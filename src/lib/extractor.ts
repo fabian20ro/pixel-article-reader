@@ -19,6 +19,7 @@ export interface Article {
   excerpt: string;
   wordCount: number;
   estimatedMinutes: number;
+  resolvedUrl: string;     // final URL after redirects (from proxy)
 }
 
 const MIN_PARAGRAPH_LENGTH = 20;
@@ -30,11 +31,11 @@ const WORDS_PER_MINUTE = 180;       // spoken pace
  * Fetch an article URL via the CORS proxy and extract readable content.
  */
 export async function extractArticle(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {
-  const html = await fetchViaProxy(url, proxyBase, proxySecret);
-  return parseArticle(html, url);
+  const { html, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret);
+  return parseArticle(html, finalUrl);
 }
 
-async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: string): Promise<string> {
+async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: string): Promise<{ html: string; finalUrl: string }> {
   const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}`;
 
   const controller = new AbortController();
@@ -66,7 +67,9 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
       throw new Error('Article is too large (>2 MB).');
     }
 
-    return await resp.text();
+    const html = await resp.text();
+    const finalUrl = resp.headers.get('X-Final-URL') || url;
+    return { html, finalUrl };
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error('Timed out fetching the article. Try again later.');
@@ -148,5 +151,6 @@ function parseArticle(html: string, sourceUrl: string): Article {
     excerpt,
     wordCount,
     estimatedMinutes,
+    resolvedUrl: sourceUrl,
   };
 }

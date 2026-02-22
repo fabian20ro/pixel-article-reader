@@ -137,6 +137,7 @@ export default {
           ...corsHeaders(allowedOrigin),
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
+          'X-Final-URL': response.url || targetUrl,
         },
       });
     } catch (err) {
@@ -155,6 +156,7 @@ function corsHeaders(origin) {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
+    'Access-Control-Expose-Headers': 'X-Final-URL',
   };
 }
 

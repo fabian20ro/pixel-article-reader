@@ -281,7 +281,7 @@ async function main() {
         try {
             const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
             currentArticle = article;
-            currentArticleUrl = url;
+            currentArticleUrl = article.resolvedUrl;
             displayArticle(article);
         }
         catch (err) {

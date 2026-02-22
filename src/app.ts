@@ -330,7 +330,7 @@ async function main(): Promise<void> {
     try {
       const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
       currentArticle = article;
-      currentArticleUrl = url;
+      currentArticleUrl = article.resolvedUrl;
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
