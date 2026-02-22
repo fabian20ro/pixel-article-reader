@@ -102,6 +102,7 @@ export class TTSEngine {
   private pitch = 1.0;
   private voice: SpeechSynthesisVoice | null = null;
   private allVoices: SpeechSynthesisVoice[] = [];
+  private preferredVoiceName = '';
 
   // Position tracking
   private paraIdx = 0;
@@ -153,7 +154,7 @@ export class TTSEngine {
     this.lang = lang;
     this.paraIdx = 0;
     this.sentIdx = 0;
-    this.voice = selectVoice(this.allVoices, lang);
+    this.voice = selectVoice(this.allVoices, lang, this.preferredVoiceName);
     this.emitState();
   }
 
@@ -295,13 +296,14 @@ export class TTSEngine {
   }
 
   setVoice(name: string): void {
+    this.preferredVoiceName = name;
     const match = this.allVoices.find((v) => v.name === name);
     if (match) this.voice = match;
   }
 
   setLang(lang: Language): void {
     this.lang = lang;
-    this.voice = selectVoice(this.allVoices, lang);
+    this.voice = selectVoice(this.allVoices, lang, this.preferredVoiceName);
   }
 
   setWakeLock(enabled: boolean): void {

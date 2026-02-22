@@ -86,6 +86,7 @@ async function main(): Promise<void> {
 
   await tts.init();
   tts.setRate(settings.rate);
+  if (settings.voiceName) tts.setVoice(settings.voiceName);
   tts.setWakeLock(settings.wakeLock);
 
   // ── DOM elements ────────────────────────────────────────────────
@@ -175,9 +176,11 @@ async function main(): Promise<void> {
   });
 
   // Voice selector
+  const ALLOWED_VOICES = ['Ioana', 'Samantha'];
   populateVoices();
   function populateVoices(): void {
-    const voices = tts.getAvailableVoices();
+    const voices = tts.getAvailableVoices()
+      .filter((v) => ALLOWED_VOICES.includes(v.name));
     settingsVoice.innerHTML = '<option value="">Default</option>';
     voices.forEach((v) => {
       const opt = document.createElement('option');

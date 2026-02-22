@@ -425,4 +425,41 @@ describe('TTSEngine', () => {
     const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
     expect(utter.voice?.name).toBe('Google US English');
   });
+
+  it('setVoice() preference persists across loadArticle()', () => {
+    const voices = [
+      makeVoice('Samantha', 'en-GB'),
+      makeVoice('Google US English', 'en-US'),
+    ];
+    mockSynth.getVoices.mockReturnValue(voices);
+
+    const engine = createEngine();
+    (engine as unknown as Record<string, unknown[]>).allVoices = voices;
+
+    engine.setVoice('Samantha');
+    engine.loadArticle(['Hello.'], 'en');
+    engine.play();
+
+    const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
+    expect(utter.voice?.name).toBe('Samantha');
+  });
+
+  it('setVoice() preference persists across setLang()', () => {
+    const voices = [
+      makeVoice('Ioana', 'ro-RO'),
+      makeVoice('Google română', 'ro-RO'),
+    ];
+    mockSynth.getVoices.mockReturnValue(voices);
+
+    const engine = createEngine();
+    (engine as unknown as Record<string, unknown[]>).allVoices = voices;
+
+    engine.setVoice('Ioana');
+    engine.loadArticle(['Bună ziua.'], 'ro');
+    engine.setLang('ro');
+    engine.play();
+
+    const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
+    expect(utter.voice?.name).toBe('Ioana');
+  });
 });
