@@ -130,6 +130,28 @@ describe('translateParagraphs', () => {
     ).rejects.toThrow(/502/);
   });
 
+  it('falls back to GET translation when POST is rejected with 405', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(mockErrorResponse(405, 'Only GET requests are allowed.'))
+      .mockResolvedValueOnce(mockTranslateResponse('Hello from GET fallback'));
+
+    const result = await translateParagraphs(['Salut'], 'ro', 'en', PROXY, 'my-secret');
+
+    expect(result).toEqual(['Hello from GET fallback']);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    expect(fetchSpy.mock.calls[0][0]).toBe(`${PROXY}?action=translate`);
+    expect(fetchSpy.mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST' }));
+
+    const secondUrl = String(fetchSpy.mock.calls[1][0]);
+    expect(secondUrl).toContain(`${PROXY}?`);
+    expect(secondUrl).toContain('action=translate');
+    expect(secondUrl).toContain('from=ro');
+    expect(secondUrl).toContain('to=en');
+    expect(secondUrl).toContain('text=Salut');
+    expect(fetchSpy.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'GET' }));
+  });
+
   it('handles rate limit error with retry info', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockErrorResponse(429, 'Rate limit exceeded'),

@@ -10,6 +10,8 @@
  *                                           — Fetch markdown via Jina Reader
  *   POST /?action=translate                  — Translate text via Google Translate API
  *        Body: { text: string, from: string, to: string }
+ *   GET  /?action=translate&text=...&from=...&to=...
+ *                                           — Translate fallback for GET-only clients/proxies
  *
  * Environment bindings (set in wrangler.toml or via `wrangler secret put`):
  *   ALLOWED_ORIGIN  — GitHub Pages origin (e.g. "https://user.github.io")
@@ -152,13 +154,19 @@ export default {
 
     const requestUrl = new URL(request.url);
 
-    // ── Translate action (POST) ────────────────────────────────────
-    if (request.method === 'POST' && requestUrl.searchParams.get('action') === 'translate') {
-      return handleTranslate(request, allowedOrigin, rateCheck);
+    // ── Translate action (POST preferred, GET compatibility) ───────
+    if (requestUrl.searchParams.get('action') === 'translate') {
+      if (request.method === 'POST') {
+        return handleTranslatePost(request, allowedOrigin, rateCheck);
+      }
+      if (request.method === 'GET') {
+        return handleTranslateGet(requestUrl, allowedOrigin, rateCheck);
+      }
+      return errorResponse(405, 'Translate endpoint supports GET or POST only.', allowedOrigin);
     }
 
     if (request.method !== 'GET') {
-      return errorResponse(405, 'POST is only supported for ?action=translate.', allowedOrigin);
+      return errorResponse(405, 'Only GET requests are allowed.', allowedOrigin);
     }
 
     const targetUrl = requestUrl.searchParams.get('url');
@@ -251,11 +259,11 @@ export default {
   },
 };
 
-// ── Translate handler ────────────────────────────────────────────────
+// ── Translate handlers ───────────────────────────────────────────────
 
 const LANG_CODE_RE = /^[a-z]{2,5}(-[a-zA-Z]{2,5})?$/;
 
-async function handleTranslate(request, allowedOrigin, rateCheck) {
+async function handleTranslatePost(request, allowedOrigin, rateCheck) {
   let body;
   try {
     body = await request.json();
@@ -263,8 +271,26 @@ async function handleTranslate(request, allowedOrigin, rateCheck) {
     return errorResponse(400, 'Invalid JSON body.', allowedOrigin);
   }
 
-  const { text, from, to } = body;
+  return handleTranslateCore(
+    body?.text,
+    body?.from,
+    body?.to,
+    allowedOrigin,
+    rateCheck,
+  );
+}
 
+async function handleTranslateGet(requestUrl, allowedOrigin, rateCheck) {
+  return handleTranslateCore(
+    requestUrl.searchParams.get('text'),
+    requestUrl.searchParams.get('from') || 'auto',
+    requestUrl.searchParams.get('to') || 'en',
+    allowedOrigin,
+    rateCheck,
+  );
+}
+
+async function handleTranslateCore(text, from, to, allowedOrigin, rateCheck) {
   if (!text || typeof text !== 'string') {
     return errorResponse(400, 'Missing or invalid "text" field (must be a non-empty string).', allowedOrigin);
   }

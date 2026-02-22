@@ -353,4 +353,27 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix translation failures on GET-only proxy paths
+
+**Context:** User reported translation failures with `405 Only GET requests are allowed` (`batch 1/2`). That indicates a deployed or routed proxy path rejecting POST requests.
+
+**What happened:**
+- Added client fallback in `src/lib/translator.ts`:
+  - primary request stays `POST /?action=translate`
+  - on HTTP 405, retry once via `GET /?action=translate&text=...&from=...&to=...`
+- Extended Worker compatibility in `worker/cors-proxy.js`:
+  - `?action=translate` now supports both POST and GET
+  - kept existing validation, limits, and response shape
+- Added coverage in `src/__tests__/translator.test.ts`:
+  - new test verifies POST-405 then GET fallback succeeds
+- Updated `AGENTS.md` and `LESSONS_LEARNED.md` to document POST/GET translation compatibility.
+
+**Outcome:** Success. Local build and tests are green (`165 tests passed`), and the app now handles POST-hostile translation paths more robustly.
+
+**Insight:** For public edge proxies, transport-method compatibility matters as much as endpoint semantics; a GET fallback on 405 can recover real user paths without changing UI behavior.
+
+**Promoted to Lessons Learned:** Yes — translation GET fallback pattern.
+
+---
+
 <!-- New entries go above this line, most recent first -->

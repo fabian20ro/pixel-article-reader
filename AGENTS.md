@@ -84,7 +84,7 @@ The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query p
 - **Rate limiting:** 20 req/min per client IP (in-memory sliding window). HTTP 429 with `Retry-After` header when exceeded.
 - **URL resolution:** Follows redirects and returns final URL in `X-Final-URL` header. Critical for shortened URLs (e.g. `share.google`).
 - **Jina markdown mode:** `GET /?url=...&mode=markdown` returns markdown content and preserves `X-Final-URL`.
-- **Translation:** `POST /?action=translate` accepts `{ text, from, to }` JSON body, calls Google Translate API server-side, returns `{ translatedText, detectedLang }`. Max 5000 chars per request.
+- **Translation:** `POST /?action=translate` accepts `{ text, from, to }` JSON body, calls Google Translate API server-side, returns `{ translatedText, detectedLang }`. `GET /?action=translate&text=...&from=...&to=...` is also supported as a compatibility fallback for environments that block POST. Max 5000 chars per request.
 
 ## Configuration
 

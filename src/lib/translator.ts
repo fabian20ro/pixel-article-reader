@@ -112,20 +112,15 @@ async function translateSingle(
   batchIndex?: number,
   batchTotal?: number,
 ): Promise<string> {
-  const url = `${proxyBase}?action=translate`;
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (proxySecret) {
-    headers['X-Proxy-Key'] = proxySecret;
-  }
+  const batchInfo = batchIndex != null && batchTotal != null
+    ? ` (batch ${batchIndex + 1}/${batchTotal})`
+    : '';
 
   let resp: Response;
   try {
-    resp = await fetch(url, {
+    resp = await fetch(`${proxyBase}?action=translate`, {
       method: 'POST',
-      headers,
+      headers: buildProxyHeaders(proxySecret, true),
       body: JSON.stringify({ text, from: sourceLang, to: targetLang }),
     });
   } catch (err: unknown) {
@@ -134,25 +129,77 @@ async function translateSingle(
   }
 
   if (!resp.ok) {
-    let detail = '';
-    try {
-      const body = await resp.json();
-      if (body.error) detail = body.error;
-    } catch { /* ignore parse errors */ }
-
-    const batchInfo = batchIndex != null && batchTotal != null
-      ? ` (batch ${batchIndex + 1}/${batchTotal})`
-      : '';
+    const detail = await readErrorDetail(resp);
 
     if (resp.status === 429) {
       const retryAfter = resp.headers.get('Retry-After');
       const waitMsg = retryAfter ? ` Try again in ${retryAfter}s.` : '';
       throw new Error(`Translation rate limited${batchInfo}.${waitMsg}${detail ? ' ' + detail : ''}`);
     }
+    if (resp.status === 405) {
+      try {
+        return await translateSingleGet(
+          text,
+          sourceLang,
+          targetLang,
+          proxyBase,
+          proxySecret,
+        );
+      } catch (fallbackErr: unknown) {
+        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+        throw new Error(
+          `Translation failed with status ${resp.status}${batchInfo}: ${detail || resp.statusText}. GET fallback failed: ${fallbackMsg}`,
+        );
+      }
+    }
 
     throw new Error(
       `Translation failed with status ${resp.status}${batchInfo}: ${detail || resp.statusText}`,
     );
+  }
+
+  const data: TranslateResponse = await resp.json();
+  return data.translatedText;
+}
+
+function buildProxyHeaders(proxySecret?: string, includeJsonContentType = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeJsonContentType) headers['Content-Type'] = 'application/json';
+  if (proxySecret) headers['X-Proxy-Key'] = proxySecret;
+  return headers;
+}
+
+async function readErrorDetail(resp: Response): Promise<string> {
+  try {
+    const body = await resp.json();
+    return body?.error ? String(body.error) : '';
+  } catch {
+    return '';
+  }
+}
+
+async function translateSingleGet(
+  text: string,
+  sourceLang: string,
+  targetLang: string,
+  proxyBase: string,
+  proxySecret?: string,
+): Promise<string> {
+  const params = new URLSearchParams({
+    action: 'translate',
+    text,
+    from: sourceLang,
+    to: targetLang,
+  });
+
+  const resp = await fetch(`${proxyBase}?${params.toString()}`, {
+    method: 'GET',
+    headers: buildProxyHeaders(proxySecret),
+  });
+
+  if (!resp.ok) {
+    const detail = await readErrorDetail(resp);
+    throw new Error(`status ${resp.status}: ${detail || resp.statusText}`);
   }
 
   const data: TranslateResponse = await resp.json();

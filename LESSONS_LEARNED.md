@@ -52,6 +52,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Cloudflare Worker uses env bindings, not hardcoded constants — `ALLOWED_ORIGIN` is a `[vars]` entry in `wrangler.toml`, while `PROXY_SECRET`/`JINA_KEY` are Worker secrets set in Cloudflare (dashboard or `wrangler secret put`). The worker reads them from the `env` parameter in `fetch(request, env)`. This avoids committing secrets and supports per-environment config.
 
+**[2026-02-22]** Translation endpoint should tolerate POST-hostile paths — Some deployed/legacy proxy paths reject POST (`405 Only GET requests are allowed`). Keep `POST /?action=translate` as primary, but support `GET /?action=translate&text=...&from=...&to=...` and let the client retry with GET on 405.
+
 ## Dependencies & External Services
 
 **[2026-02-22]** Vendored Readability.js comes from `mozilla/readability` main branch — Downloaded from `https://raw.githubusercontent.com/mozilla/readability/main/Readability.js`. It's ~2800 lines. When updating, verify the export format hasn't changed (must still declare global `function Readability` and use `module.exports` guard).
