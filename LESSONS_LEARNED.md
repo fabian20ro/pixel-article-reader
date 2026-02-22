@@ -54,6 +54,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Translation endpoint should tolerate POST-hostile paths — Some deployed/legacy proxy paths reject POST (`405 Only GET requests are allowed`). Keep `POST /?action=translate` as primary, but support `GET /?action=translate&text=...&from=...&to=...` and let the client retry with GET on 405.
 
+**[2026-02-22]** Filter Web Speech API voices by language code, not name — `SpeechSynthesisVoice.name` varies across platforms (Android Chrome uses "Google US English", iOS Safari uses "Samantha", Samsung uses its own names). Filtering by `voice.lang.startsWith('en')` is standardized across all browsers and still acts as a whitelist. When preferring "enhanced" voices, use `/google|enhanced|premium/i` to match high-quality voices across Android (Google), iOS (Enhanced), and Samsung (Premium).
+
 ## Dependencies & External Services
 
 **[2026-02-22]** Vendored Readability.js comes from `mozilla/readability` main branch — Downloaded from `https://raw.githubusercontent.com/mozilla/readability/main/Readability.js`. It's ~2800 lines. When updating, verify the export format hasn't changed (must still declare global `function Readability` and use `module.exports` guard).

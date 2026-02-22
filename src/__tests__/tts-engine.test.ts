@@ -69,17 +69,17 @@ describe('selectVoice', () => {
     makeVoice('Samantha', 'en-GB'),
   ];
 
-  it('prefers Google voices for English', () => {
+  it('prefers enhanced/premium voices for English', () => {
     const v = selectVoice(voices, 'en');
     expect(v?.name).toBe('Google US English');
   });
 
-  it('prefers Google voices for Romanian', () => {
+  it('prefers enhanced/premium voices for Romanian', () => {
     const v = selectVoice(voices, 'ro');
     expect(v?.name).toBe('Google română');
   });
 
-  it('falls back to any matching voice if no Google voice', () => {
+  it('falls back to any matching voice if no enhanced/premium voice exists', () => {
     const limited = [makeVoice('Alex', 'en-US'), makeVoice('Maria', 'ro-RO')];
     expect(selectVoice(limited, 'en')?.name).toBe('Alex');
     expect(selectVoice(limited, 'ro')?.name).toBe('Maria');
@@ -107,6 +107,63 @@ describe('selectVoice', () => {
 
   it('returns null for empty voice list', () => {
     expect(selectVoice([], 'en')).toBeNull();
+  });
+
+  // ── Cross-platform voice selection ──────────────────────────────
+
+  it('prefers Enhanced voices on iOS (no Google voices)', () => {
+    const iosVoices = [
+      makeVoice('Samantha', 'en-US'),
+      makeVoice('Samantha (Enhanced)', 'en-US'),
+      makeVoice('Daniel', 'en-GB'),
+      makeVoice('Ioana', 'ro-RO'),
+    ];
+    const v = selectVoice(iosVoices, 'en');
+    expect(v?.name).toBe('Samantha (Enhanced)');
+  });
+
+  it('prefers Premium voices on Samsung', () => {
+    const samsungVoices = [
+      makeVoice('Samsung English', 'en-US'),
+      makeVoice('Samsung English Premium', 'en-US'),
+      makeVoice('Samsung Romanian', 'ro-RO'),
+    ];
+    const v = selectVoice(samsungVoices, 'en');
+    expect(v?.name).toBe('Samsung English Premium');
+  });
+
+  it('falls back to any matching voice on iOS when no Enhanced exists', () => {
+    const iosVoices = [
+      makeVoice('Samantha', 'en-US'),
+      makeVoice('Daniel', 'en-GB'),
+      makeVoice('Ioana', 'ro-RO'),
+    ];
+    expect(selectVoice(iosVoices, 'en')?.name).toBe('Samantha');
+    expect(selectVoice(iosVoices, 'ro')?.name).toBe('Ioana');
+  });
+
+  it('matches Romanian voices across platforms', () => {
+    const mixed = [
+      makeVoice('Google română', 'ro-RO'),
+      makeVoice('Ioana', 'ro-RO'),
+    ];
+    // Google voice preferred
+    expect(selectVoice(mixed, 'ro')?.name).toBe('Google română');
+
+    // Without Google, falls back
+    const iosOnly = [makeVoice('Ioana', 'ro-RO')];
+    expect(selectVoice(iosOnly, 'ro')?.name).toBe('Ioana');
+  });
+
+  it('handles voice.lang variants (en-US, en-GB, en-AU)', () => {
+    const multiRegion = [
+      makeVoice('Karen', 'en-AU'),
+      makeVoice('Daniel', 'en-GB'),
+    ];
+    // Both should match 'en' prefix
+    const v = selectVoice(multiRegion, 'en');
+    expect(v).not.toBeNull();
+    expect(v!.lang.startsWith('en')).toBe(true);
   });
 });
 

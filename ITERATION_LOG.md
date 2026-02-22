@@ -376,4 +376,25 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Add iOS & Samsung voice support — language-code-based voice filtering
+
+**Context:** The voice dropdown only showed voices matching hardcoded names `['Ioana', 'Samantha']`, which may not exist on iOS Safari or Samsung Internet. User requested cross-platform support with only English and Romanian voices selectable.
+
+**What happened:**
+- Added 6 Claude agent definitions (architect, planner, refactor-cleaner, doc-updater, security-reviewer, code-reviewer) to `.claude/agents/` from `fabian20ro/everything-claude-code`.
+- Replaced `ALLOWED_VOICES = ['Ioana', 'Samantha']` (name-based whitelist) with `ALLOWED_LANG_PREFIXES = ['en', 'ro']` (language-code-based whitelist) in `src/app.ts`.
+- Updated `populateVoices()` to filter by `voice.lang.startsWith(prefix)` and sort voices by language group then name.
+- Broadened `selectVoice()` in `src/lib/tts-engine.ts` to prefer enhanced/premium voices across platforms (regex `/google|enhanced|premium/i` instead of `/google/i`).
+- Added 5 cross-platform voice selection tests: iOS Enhanced, Samsung Premium, iOS fallback, mixed platforms, multi-region lang variants.
+- Ran security review (all clear) and code review via agent definitions.
+- Build succeeds, all 170 tests pass.
+
+**Outcome:** Success. Voice dropdown now shows all English and Romanian voices available on any platform (Pixel, iOS, Samsung).
+
+**Insight:** Filtering Web Speech API voices by `voice.name` is inherently non-portable — voice names vary across platforms. Filtering by `voice.lang` prefix (BCP-47 language tag) is standardized and works everywhere. The language-code approach is still a whitelist (only allowed languages appear), maintaining the same security posture.
+
+**Promoted to Lessons Learned:** Yes — cross-platform voice filtering pattern.
+
+---
+
 <!-- New entries go above this line, most recent first -->

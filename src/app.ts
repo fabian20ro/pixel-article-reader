@@ -17,7 +17,7 @@ const CONFIG = {
   DEFAULT_LANG: 'auto' as 'auto' | Language,
 };
 
-const ALLOWED_VOICES = ['Ioana', 'Samantha'];
+const ALLOWED_LANG_PREFIXES = ['en', 'ro'];
 
 async function main(): Promise<void> {
   const refs = getAppDomRefs();
@@ -215,9 +215,16 @@ async function main(): Promise<void> {
   function populateVoices(): void {
     const voices = tts
       .getAvailableVoices()
-      .filter((voice) => ALLOWED_VOICES.includes(voice.name));
+      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
 
-    refs.settingsVoice.innerHTML = '<option value="">Default</option>';
+    // Sort: group by language, then alphabetically by name within each group
+    voices.sort((a, b) => {
+      const langCmp = a.lang.localeCompare(b.lang);
+      if (langCmp !== 0) return langCmp;
+      return a.name.localeCompare(b.name);
+    });
+
+    refs.settingsVoice.innerHTML = '<option value="">Auto</option>';
     voices.forEach((voice) => {
       const opt = document.createElement('option');
       opt.value = voice.name;
