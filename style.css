@@ -117,6 +117,12 @@ body {
   margin-bottom: 0;
 }
 
+.settings-badge {
+  text-align: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 .settings-label {
   display: flex;
   align-items: center;
