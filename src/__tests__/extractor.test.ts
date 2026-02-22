@@ -331,6 +331,79 @@ describe('extractArticle', () => {
     const article = await extractArticle(ARTICLE_URL, PROXY);
     expect(article.htmlLang).toBe('');
   });
+
+  it('strips raw HTML tags from paragraphs', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'Normal paragraph with enough words to pass the filter easily.\n\n<img src="photo.jpg" alt="photo"> This has some text around the image tag.\n\nAnother normal paragraph with plenty of readable text content here.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    // No paragraph should contain raw HTML tags
+    for (const p of article.paragraphs) {
+      expect(p).not.toMatch(/<[^>]+>/);
+    }
+  });
+
+  it('filters out paragraphs that are only data URIs', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'This is a real paragraph with enough text content to be read aloud.\n\ndata:image/png;base64,iVBORw0KGgoAAAANSUhEUg==\n\nAnother real paragraph with meaningful content for the reader.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    // Data URI paragraph should be filtered out
+    expect(article.paragraphs.length).toBe(2);
+    for (const p of article.paragraphs) {
+      expect(p).not.toContain('data:image');
+    }
+  });
+
+  it('filters out paragraphs with only image markdown and no real words', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'First paragraph with enough words to satisfy the speakable text filter.\n\n![](https://example.com/image-with-a-very-long-url-that-has-many-segments-and-parameters-to-exceed-the-eighty-character-threshold.jpg)\n\nSecond paragraph also has enough words to be considered real content.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    expect(article.paragraphs.length).toBe(2);
+    expect(article.paragraphs[0]).toContain('First paragraph');
+    expect(article.paragraphs[1]).toContain('Second paragraph');
+  });
+
+  it('keeps paragraphs with Romanian diacritics', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'Acesta este un paragraf în limba română cu diacritice ă î ș ț â.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+    expect(article.paragraphs.length).toBe(1);
+    expect(article.paragraphs[0]).toContain('română');
+  });
 });
 
 describe('extractArticleWithJina', () => {
@@ -387,6 +460,26 @@ describe('extractArticleWithJina', () => {
     expect(article.title).toBe('Fallback Article');
     expect(article.markdown.length).toBeGreaterThan(0);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('filters out image-only markdown paragraphs from Jina output', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: () => Promise.resolve(
+        '# Title\n\nThis is the real article text with enough words.\n\n![](https://example.com/image.jpg)\n\nAnother paragraph with enough content for TTS reading.',
+      ),
+      headers: { get: (name: string) => (name === 'X-Final-URL' ? ARTICLE_URL : null) },
+    } as unknown as Response);
+
+    const article = await extractArticleWithJina(ARTICLE_URL, PROXY);
+
+    // Image-only paragraph should be filtered
+    for (const p of article.paragraphs) {
+      expect(p).not.toContain('example.com/image');
+    }
+    expect(article.paragraphs.length).toBe(2);
   });
 
   it('converts markdown blocks into clean TTS paragraphs', async () => {

@@ -453,4 +453,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Filter non-speakable paragraphs from TTS (images, data URIs, HTML tags, code blocks)
+
+**Context:** User reported that TTS reads non-article content aloud — raw HTML `<img>` tags, data URIs, long image URLs, and other non-text artifacts that survive the extraction pipeline as paragraphs.
+
+**What happened:**
+- Extracted common content-stripping logic into `stripNonTextContent()` in `extractor.ts` — strips raw HTML tags, data URIs, and very long URLs (80+ chars).
+- Applied `stripNonTextContent()` in both `stripMarkdownSyntax()` (markdown path) and `splitPlainTextParagraphs()` (plain text fallback path), ensuring consistent filtering regardless of which extraction path is used.
+- Added `isSpeakableText()` filter to both `markdownToParagraphs()` and `splitPlainTextParagraphs()` — requires at least 3 word-like tokens (2+ letter sequences) to pass, filtering out paragraphs that are mostly URLs, base64 data, or non-text artifacts.
+- Updated `renderArticleBody()` in `article-controller.ts` to skip `<pre>` blocks (code isn't meaningful when spoken) and handle `<figure>` blocks by only extracting figcaption text (skip image-only figures).
+- Added 5 new tests: HTML tag stripping, data URI filtering, image-markdown filtering, Romanian diacritics preservation, and Jina image-only paragraph filtering.
+- All 185 tests pass, build clean.
+
+**Outcome:** Success. Non-speakable content (images, code blocks, data URIs, raw HTML) is now filtered from TTS paragraphs at both the extraction and rendering layers.
+
+**Insight:** Content filtering must be applied in ALL paragraph extraction paths, not just the primary one. The markdown path (`markdownToParagraphs`) and the plain-text fallback path (`splitPlainTextParagraphs`) both need the same stripping and filtering, since articles can take either path depending on Readability/TurndownService success.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->
