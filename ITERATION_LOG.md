@@ -104,4 +104,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix share URL handling for text with title + URL
+
+**Context:** User reported that sharing from Google News produces text like "Article Title https://share.google/xyz" and the app can't open it because "it's more than the url."
+
+**What happened:**
+- Investigated the full share flow. The `extractUrl()` function already handled extracting URLs from mixed text via regex, so the core logic was correct.
+- Identified two UX/coverage issues: (1) the input field used `type="url"` which shows URL-only validation on mobile and makes pasting shared text harder, (2) `getUrlFromParams()` only checked `url` and `text` query params, missing the `title` param.
+- Changed `<input type="url">` to `<input type="text">` with updated placeholder text.
+- Added `title` to the candidate query params in `getUrlFromParams()`.
+- Added 4 new test cases covering the exact Google News sharing format and the `title` param fallback.
+- All 79 tests pass.
+
+**Outcome:** Success. The app now properly handles shared text containing a title prefix before the URL, both via manual paste and Share Target API.
+
+**Insight:** `type="url"` on input fields causes mobile browsers to show URL-specific keyboards (no space bar) and validation errors for non-URL text. Use `type="text"` when the input accepts more than bare URLs.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->
