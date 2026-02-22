@@ -26,6 +26,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Inject PROXY_SECRET into client config
+        run: sed -i "s|PROXY_SECRET: ''|PROXY_SECRET: '${{ secrets.PROXY_SECRET }}'|" src/app.ts
+
       - run: npm run build
 
       - run: npm test

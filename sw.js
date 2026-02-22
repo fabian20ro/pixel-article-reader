@@ -1,6 +1,6 @@
 // ArticleVoice Service Worker — cache-first for app shell, network-only for proxy.
 
-const CACHE_NAME = 'article-voice-v1';
+const CACHE_NAME = 'article-voice-v2';
 
 // Precache list uses relative paths so it works in any subdirectory (e.g. GitHub Pages)
 const PRECACHE = [
@@ -55,7 +55,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for app shell assets
+  // Navigation requests (including Share Target with ?url=... query params):
+  // Use ignoreSearch so the cached app shell is served regardless of query params.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+        return cached || fetch(event.request);
+      })
+    );
+    return;
+  }
+
+  // Cache-first for other app shell assets
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
