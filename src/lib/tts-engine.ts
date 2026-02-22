@@ -235,6 +235,49 @@ export class TTSEngine {
     this.emitState();
   }
 
+  skipSentenceForward(): void {
+    if (this.paragraphs.length === 0) return;
+    const sentences = this.paragraphs[this.paraIdx];
+    if (this.sentIdx < sentences.length - 1) {
+      // Move to next sentence within current paragraph
+      speechSynthesis.cancel();
+      this.sentIdx++;
+    } else if (this.paraIdx < this.paragraphs.length - 1) {
+      // Move to first sentence of next paragraph
+      speechSynthesis.cancel();
+      this.paraIdx++;
+      this.sentIdx = 0;
+      this.emitParagraphChange();
+    } else {
+      return; // Already at last sentence of last paragraph
+    }
+    if (this._isPlaying && !this._isPaused) {
+      this.speakCurrent();
+    }
+    this.emitState();
+  }
+
+  skipSentenceBackward(): void {
+    if (this.paragraphs.length === 0) return;
+    if (this.sentIdx > 0) {
+      // Move to previous sentence within current paragraph
+      speechSynthesis.cancel();
+      this.sentIdx--;
+    } else if (this.paraIdx > 0) {
+      // Move to last sentence of previous paragraph
+      speechSynthesis.cancel();
+      this.paraIdx--;
+      this.sentIdx = this.paragraphs[this.paraIdx].length - 1;
+      this.emitParagraphChange();
+    } else {
+      return; // Already at first sentence of first paragraph
+    }
+    if (this._isPlaying && !this._isPaused) {
+      this.speakCurrent();
+    }
+    this.emitState();
+  }
+
   jumpToParagraph(index: number): void {
     if (index < 0 || index >= this.paragraphs.length) return;
     speechSynthesis.cancel();

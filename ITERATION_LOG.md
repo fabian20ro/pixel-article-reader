@@ -124,4 +124,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Add sentence-level skip buttons to player controls
+
+**Context:** User requested buttons to skip forward/backward one sentence, not just one paragraph.
+
+**What happened:**
+- Added `skipSentenceForward()` and `skipSentenceBackward()` methods to `TTSEngine` in `tts-engine.ts`. Forward advances one sentence within the current paragraph, or crosses to the first sentence of the next paragraph. Backward goes back one sentence, or to the last sentence of the previous paragraph.
+- Added two new buttons to `index.html` player controls, positioned between the paragraph skip buttons and the play/pause button, using smaller double-chevron SVG icons.
+- Wired buttons in `app.ts` to call the new TTS engine methods.
+- Added `.sentence-btn` CSS class for slightly smaller sizing and reduced opacity to visually differentiate from paragraph buttons.
+- Added 6 new tests covering: sentence advance within paragraph, cross-paragraph forward, boundary at last sentence, sentence backward within paragraph, cross-paragraph backward, and boundary at first sentence.
+- All 91 tests pass.
+
+**Outcome:** Success. Sentence skip buttons work alongside existing paragraph skip buttons.
+
+**Insight:** The TTS engine already tracked sentence position (`sentIdx`) internally for the chunking logic, so adding sentence-level navigation was straightforward — just needed public methods that manipulate the same indices.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->

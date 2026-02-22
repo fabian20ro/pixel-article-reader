@@ -470,6 +470,17 @@ body {
   color: var(--text-secondary);
 }
 
+.sentence-btn {
+  min-width: 40px;
+  min-height: 40px;
+  opacity: 0.7;
+}
+
+.sentence-btn:hover,
+.sentence-btn:active {
+  opacity: 1;
+}
+
 /* === Speed Controls === */
 .speed-controls {
   display: flex;

@@ -108,6 +108,8 @@ async function main(): Promise<void> {
   const pauseIcon = $('pause-icon');
   const skipForwardBtn = $('skip-forward');
   const skipBackBtn = $('skip-back');
+  const skipSentenceForwardBtn = $('skip-sentence-forward');
+  const skipSentenceBackBtn = $('skip-sentence-back');
   const progressFill = $('progress-fill');
   const progressText = $('progress-text');
   const progressBar = $('progress-bar');
@@ -244,6 +246,8 @@ async function main(): Promise<void> {
 
   skipForwardBtn.addEventListener('click', () => tts.skipForward());
   skipBackBtn.addEventListener('click', () => tts.skipBackward());
+  skipSentenceForwardBtn.addEventListener('click', () => tts.skipSentenceForward());
+  skipSentenceBackBtn.addEventListener('click', () => tts.skipSentenceBackward());
 
   // Speed preset buttons
   const speedBtns = document.querySelectorAll<HTMLButtonElement>('.speed-btn');
