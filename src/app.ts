@@ -215,7 +215,7 @@ async function main(): Promise<void> {
   function populateVoices(): void {
     const voices = tts
       .getAvailableVoices()
-      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang.startsWith(p)));
+      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
 
     // Sort: group by language, then alphabetically by name within each group
     voices.sort((a, b) => {

@@ -46,6 +46,11 @@ function langToCode(lang: Language): string {
   return lang === 'ro' ? 'ro' : 'en';
 }
 
+/** BCP 47 prefix match: 'en' matches 'en', 'en-US', 'en-GB' but not 'enx'. */
+function langMatches(voiceLang: string, prefix: string): boolean {
+  return voiceLang === prefix || voiceLang.startsWith(prefix + '-');
+}
+
 /** Wait for voices to be loaded (handles the async voiceschanged event). */
 export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
@@ -76,10 +81,10 @@ export function selectVoice(
   const code = langToCode(lang);
 
   if (preferred) {
-    const match = voices.find((v) => v.name === preferred && v.lang.startsWith(code));
+    const match = voices.find((v) => v.name === preferred && langMatches(v.lang, code));
     if (match) return match;
   }
-  const matching = voices.filter((v) => v.lang.startsWith(code));
+  const matching = voices.filter((v) => langMatches(v.lang, code));
 
   // Prefer enhanced/premium voices (Google on Android, "Enhanced"/"Premium" on iOS/Samsung)
   const enhanced = matching.filter((v) => /google|enhanced|premium/i.test(v.name));

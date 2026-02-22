@@ -69,17 +69,17 @@ describe('selectVoice', () => {
     makeVoice('Samantha', 'en-GB'),
   ];
 
-  it('prefers Google voices for English', () => {
+  it('prefers enhanced/premium voices for English', () => {
     const v = selectVoice(voices, 'en');
     expect(v?.name).toBe('Google US English');
   });
 
-  it('prefers Google voices for Romanian', () => {
+  it('prefers enhanced/premium voices for Romanian', () => {
     const v = selectVoice(voices, 'ro');
     expect(v?.name).toBe('Google română');
   });
 
-  it('falls back to any matching voice if no Google voice', () => {
+  it('falls back to any matching voice if no enhanced/premium voice exists', () => {
     const limited = [makeVoice('Alex', 'en-US'), makeVoice('Maria', 'ro-RO')];
     expect(selectVoice(limited, 'en')?.name).toBe('Alex');
     expect(selectVoice(limited, 'ro')?.name).toBe('Maria');
