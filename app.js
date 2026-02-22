@@ -7,6 +7,18 @@
 import { getUrlFromParams, extractUrl, clearQueryParams } from './lib/url-utils.js';
 import { extractArticle } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
+// ── Helpers ─────────────────────────────────────────────────────────
+/** Convert a URL to its Google Translate proxy equivalent. */
+function toTranslateUrl(url, targetLang = 'en') {
+    const parsed = new URL(url);
+    const translatedHost = parsed.hostname.replace(/\./g, '-') + '.translate.goog';
+    const params = new URLSearchParams(parsed.search);
+    params.set('_x_tr_sl', 'auto');
+    params.set('_x_tr_tl', targetLang);
+    params.set('_x_tr_hl', targetLang);
+    params.set('_x_tr_pto', 'wapp');
+    return `https://${translatedHost}${parsed.pathname}?${params.toString()}`;
+}
 // ── Config ──────────────────────────────────────────────────────────
 const CONFIG = {
     PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
@@ -43,6 +55,7 @@ async function main() {
     }
     const settings = loadSettings();
     let currentArticle = null;
+    let currentArticleUrl = '';
     let currentLangOverride = settings.lang;
     // ── TTS engine ──────────────────────────────────────────────────
     const tts = new TTSEngine({
@@ -65,6 +78,8 @@ async function main() {
     });
     await tts.init();
     tts.setRate(settings.rate);
+    if (settings.voiceName)
+        tts.setVoice(settings.voiceName);
     tts.setWakeLock(settings.wakeLock);
     // ── DOM elements ────────────────────────────────────────────────
     const urlInput = $('url-input');
@@ -78,6 +93,7 @@ async function main() {
     const articleSection = $('article-section');
     const articleTitle = $('article-title');
     const articleInfo = $('article-info');
+    const translateBtn = $('translate-btn');
     const articleText = $('article-text');
     const playerControls = $('player-controls');
     const playPauseBtn = $('play-pause');
@@ -138,9 +154,11 @@ async function main() {
         updateSpeedButtons(rate);
     });
     // Voice selector
+    const ALLOWED_VOICES = ['Ioana', 'Samantha'];
     populateVoices();
     function populateVoices() {
-        const voices = tts.getAvailableVoices();
+        const voices = tts.getAvailableVoices()
+            .filter((v) => ALLOWED_VOICES.includes(v.name));
         settingsVoice.innerHTML = '<option value="">Default</option>';
         voices.forEach((v) => {
             const opt = document.createElement('option');
@@ -249,6 +267,12 @@ async function main() {
         const idx = Math.floor(ratio * currentArticle.paragraphs.length);
         tts.jumpToParagraph(idx);
     });
+    // ── Translate button ────────────────────────────────────────────
+    translateBtn.addEventListener('click', () => {
+        if (!currentArticleUrl)
+            return;
+        loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+    });
     // ── Article loading ─────────────────────────────────────────────
     async function loadArticle(url) {
         showView('loading');
@@ -257,6 +281,7 @@ async function main() {
         try {
             const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
             currentArticle = article;
+            currentArticleUrl = url;
             displayArticle(article);
         }
         catch (err) {
@@ -273,6 +298,8 @@ async function main() {
             lang.toUpperCase(),
             `${article.wordCount} words`,
         ].join(' \u00B7 ');
+        // Translate button
+        translateBtn.classList.remove('hidden');
         // Render paragraphs
         articleText.innerHTML = '';
         article.paragraphs.forEach((p, i) => {

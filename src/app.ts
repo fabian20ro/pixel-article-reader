@@ -10,6 +10,20 @@ import { extractArticle, type Article } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
 import type { Language } from './lib/lang-detect.js';
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
+/** Convert a URL to its Google Translate proxy equivalent. */
+function toTranslateUrl(url: string, targetLang = 'en'): string {
+  const parsed = new URL(url);
+  const translatedHost = parsed.hostname.replace(/\./g, '-') + '.translate.goog';
+  const params = new URLSearchParams(parsed.search);
+  params.set('_x_tr_sl', 'auto');
+  params.set('_x_tr_tl', targetLang);
+  params.set('_x_tr_hl', targetLang);
+  params.set('_x_tr_pto', 'wapp');
+  return `https://${translatedHost}${parsed.pathname}?${params.toString()}`;
+}
+
 // ── Config ──────────────────────────────────────────────────────────
 
 const CONFIG = {
@@ -61,6 +75,7 @@ async function main(): Promise<void> {
 
   const settings = loadSettings();
   let currentArticle: Article | null = null;
+  let currentArticleUrl = '';
   let currentLangOverride: 'auto' | Language = settings.lang;
 
   // ── TTS engine ──────────────────────────────────────────────────
@@ -86,6 +101,7 @@ async function main(): Promise<void> {
 
   await tts.init();
   tts.setRate(settings.rate);
+  if (settings.voiceName) tts.setVoice(settings.voiceName);
   tts.setWakeLock(settings.wakeLock);
 
   // ── DOM elements ────────────────────────────────────────────────
@@ -101,6 +117,7 @@ async function main(): Promise<void> {
   const articleSection = $('article-section');
   const articleTitle = $('article-title');
   const articleInfo = $('article-info');
+  const translateBtn = $('translate-btn') as HTMLButtonElement;
   const articleText = $('article-text');
   const playerControls = $('player-controls');
   const playPauseBtn = $('play-pause');
@@ -175,9 +192,11 @@ async function main(): Promise<void> {
   });
 
   // Voice selector
+  const ALLOWED_VOICES = ['Ioana', 'Samantha'];
   populateVoices();
   function populateVoices(): void {
-    const voices = tts.getAvailableVoices();
+    const voices = tts.getAvailableVoices()
+      .filter((v) => ALLOWED_VOICES.includes(v.name));
     settingsVoice.innerHTML = '<option value="">Default</option>';
     voices.forEach((v) => {
       const opt = document.createElement('option');
@@ -294,6 +313,13 @@ async function main(): Promise<void> {
     tts.jumpToParagraph(idx);
   });
 
+  // ── Translate button ────────────────────────────────────────────
+
+  translateBtn.addEventListener('click', () => {
+    if (!currentArticleUrl) return;
+    loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+  });
+
   // ── Article loading ─────────────────────────────────────────────
 
   async function loadArticle(url: string): Promise<void> {
@@ -304,6 +330,7 @@ async function main(): Promise<void> {
     try {
       const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
       currentArticle = article;
+      currentArticleUrl = url;
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
@@ -321,6 +348,9 @@ async function main(): Promise<void> {
       lang.toUpperCase(),
       `${article.wordCount} words`,
     ].join(' \u00B7 ');
+
+    // Translate button
+    translateBtn.classList.remove('hidden');
 
     // Render paragraphs
     articleText.innerHTML = '';
