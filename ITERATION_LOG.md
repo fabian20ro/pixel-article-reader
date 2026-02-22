@@ -473,4 +473,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix autoscroll highlight desync (ordinal position vs data-index)
+
+**Context:** User reported that TTS autoscrolling sometimes lags behind — highlighting/scrolling to the wrong paragraph after recent commits that filter non-speakable content (images, code blocks, PRE elements).
+
+**What happened:**
+- Investigated the full TTS → highlight → scroll pipeline across `tts-engine.ts`, `article-controller.ts`, and `app.ts`.
+- Root cause: `highlightParagraph()` in `app.ts` used ordinal position (`querySelectorAll('.paragraph')[i]`) to match against TTS paragraph index. Since commit `5a03552` introduced short-block merging (bylines/headings < 80 chars merged with next block), multiple DOM elements share the same `data-index` but have different ordinal positions. Ordinal position ≠ TTS index when merging occurs.
+- The filtering commit (`74ea693`) made it worse by changing which blocks participate in merging, increasing the frequency of the mismatch.
+- Fix: rewrote `highlightParagraph()` to use `data-index` attribute (already set by `renderArticleBody`) instead of ordinal position. All merged blocks with the same TTS index now highlight together, and `scrollIntoView` targets the first block of the correct TTS paragraph.
+- Added inline documentation in `article-controller.ts` at the `flush()` function and skip logic to document the `data-index` contract.
+- All tests pass, build clean.
+
+**Outcome:** Success. Autoscroll now correctly tracks TTS position regardless of block merging or filtering.
+
+**Insight:** When DOM elements have a many-to-one relationship with logical indices (via merging), ordinal position in query results is unreliable. Always use the explicit `data-index` attribute for lookup. The `data-index` was already being set correctly — only the consumer was wrong.
+
+**Promoted to Lessons Learned:** Yes — 2nd occurrence of TTS-DOM index mismatch. Added lesson about never using ordinal DOM position for TTS paragraph lookup.
+
+---
+
 <!-- New entries go above this line, most recent first -->

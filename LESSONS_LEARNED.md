@@ -70,7 +70,9 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Do not add the npm package `tsc` — The package named `tsc` is not TypeScript and will shadow the real compiler binary in `node_modules/.bin/tsc`. Keep only `typescript` in `devDependencies` and use `npm run build`.
 
-**[2026-02-22]** Markdown-first rendering needs explicit TTS alignment — Rendering markdown blocks directly to DOM is great for readability, but TTS highlighting only works if each clickable rendered block is mapped to a normalized paragraph index used by `TTSEngine`. Keep this mapping in one place (article controller) and reuse it for click-to-seek + progress highlighting.
+**[2026-02-22]** Markdown-first rendering needs explicit TTS alignment — Rendering markdown blocks directly to DOM is great for readability, but TTS highlighting only works if each clickable rendered block is mapped to a normalized paragraph index used by `TTSEngine`. Keep this mapping in one place (article controller) and reuse it for click-to-seek + progress highlighting. Always look up DOM elements by `data-index` attribute, never by ordinal position in `querySelectorAll` results — block merging and filtering mean ordinal ≠ TTS index.
+
+**[2026-02-22]** Never use ordinal DOM position for TTS paragraph lookup — When short blocks are merged into one TTS paragraph, multiple DOM elements share the same `data-index`. Using `querySelectorAll('.paragraph')[i]` to find TTS paragraph `i` is wrong; always use `querySelector('.paragraph[data-index="N"]')` or compare `element.dataset.index`. This applies to highlighting, scrolling, and any future feature that maps between TTS position and DOM. (Promoted from iteration log: 2nd occurrence of TTS-DOM index mismatch.)
 
 ---
 

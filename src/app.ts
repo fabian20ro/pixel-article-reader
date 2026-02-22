@@ -293,13 +293,15 @@ async function main(): Promise<void> {
 
   function highlightParagraph(index: number): void {
     const paragraphs = refs.articleText.querySelectorAll('.paragraph');
-    paragraphs.forEach((element, i) => {
-      element.classList.toggle('active', i === index);
-      element.classList.toggle('past', i < index);
+    paragraphs.forEach((element) => {
+      const elIndex = parseInt((element as HTMLElement).dataset.index ?? '-1', 10);
+      element.classList.toggle('active', elIndex === index);
+      element.classList.toggle('past', elIndex < index);
     });
 
-    if (index >= 0 && index < paragraphs.length) {
-      paragraphs[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const target = refs.articleText.querySelector(`.paragraph[data-index="${index}"]`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }
 }
