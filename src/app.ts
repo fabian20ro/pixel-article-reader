@@ -61,6 +61,7 @@ async function main(): Promise<void> {
 
   const settings = loadSettings();
   let currentArticle: Article | null = null;
+  let currentArticleUrl = '';
   let currentLangOverride: 'auto' | Language = settings.lang;
 
   // ── TTS engine ──────────────────────────────────────────────────
@@ -102,6 +103,7 @@ async function main(): Promise<void> {
   const articleSection = $('article-section');
   const articleTitle = $('article-title');
   const articleInfo = $('article-info');
+  const translateLink = $('translate-link') as HTMLAnchorElement;
   const articleText = $('article-text');
   const playerControls = $('player-controls');
   const playPauseBtn = $('play-pause');
@@ -307,6 +309,7 @@ async function main(): Promise<void> {
     try {
       const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
       currentArticle = article;
+      currentArticleUrl = url;
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
@@ -324,6 +327,10 @@ async function main(): Promise<void> {
       lang.toUpperCase(),
       `${article.wordCount} words`,
     ].join(' \u00B7 ');
+
+    // Translate link
+    translateLink.href = `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(currentArticleUrl)}`;
+    translateLink.classList.remove('hidden');
 
     // Render paragraphs
     articleText.innerHTML = '';

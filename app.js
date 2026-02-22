@@ -43,6 +43,7 @@ async function main() {
     }
     const settings = loadSettings();
     let currentArticle = null;
+    let currentArticleUrl = '';
     let currentLangOverride = settings.lang;
     // ── TTS engine ──────────────────────────────────────────────────
     const tts = new TTSEngine({
@@ -80,6 +81,7 @@ async function main() {
     const articleSection = $('article-section');
     const articleTitle = $('article-title');
     const articleInfo = $('article-info');
+    const translateLink = $('translate-link');
     const articleText = $('article-text');
     const playerControls = $('player-controls');
     const playPauseBtn = $('play-pause');
@@ -261,6 +263,7 @@ async function main() {
         try {
             const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
             currentArticle = article;
+            currentArticleUrl = url;
             displayArticle(article);
         }
         catch (err) {
@@ -277,6 +280,9 @@ async function main() {
             lang.toUpperCase(),
             `${article.wordCount} words`,
         ].join(' \u00B7 ');
+        // Translate link
+        translateLink.href = `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(currentArticleUrl)}`;
+        translateLink.classList.remove('hidden');
         // Render paragraphs
         articleText.innerHTML = '';
         article.paragraphs.forEach((p, i) => {
