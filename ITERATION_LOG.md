@@ -435,4 +435,22 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Merge short TTS paragraphs to eliminate pauses on bylines
+
+**Context:** The sentence-merging fix alone didn't resolve TTS pauses on names. The real issue: short blocks like author bylines ("Ilene S. Cohen, Ph.D.") became their own TTS paragraphs with pause boundaries before and after. The sentence fix only helped within a paragraph.
+
+**What happened:**
+- Added `MIN_TTS_PARAGRAPH = 80` constant in `article-controller.ts`.
+- Rewrote `renderArticleBody()` markdown path to accumulate short blocks (< 80 chars) and merge them into the next block's TTS paragraph. All merged visual blocks share the same `data-index`, so click-to-seek and highlighting still work.
+- The fallback (non-markdown) path is unaffected — those paragraphs are already filtered by `MIN_PARAGRAPH_LENGTH = 20` in extractor.ts and tend to be full-length.
+- All 179 tests pass, build clean.
+
+**Outcome:** Success. Short bylines, credits, and headings are now spoken together with the following content instead of as isolated pause-bounded utterances.
+
+**Insight:** TTS quality has two pause levels: inter-sentence pauses (within an utterance, controlled by punctuation) and inter-paragraph pauses (between separate `SpeechSynthesisUtterance` chains). Fixing only sentence splitting wasn't enough — the paragraph-level grouping also needed short-item merging. A threshold of 80 chars catches bylines/credits while keeping real paragraphs separate.
+
+**Promoted to Lessons Learned:** No — second occurrence of TTS pause issue, but different root cause (paragraph level vs sentence level). If it recurs, promote the two-level pause insight.
+
+---
+
 <!-- New entries go above this line, most recent first -->

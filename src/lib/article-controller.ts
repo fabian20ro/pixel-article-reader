@@ -13,6 +13,14 @@ import type { AppDomRefs } from './dom-refs.js';
 // marked is loaded as a global via <script> tag (vendor/marked.js)
 declare const marked: { parse(md: string): string };
 
+/**
+ * TTS paragraph minimum length.  Blocks whose normalised text is shorter
+ * than this are merged with the following block so that short items like
+ * author bylines ("Ilene S. Cohen, Ph.D."), photo credits, or short
+ * headings don't produce their own pause-bounded TTS utterance.
+ */
+const MIN_TTS_PARAGRAPH = 80;
+
 const MARKDOWN_BLOCK_SELECTOR = [
   ':scope > h1',
   ':scope > h2',
@@ -178,21 +186,41 @@ export class ArticleController {
 
         const blocks = this.getMarkdownBlocks(refs.articleText);
 
+        // Merge short blocks (bylines, credits, short headings) with the
+        // next block so they don't produce their own pause-bounded TTS
+        // utterance.  All merged visual blocks share the same TTS index.
         const ttsParagraphs: string[] = [];
+        let pendingText = '';
+        let pendingBlocks: HTMLElement[] = [];
+
+        const flush = () => {
+          if (!pendingText) return;
+          const index = ttsParagraphs.length;
+          ttsParagraphs.push(pendingText);
+          for (const b of pendingBlocks) {
+            b.classList.add('paragraph');
+            b.dataset.index = String(index);
+            b.addEventListener('click', () => {
+              this.options.tts.jumpToParagraph(index);
+              if (!this.options.tts.state.isPlaying) this.options.tts.play();
+            });
+          }
+          pendingText = '';
+          pendingBlocks = [];
+        };
+
         blocks.forEach((block) => {
           const text = this.normalizeTtsText(block.textContent ?? '');
           if (!text) return;
 
-          const index = ttsParagraphs.length;
-          ttsParagraphs.push(text);
+          pendingText = pendingText ? pendingText + ' ' + text : text;
+          pendingBlocks.push(block);
 
-          block.classList.add('paragraph');
-          block.dataset.index = String(index);
-          block.addEventListener('click', () => {
-            this.options.tts.jumpToParagraph(index);
-            if (!this.options.tts.state.isPlaying) this.options.tts.play();
-          });
+          if (pendingText.length >= MIN_TTS_PARAGRAPH) {
+            flush();
+          }
         });
+        flush();
 
         if (ttsParagraphs.length > 0) {
           article.paragraphs = ttsParagraphs;
