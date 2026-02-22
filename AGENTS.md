@@ -38,6 +38,7 @@ This project maintains a persistent learning system across AI agent sessions.
 - **Build:** `tsc` only — no bundler. Run `npm run build` to compile
 - **Testing:** Vitest with jsdom environment. Run `npm test`
 - **Hosting target:** GitHub Pages (static files)
+- **CI/CD:** GitHub Actions — auto-deploys Pages on push, auto-deploys CF Worker on `worker/` changes
 
 ## Repository Layout
 
@@ -62,7 +63,12 @@ style.css                # Dark-theme mobile-first styles
 manifest.json            # PWA manifest with Share Target config
 sw.js                    # Service Worker (plain JS, not compiled from TS)
 vendor/Readability.js    # Vendored Mozilla Readability (~2800 lines)
-worker/cors-proxy.js     # Cloudflare Worker CORS proxy (deploy separately)
+worker/
+  cors-proxy.js          # Cloudflare Worker CORS proxy
+  wrangler.toml          # Wrangler deployment config
+.github/workflows/
+  deploy-pages.yml       # GitHub Pages CI/CD (build + test + deploy)
+  deploy-worker.yml      # Cloudflare Worker CI/CD (on worker/ changes)
 icons/                   # PWA icons
 ```
 
@@ -81,7 +87,7 @@ npm run watch            # Compile TypeScript in watch mode
 2. **Compiled JS goes to root.** `tsconfig.json` has `outDir: "."` and `rootDir: "src"`, so `src/app.ts` compiles to `./app.js` and `src/lib/foo.ts` compiles to `./lib/foo.js`.
 3. **Service Worker is plain JS.** `sw.js` is not TypeScript — it runs in a different scope and is kept simple.
 4. **Readability.js is a global.** It's loaded via `<script>` tag before `app.js`. In TypeScript, it's accessed via a `declare const Readability` ambient declaration in `extractor.ts`.
-5. **The Cloudflare Worker is deployed separately.** `worker/cors-proxy.js` is not part of the app build — it's pasted into the Cloudflare dashboard.
+5. **The Cloudflare Worker is deployed separately.** `worker/cors-proxy.js` is deployed via GitHub Actions using wrangler. It's configured in `worker/wrangler.toml` and uses environment bindings (`ALLOWED_ORIGIN`, `PROXY_SECRET`) instead of hardcoded constants.
 
 ## Critical Implementation Details
 
@@ -92,19 +98,32 @@ Chrome on Android silently stops speaking after ~15 seconds of continuous text. 
 The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query params (`?url=...`). Some apps put the URL in `?text=` instead — `url-utils.ts` checks both fields.
 
 ### CORS Proxy Security (worker/cors-proxy.js)
-The proxy rejects private IPs (SSRF prevention), enforces a 2 MB response limit, sets a 10-second timeout, and strips cookies. The `ALLOWED_ORIGIN` should be restricted to the GitHub Pages domain in production.
+The proxy rejects private IPs (SSRF prevention), enforces a 2 MB response limit, sets a 10-second timeout, and strips cookies. It validates requests via a shared secret (`X-Proxy-Key` header, checked against the `PROXY_SECRET` env binding). `ALLOWED_ORIGIN` is set to the GitHub Pages domain in `wrangler.toml`.
 
 ## Configuration
 
-The proxy URL must be set in `src/app.ts`:
+The proxy URL and secret must be set in `src/app.ts`:
 
 ```ts
 const CONFIG = {
-  PROXY_BASE: 'https://article-voice-proxy.YOUR_SUBDOMAIN.workers.dev',
+  PROXY_BASE: 'https://article-voice-proxy.fabian20ro.workers.dev',
+  PROXY_SECRET: '',  // same value as the PROXY_SECRET worker secret
 };
 ```
 
 After changing, run `npm run build` to recompile.
+
+## CI/CD
+
+Three GitHub repository secrets are required:
+
+| Secret | Purpose |
+|--------|---------|
+| `CLOUDFLARE_API_TOKEN` | Wrangler uses this to deploy the worker |
+| `CLOUDFLARE_ACCOUNT_ID` | Identifies the Cloudflare account |
+| `PROXY_SECRET` | Shared secret injected into the worker as an env binding |
+
+See README.md for step-by-step setup instructions.
 
 ## Testing Notes
 

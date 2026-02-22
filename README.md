@@ -1,5 +1,7 @@
 # ArticleVoice
 
+**Live app: https://fabian20ro.github.io/pixel-article-reader/**
+
 PWA that turns any article into audio using on-device TTS. Zero cost. Works offline after first load.
 
 ## How It Works
@@ -13,38 +15,94 @@ The entire app runs client-side. The only server component is a lightweight Clou
 
 ## Quick Start
 
-### 1. Deploy the CORS proxy
+### 1. Set up the Cloudflare Worker (CORS proxy)
 
-Create a free [Cloudflare Workers](https://workers.cloudflare.com/) account, then deploy `worker/cors-proxy.js`:
+The worker deploys automatically via GitHub Actions when you push changes to `worker/`. You need to configure three repository secrets first.
 
-1. Go to **Workers & Pages > Create Worker**
-2. Paste the contents of `worker/cors-proxy.js`
-3. Deploy and note the URL (e.g. `https://article-voice-proxy.your-subdomain.workers.dev`)
+#### Step-by-step: Create a Cloudflare API Token
 
-### 2. Configure the proxy URL
+1. Sign up for a free account at [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Go to **My Profile > API Tokens > Create Token**
+3. Use the **"Edit Cloudflare Workers"** template, or create a custom token with:
+   - **Account / Workers Scripts**: Edit
+   - **Zone / Zone**: Read (optional, only if using a custom domain)
+4. Copy the generated token — you'll need it for GitHub
 
-In `src/app.ts`, update the `PROXY_BASE` constant:
+#### Step-by-step: Find your Cloudflare Account ID
+
+1. Go to the [Cloudflare dashboard](https://dash.cloudflare.com)
+2. Click any domain (or Workers & Pages)
+3. Your **Account ID** is shown on the right sidebar under the API section
+4. Copy it
+
+#### Step-by-step: Choose a Proxy Secret
+
+Pick any random string to use as a shared secret between the app and the worker. This prevents unauthorized use of your proxy. Example:
+
+```sh
+openssl rand -hex 32
+```
+
+#### Step-by-step: Add secrets to GitHub
+
+Go to your repo **Settings > Secrets and variables > Actions > New repository secret** and add:
+
+| Secret name | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | The API token from step 1 |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Account ID from step 2 |
+| `PROXY_SECRET` | The random string from step 3 |
+
+#### Step-by-step: Set the proxy secret in the app
+
+In `src/app.ts`, set `CONFIG.PROXY_SECRET` to the same value you used for `PROXY_SECRET` above:
 
 ```ts
 const CONFIG = {
-  PROXY_BASE: 'https://article-voice-proxy.your-subdomain.workers.dev',
+  PROXY_BASE: 'https://article-voice-proxy.fabian20ro.workers.dev',
+  PROXY_SECRET: 'your-secret-here',
   // ...
 };
 ```
 
-Then rebuild:
+Then rebuild: `npm run build`
+
+> **Note:** The secret is visible in the client-side JS. Its purpose is to prevent casual abuse of the proxy, not to be cryptographically secure. If you don't need this, leave `PROXY_SECRET` empty in both the worker and the app — the worker will skip validation.
+
+### 2. Deploy to GitHub Pages
+
+GitHub Actions handles this automatically. On every push to `main`:
+
+1. TypeScript is compiled
+2. Tests are run
+3. The app shell is deployed to GitHub Pages
+
+To enable: go to **Settings > Pages > Source** and select **GitHub Actions**.
+
+The site will be available at `https://fabian20ro.github.io/pixel-article-reader/`.
+
+### 3. Deploy the Cloudflare Worker
+
+The worker deploys automatically on push to `main` when any file in `worker/` changes. The GitHub Action uses `wrangler` with your `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
+
+To trigger the first deploy, push any change to `worker/` (or push after setting up the secrets).
+
+The worker URL will be: `https://article-voice-proxy.fabian20ro.workers.dev`
+
+#### Manual first deploy (alternative)
+
+If you prefer to deploy manually the first time:
 
 ```sh
-npm run build
+cd worker
+npx wrangler deploy
+npx wrangler secret put PROXY_SECRET
+# paste your secret when prompted
 ```
-
-### 3. Deploy to GitHub Pages
-
-Push the repo to GitHub, then go to **Settings > Pages** and set the source to the `main` branch root (`/`). The site will be available at `https://<username>.github.io/<repo>/`.
 
 ### 4. Install the PWA
 
-Open the deployed site on your phone (Chrome or Brave). Tap the install banner or use the browser menu to **Add to Home Screen**. Once installed, you can share articles directly from your browser to ArticleVoice.
+Open the live app on your phone (Chrome or Brave). Tap the install banner or use the browser menu to **Add to Home Screen**. Once installed, you can share articles directly from your browser to ArticleVoice.
 
 ## Usage
 
@@ -103,6 +161,13 @@ TypeScript source lives in `src/`. Compiled JS output goes to the project root (
 npm test
 ```
 
+### CI/CD
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `deploy-pages.yml` | Push to `main` | Builds TS, runs tests, deploys to GitHub Pages |
+| `deploy-worker.yml` | Push to `main` changing `worker/**` | Deploys Cloudflare Worker via wrangler |
+
 ### Project Structure
 
 ```
@@ -126,7 +191,11 @@ npm test
 ├── vendor/
 │   └── Readability.js      # Mozilla Readability (vendored)
 ├── worker/
-│   └── cors-proxy.js       # Cloudflare Worker CORS proxy
+│   ├── cors-proxy.js       # Cloudflare Worker CORS proxy
+│   └── wrangler.toml       # Wrangler deployment config
+├── .github/workflows/
+│   ├── deploy-pages.yml    # GitHub Pages CI/CD
+│   └── deploy-worker.yml   # Cloudflare Worker CI/CD
 ├── icons/                  # PWA icons (192px, 512px)
 ├── tsconfig.json
 └── package.json

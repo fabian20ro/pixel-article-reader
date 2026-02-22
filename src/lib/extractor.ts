@@ -29,19 +29,24 @@ const WORDS_PER_MINUTE = 180;       // spoken pace
 /**
  * Fetch an article URL via the CORS proxy and extract readable content.
  */
-export async function extractArticle(url: string, proxyBase: string): Promise<Article> {
-  const html = await fetchViaProxy(url, proxyBase);
+export async function extractArticle(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {
+  const html = await fetchViaProxy(url, proxyBase, proxySecret);
   return parseArticle(html, url);
 }
 
-async function fetchViaProxy(url: string, proxyBase: string): Promise<string> {
+async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: string): Promise<string> {
   const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
+  const headers: Record<string, string> = {};
+  if (proxySecret) {
+    headers['X-Proxy-Key'] = proxySecret;
+  }
+
   try {
-    const resp = await fetch(proxyUrl, { signal: controller.signal });
+    const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
     if (!resp.ok) {
       throw new Error(`Proxy returned ${resp.status}: ${resp.statusText}`);
     }

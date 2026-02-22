@@ -2,17 +2,18 @@
 
 const CACHE_NAME = 'article-voice-v1';
 
+// Precache list uses relative paths so it works in any subdirectory (e.g. GitHub Pages)
 const PRECACHE = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/lib/extractor.js',
-  '/lib/tts-engine.js',
-  '/lib/lang-detect.js',
-  '/lib/url-utils.js',
-  '/vendor/Readability.js',
-  '/manifest.json',
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './lib/extractor.js',
+  './lib/tts-engine.js',
+  './lib/lang-detect.js',
+  './lib/url-utils.js',
+  './vendor/Readability.js',
+  './manifest.json',
 ];
 
 // ── Install: pre-cache app shell ────────────────────────────────────

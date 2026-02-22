@@ -42,7 +42,11 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 ## Performance & Infrastructure
 
-<!-- Insights about deployment, CI/CD, build performance -->
+**[2026-02-22]** Manifest and SW paths must be relative for subdirectory deployment — GitHub Pages serves at `/<repo>/`, not `/`. Using absolute paths like `"start_url": "/"` or `'/index.html'` in the SW precache list will break. Use `"."` for manifest `start_url`/`scope`/`share_target.action` and `'./'`-prefixed paths in the SW precache list.
+
+**[2026-02-22]** GitHub Pages deploy via Actions needs a clean artifact — The `deploy-pages.yml` workflow builds a `_site/` directory containing only deployable files (no `src/`, `node_modules/`, etc.) and uses `actions/upload-pages-artifact`. Pages source must be set to "GitHub Actions" in repo settings.
+
+**[2026-02-22]** Cloudflare Worker uses env bindings, not hardcoded constants — `ALLOWED_ORIGIN` is a `[vars]` entry in `wrangler.toml`, `PROXY_SECRET` is a secret set via `wrangler secret put` or injected by GitHub Actions. The worker reads them from the `env` parameter in `fetch(request, env)`. This avoids committing secrets and allows per-environment configuration.
 
 ## Dependencies & External Services
 
@@ -50,7 +54,9 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 ## Process & Workflow
 
-**[2026-02-22]** Build before committing — Since compiled JS files are committed (needed for GitHub Pages deployment), always run `npm run build` after editing TypeScript source and before committing. Stale `.js` files that don't match the `.ts` source will cause confusing runtime behavior.
+**[2026-02-22]** Build before committing — Since compiled JS files are committed (needed for GitHub Pages deployment), always run `npm run build` after editing TypeScript source and before committing. Stale `.js` files that don't match the `.ts` source will cause confusing runtime behavior. (Note: the CI pipeline also builds, so stale JS won't reach production, but it will confuse local testing.)
+
+**[2026-02-22]** Three GitHub secrets are required for CI/CD — `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PROXY_SECRET`. These must be set in the repo's Settings > Secrets > Actions before the deploy-worker workflow will succeed.
 
 ---
 
