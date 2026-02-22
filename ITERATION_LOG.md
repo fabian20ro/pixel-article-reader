@@ -416,4 +416,41 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix TTS pauses on names and abbreviations
+
+**Context:** User reported that names like "Ilene S. Cohen, Ph.D." are read with unnatural pauses because the sentence splitter breaks on every period, producing tiny fragments like "Ilene S.", "Cohen, Ph.", "D." — each spoken as a separate `SpeechSynthesisUtterance`.
+
+**What happened:**
+- Added `mergeShortSentences()` post-processing step to `splitSentences()` in `tts-engine.ts`. After the regex splits text on punctuation, fragments shorter than 40 characters are merged with the next fragment, up to a 200-character cap (to stay safely under Android's ~15-second utterance cutoff).
+- Exported `splitSentences()` for direct unit testing.
+- Added 9 new `splitSentences` tests: normal splitting, name abbreviations, "Dr." prefix, multiple abbreviations in running text, long sentences staying separate, MAX_UTTERANCE_LENGTH cap, single sentence, no punctuation, empty string.
+- Updated 4 existing TTSEngine tests that used short test strings (now merged by the new logic) to use sentences longer than 40 characters.
+- All 179 tests pass, build clean.
+
+**Outcome:** Success. Names and abbreviations are now spoken as part of a natural utterance instead of as isolated fragments with pauses.
+
+**Insight:** Post-processing (merge short fragments) is more robust than trying to make the splitting regex abbreviation-aware. The 40-char minimum catches virtually all abbreviation fragments while still allowing real sentences to stand alone. The 200-char max cap preserves the Android chunking safety.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
+### [2026-02-22] Merge short TTS paragraphs to eliminate pauses on bylines
+
+**Context:** The sentence-merging fix alone didn't resolve TTS pauses on names. The real issue: short blocks like author bylines ("Ilene S. Cohen, Ph.D.") became their own TTS paragraphs with pause boundaries before and after. The sentence fix only helped within a paragraph.
+
+**What happened:**
+- Added `MIN_TTS_PARAGRAPH = 80` constant in `article-controller.ts`.
+- Rewrote `renderArticleBody()` markdown path to accumulate short blocks (< 80 chars) and merge them into the next block's TTS paragraph. All merged visual blocks share the same `data-index`, so click-to-seek and highlighting still work.
+- The fallback (non-markdown) path is unaffected — those paragraphs are already filtered by `MIN_PARAGRAPH_LENGTH = 20` in extractor.ts and tend to be full-length.
+- All 179 tests pass, build clean.
+
+**Outcome:** Success. Short bylines, credits, and headings are now spoken together with the following content instead of as isolated pause-bounded utterances.
+
+**Insight:** TTS quality has two pause levels: inter-sentence pauses (within an utterance, controlled by punctuation) and inter-paragraph pauses (between separate `SpeechSynthesisUtterance` chains). Fixing only sentence splitting wasn't enough — the paragraph-level grouping also needed short-item merging. A threshold of 80 chars catches bylines/credits while keeping real paragraphs separate.
+
+**Promoted to Lessons Learned:** No — second occurrence of TTS pause issue, but different root cause (paragraph level vs sentence level). If it recurs, promote the two-level pause insight.
+
+---
+
 <!-- New entries go above this line, most recent first -->
