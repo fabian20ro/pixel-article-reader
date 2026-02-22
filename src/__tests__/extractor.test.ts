@@ -13,11 +13,9 @@ beforeEach(() => {
   (globalThis as Record<string, unknown>).TurndownService = class {
     constructor(_options?: object) {}
     turndown(html: string): string {
-      return html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script, style, iframe, object, embed').forEach((node) => node.remove());
+      return (doc.body?.textContent ?? '').replace(/\s+/g, ' ').trim();
     }
   };
 });
