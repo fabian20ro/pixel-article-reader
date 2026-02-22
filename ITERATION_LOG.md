@@ -228,4 +228,19 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix CodeQL security issues (#1, #2, #3)
+
+**Goal:** Fix three CodeQL-detected security vulnerabilities — two in vendored Readability.js (High severity) and one in the deploy-worker workflow (Medium severity).
+
+**What happened:**
+- **Issue #1 — Incomplete hostname regex** (`vendor/Readability.js:155`): Video allowlist regex lacked a boundary after TLD, so `youtube.com.evil.com` could match. Added lookahead `(?=[/\?#:]|$)` and escaped unescaped dot in `live.bilibili`.
+- **Issue #2 — Incomplete URL scheme check** (`vendor/Readability.js:481`): Only checked lowercase `javascript:` scheme. Replaced `indexOf` with regex `/^\s*(javascript|data):/i` to also block `data:` URIs, case variations, and whitespace prefixes.
+- **Issue #3 — Missing workflow permissions** (`.github/workflows/deploy-worker.yml`): Added `permissions: contents: read` to follow principle of least privilege, matching the pattern already used in `deploy-pages.yml`.
+
+**Outcome:** Success. All 102 tests pass, build succeeds, three security fixes applied.
+
+**Insight:** Vendored libraries accumulate CodeQL findings over time since they don't receive upstream updates automatically. Hostname regexes in URL allowlists need boundary anchoring (lookahead for `/`, `?`, `#`, `:`, or end-of-string) to prevent subdomain spoofing.
+
+---
+
 <!-- New entries go above this line, most recent first -->

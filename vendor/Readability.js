@@ -152,7 +152,7 @@ Readability.prototype = {
     replaceFonts: /<(\/?)font[^>]*>/gi,
     normalize: /\s{2,}/g,
     videos:
-      /\/\/(www\.)?((dailymotion|youtube|youtube-nocookie|player\.vimeo|v\.qq|bilibili|live.bilibili)\.com|(archive|upload\.wikimedia)\.org|player\.twitch\.tv)/i,
+      /\/\/(www\.)?((dailymotion|youtube|youtube-nocookie|player\.vimeo|v\.qq|bilibili|live\.bilibili)\.com|(archive|upload\.wikimedia)\.org|player\.twitch\.tv)(?=[/\?#:]|$)/i,
     shareElements: /(\b|_)(share|sharedaddy)(\b|_)/i,
     nextLink: /(next|weiter|continue|>([^\|]|$)|»([^\|]|$))/i,
     prevLink: /(prev|earl|old|new|<|«)/i,
@@ -476,9 +476,9 @@ Readability.prototype = {
     this._forEachNode(links, function (link) {
       var href = link.getAttribute("href");
       if (href) {
-        // Remove links with javascript: URIs, since
+        // Remove links with javascript: or data: URIs, since
         // they won't work after scripts have been removed from the page.
-        if (href.indexOf("javascript:") === 0) {
+        if (/^\s*(javascript|data):/i.test(href)) {
           // if the link only contains simple text content, it can be converted to a text node
           if (
             link.childNodes.length === 1 &&
