@@ -122,6 +122,8 @@ Open ArticleVoice directly and paste an article URL into the input field. Press 
 | Skip forward / back | Jump to next or previous paragraph |
 | Speed buttons | Set reading speed (0.75x to 2x) |
 | Language toggle | Switch between Auto, EN, and RO |
+| Sentence skip | Skip forward / back one sentence within a paragraph |
+| Translate | Re-fetch the article through Google Translate (for non-English articles) |
 | Tap a paragraph | Jump to that paragraph and start reading |
 | Progress bar | Click to seek to a position |
 
@@ -207,7 +209,7 @@ npm test
 |---|---|
 | Web Speech API | Free, zero-network, on-device voices. No server needed for audio. |
 | Sentence-level chunking | Avoids Chrome Android's 15-second TTS cutoff bug. Each sentence is a separate `SpeechSynthesisUtterance`, chained via `onend`. |
-| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. |
+| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Returns `X-Final-URL` header for redirect resolution. |
 | Mozilla Readability.js | Battle-tested article extraction — same engine as Firefox Reader View. |
 | No bundler | Vanilla TypeScript compiled with `tsc`. ES modules loaded directly by the browser. Keeps deployment simple — just static files. |
 | GitHub Pages | Free HTTPS hosting (required for PWA + Share Target). |

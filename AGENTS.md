@@ -100,6 +100,9 @@ The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query p
 ### CORS Proxy Security (worker/cors-proxy.js)
 The proxy rejects private IPs (SSRF prevention), enforces a 2 MB response limit, sets a 10-second timeout, and strips cookies. It validates requests via a shared secret (`X-Proxy-Key` header, checked against the `PROXY_SECRET` env binding). `ALLOWED_ORIGIN` is set to the GitHub Pages domain in `wrangler.toml`.
 
+### URL Resolution (worker/cors-proxy.js + extractor.ts)
+The proxy follows redirects (`redirect: 'follow'`) and returns the final resolved URL in the `X-Final-URL` response header. The extractor reads this header and stores it as `article.resolvedUrl`. This is critical for shortened URLs (e.g. `share.google`) — the translate button uses the resolved URL to construct the Google Translate proxy host. Without it, shortened domains produce invalid translate URLs.
+
 ## Configuration
 
 The proxy URL and secret must be set in `src/app.ts`:
