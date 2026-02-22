@@ -1,0 +1,65 @@
+# Iteration Log
+
+> Append-only journal of AI agent work sessions on this project.
+> **Add an entry at the end of every iteration.**
+> When patterns emerge (same issue 2+ times), promote to `LESSONS_LEARNED.md`.
+
+## Format
+
+Each entry should follow this structure:
+
+---
+
+### [YYYY-MM-DD] Brief Description of Work Done
+
+**Context:** What was the goal / what triggered this work
+**What happened:** Key actions taken, decisions made
+**Outcome:** Result — success, partial, or failure
+**Insight:** (optional) What would you tell the next agent about this?
+**Promoted to Lessons Learned:** Yes/No
+
+---
+
+### [2026-02-22] Initial PWA implementation — full ArticleVoice app
+
+**Context:** Greenfield implementation of ArticleVoice PWA from a detailed architecture plan. The project was an empty repo with just a LICENSE file.
+
+**What happened:**
+- Set up TypeScript project with `tsc` as sole build tool. Used `outDir: "."` with `rootDir: "src"` so compiled JS lands at the project root for direct GitHub Pages deployment.
+- Created all core modules: `url-utils.ts` (URL validation + Share Target param parsing), `lang-detect.ts` (EN/RO heuristic detection), `extractor.ts` (CORS proxy fetch + Readability.js parsing), `tts-engine.ts` (Web Speech API wrapper with sentence-level chunking to avoid Android's 15-second cutoff bug).
+- Built `app.ts` orchestrator wiring URL handling, extraction, TTS, install prompts, settings persistence, and all UI interactions.
+- Created `index.html` with full player UI, `style.css` with dark theme, `manifest.json` with Share Target, `sw.js` for offline caching.
+- Created `worker/cors-proxy.js` Cloudflare Worker with SSRF prevention.
+- Vendored Mozilla Readability.js from GitHub.
+- Generated placeholder PWA icons via Python script.
+
+**Outcome:** Success. All files created, TypeScript compiles cleanly, app structure matches the plan.
+
+**Insight:** The `outDir: "."` approach is clean for GitHub Pages but means root-level `.js` files are build artifacts — easy to accidentally edit the wrong file. Always edit `src/`, never the root `.js`.
+
+**Promoted to Lessons Learned:** Yes — architecture decision about outDir overlap and import `.js` extension requirement.
+
+---
+
+### [2026-02-22] Add documentation (README, AGENTS.md, CLAUDE.md) and Vitest test suite
+
+**Context:** Needed README for users, AGENTS.md for AI agents, CLAUDE.md as entry point, and tests for all implemented modules.
+
+**What happened:**
+- Created README.md with full usage guide (quick start, share target flow, player controls, development setup).
+- Created AGENTS.md with codebase reference (layout, commands, 5 architecture rules, critical implementation details, testing notes).
+- Created CLAUDE.md pointing to AGENTS.md.
+- Chose Vitest over Jest — it handles TypeScript natively, supports ES modules, and needs minimal config. Added `jsdom` environment for DOM API testing.
+- Wrote 75 tests across 4 files covering all library modules.
+- Hit one test failure: the extractor test for "single-newline fallback" assumed the fallback path would trigger, but the double-newline split actually succeeds with one large paragraph. Fixed by correcting the assertion to match actual behavior.
+- Had to exclude `src/__tests__/` from `tsconfig.json` to prevent `tsc` from compiling test files into the root output directory.
+
+**Outcome:** Success. 75/75 tests passing. All documentation complete.
+
+**Insight:** When testing text-splitting logic, trace through the actual regex behavior with your test data before writing assertions. The "obvious" split behavior is often wrong. Also, always add `src/__tests__` to tsconfig `exclude` when test files live inside the source tree.
+
+**Promoted to Lessons Learned:** Yes — test data accuracy lesson, tsconfig exclude for tests, and mock SpeechSynthesis guidance.
+
+---
+
+<!-- New entries go above this line, most recent first -->
