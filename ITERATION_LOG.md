@@ -186,4 +186,22 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Add PWA force-update mechanism
+
+**Context:** User installed a previous version of the PWA and the UI buttons weren't updating. Requested a way to force the app to update — either a button in settings or automatic update on load.
+
+**What happened:**
+- Added auto-reload on service worker update: listens for `controllerchange` on `navigator.serviceWorker` and reloads the page when a new SW takes control. Since the SW already calls `skipWaiting()` + `clients.claim()`, this ensures new versions activate and reload automatically.
+- Added a "Check for Updates" button in the settings panel that: calls `registration.update()` to force the browser to check for a new SW, then clears all caches and reloads the page. This handles cases where the auto-update didn't trigger (e.g., the SW file didn't change but app assets did).
+- Added status feedback text under the button.
+- Styled the button to match the existing settings panel design.
+
+**Outcome:** Success. Both auto-update on load and manual force-update from settings are implemented. All 92 tests pass.
+
+**Insight:** PWAs installed on Android can get stuck on stale caches even when the SW uses `skipWaiting()` + `clients.claim()` because the page doesn't reload after the new SW activates. Listening for `controllerchange` and auto-reloading solves the most common case. For manual recovery, clearing all caches via `caches.keys()` + `caches.delete()` and reloading is the nuclear option that always works.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->

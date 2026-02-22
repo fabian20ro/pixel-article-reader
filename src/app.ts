@@ -68,9 +68,16 @@ function $(id: string): HTMLElement {
 // ── Main ────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // Register service worker
+  // Register service worker with auto-update on new version
+  let swRegistration: ServiceWorkerRegistration | undefined;
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+    swRegistration = await navigator.serviceWorker.register('sw.js').catch(() => undefined);
   }
 
   const settings = loadSettings();
@@ -136,6 +143,8 @@ async function main(): Promise<void> {
   const speedValue = $('speed-value');
   const settingsVoice = $('settings-voice') as HTMLSelectElement;
   const settingsWakelock = $('settings-wakelock') as HTMLInputElement;
+  const checkUpdateBtn = $('check-update-btn');
+  const updateStatus = $('update-status');
   const installBanner = $('install-banner');
   const installBtn = $('install-btn');
   const installDismiss = $('install-dismiss');
@@ -169,6 +178,25 @@ async function main(): Promise<void> {
   installDismiss.addEventListener('click', () => {
     installBanner.classList.add('hidden');
     localStorage.setItem('articlevoice-install-dismissed', '1');
+  });
+
+  // ── Check for updates button ───────────────────────────────────
+
+  checkUpdateBtn.addEventListener('click', async () => {
+    updateStatus.textContent = 'Checking...';
+    try {
+      if (swRegistration) {
+        await swRegistration.update();
+      }
+      // If a new SW was found, controllerchange will reload the page.
+      // Otherwise clear caches and hard-reload to pick up any changes.
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      updateStatus.textContent = 'Reloading...';
+      window.location.reload();
+    } catch {
+      updateStatus.textContent = 'Update check failed. Try again.';
+    }
   });
 
   // ── Settings ────────────────────────────────────────────────────

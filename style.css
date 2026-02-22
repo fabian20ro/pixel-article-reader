@@ -117,6 +117,33 @@ body {
   margin-bottom: 0;
 }
 
+.btn-update {
+  width: 100%;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.btn-update:hover,
+.btn-update:active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.update-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  text-align: center;
+  min-height: 0;
+}
+
+.update-status:empty {
+  display: none;
+}
+
 .settings-badge {
   text-align: center;
   padding-top: 8px;
