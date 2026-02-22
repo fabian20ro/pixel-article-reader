@@ -268,4 +268,69 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Refactor to modular app architecture + markdown reading pipeline + Jina fallback
+
+**Context:** Implemented the reliability-first refactor plan, then added markdown-rendered reading mode and Jina Reader retry flow on top of the refactored structure.
+
+**What happened:**
+- Introduced modular app architecture:
+  - `src/lib/settings-store.ts` for settings persistence/validation
+  - `src/lib/dom-refs.ts` for typed DOM references
+  - `src/lib/pwa-update-manager.ts` for SW registration/update/reload policy
+  - `src/lib/article-controller.ts` for extraction/rendering/translation UI flow
+  - `src/lib/release.ts` for build metadata display
+- Updated SW update behavior and release metadata wiring:
+  - startup + visibility update checks
+  - deferred reload when playback is active
+  - manual force refresh kept as break-glass path
+- Added markdown content pipeline:
+  - `Article` now includes `markdown`
+  - Readability output is converted to markdown (Turndown-compatible global)
+  - markdown is rendered into formatted HTML (marked-compatible global) with sanitization
+  - rendered top-level blocks are mapped to TTS paragraph indices for click/highlight parity
+- Added user actions:
+  - **Try with Jina Reader** (`extractArticleWithJina`) with fallback to default extraction
+  - **Copy as Markdown** button (clipboard export)
+- Extended Cloudflare Worker:
+  - `GET /?url=...&mode=markdown` path that fetches `https://r.jina.ai/<url>`
+  - optional server-side `JINA_KEY` authorization header
+  - keeps existing SSRF/rate-limit/CORS constraints
+- Added/updated tests:
+  - new `settings-store` test suite
+  - new `pwa-update-manager` test suite
+  - expanded extractor tests for markdown + Jina + fallback behavior
+- Fixed local toolchain blocker:
+  - removed accidental npm dependency `tsc` (which shadowed TypeScript compiler binary)
+
+**Outcome:** Success. Build passes and all tests pass (`7 files, 164 tests`).
+
+**Insight:** A package named `tsc` can silently replace the expected compiler command in npm scripts. For TypeScript projects, keep only `typescript` and avoid adding `tsc` as a dependency.
+
+**Promoted to Lessons Learned:** Yes — `tsc` package shadowing and markdown-to-TTS alignment guidance.
+
+---
+
+### [2026-02-22] Stop tracking generated JS outputs
+
+**Context:** Repo policy changed: generated build outputs should not be committed. Only source files stay tracked; CI build produces runtime JS before deploy.
+
+**What happened:**
+- Updated `.gitignore` to ignore generated outputs:
+  - `app.js`
+  - `lib/*.js`
+- Kept source/runtime JS files tracked:
+  - `sw.js`
+  - `worker/cors-proxy.js`
+  - `vendor/*.js`
+- Updated docs (`README.md`, `AGENTS.md`, codemaps, lessons) to reflect that root JS build outputs are generated and gitignored.
+- Confirmed build and tests still pass with generated output policy.
+
+**Outcome:** Success. Repo now tracks source, not generated app bundle outputs.
+
+**Insight:** Ignoring only generated runtime outputs (`app.js`, `lib/*.js`) keeps commits cleaner while preserving tracked JS files that are true source (SW, worker, vendor).
+
+**Promoted to Lessons Learned:** Yes — generated output tracking policy.
+
+---
+
 <!-- New entries go above this line, most recent first -->

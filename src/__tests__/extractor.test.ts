@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { extractArticle, createArticleFromText } from '../lib/extractor.js';
+import { extractArticle, extractArticleWithJina, createArticleFromText } from '../lib/extractor.js';
 
 // ── Mock Readability globally ─────────────────────────────────────
 
@@ -10,11 +10,22 @@ beforeEach(() => {
     constructor(_doc: Document) {}
     parse = mockParse;
   };
+  (globalThis as Record<string, unknown>).TurndownService = class {
+    constructor(_options?: object) {}
+    turndown(html: string): string {
+      return html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  };
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   delete (globalThis as Record<string, unknown>).Readability;
+  delete (globalThis as Record<string, unknown>).TurndownService;
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -127,6 +138,22 @@ describe('extractArticle', () => {
     expect(article.lang).toBe('en');
     expect(article.wordCount).toBeGreaterThan(0);
     expect(article.estimatedMinutes).toBeGreaterThanOrEqual(1);
+  });
+
+  it('produces markdown content from extracted HTML', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Markdown Title',
+      content: '<h2>Section</h2><p>Paragraph with <strong>bold</strong> text.</p>',
+      textContent: 'Section\\n\\nParagraph with bold text.',
+      siteName: 'Example',
+      excerpt: 'Section...',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    expect(article.markdown.length).toBeGreaterThan(0);
+    expect(article.markdown).toContain('Markdown Title');
   });
 
   it('falls back to <p> extraction when Readability returns null', async () => {
@@ -308,6 +335,80 @@ describe('extractArticle', () => {
   });
 });
 
+describe('extractArticleWithJina', () => {
+  it('fetches markdown mode from proxy', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: () => Promise.resolve(
+        '# Jina Title\n\nParagraph one has enough words for extraction.\n\nParagraph two also has enough words for extraction.',
+      ),
+      headers: { get: (name: string) => (name === 'X-Final-URL' ? ARTICLE_URL : null) },
+    } as unknown as Response);
+
+    const article = await extractArticleWithJina(ARTICLE_URL, PROXY);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      `${PROXY}?url=${encodeURIComponent(ARTICLE_URL)}&mode=markdown`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(article.title).toBe('Jina Title');
+    expect(article.markdown).toContain('Paragraph one');
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('falls back to Readability path when markdown mode fails', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        json: () => Promise.resolve({ error: 'Jina unavailable' }),
+        headers: { get: () => null },
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: () => Promise.resolve(SAMPLE_HTML),
+        headers: { get: () => null },
+      } as unknown as Response);
+
+    mockParse.mockReturnValue({
+      title: 'Fallback Article',
+      content: '<p>Fallback paragraph content with enough text.</p>',
+      textContent: 'Fallback paragraph content with enough text to pass the filter.',
+      siteName: 'Fallback Site',
+      excerpt: 'Fallback paragraph...',
+    });
+
+    const article = await extractArticleWithJina(ARTICLE_URL, PROXY);
+
+    expect(article.title).toBe('Fallback Article');
+    expect(article.markdown.length).toBeGreaterThan(0);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('converts markdown blocks into clean TTS paragraphs', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: () => Promise.resolve(
+        '# Title\n\n- **First** item with [link](https://example.com) and plenty of supporting words.\n\n> Quoted text here with enough words to remain in the paragraph list.',
+      ),
+      headers: { get: (name: string) => (name === 'X-Final-URL' ? ARTICLE_URL : null) },
+    } as unknown as Response);
+
+    const article = await extractArticleWithJina(ARTICLE_URL, PROXY);
+
+    expect(article.paragraphs[0]).toContain('First item with link');
+    expect(article.paragraphs[1]).toContain('Quoted text here');
+  });
+});
+
 // ── createArticleFromText ───────────────────────────────────────────
 
 describe('createArticleFromText', () => {
@@ -329,6 +430,12 @@ describe('createArticleFromText', () => {
     const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
     const article = createArticleFromText(text);
     expect(article.resolvedUrl).toBe('');
+  });
+
+  it('sets markdown to the pasted text content', () => {
+    const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
+    const article = createArticleFromText(text);
+    expect(article.markdown).toContain('This paragraph');
   });
 
   it('sets siteName to Pasted', () => {

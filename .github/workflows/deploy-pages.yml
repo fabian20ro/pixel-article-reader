@@ -26,9 +26,22 @@ jobs:
 
       - run: npm ci
 
+      - name: Verify build output consistency
+        run: |
+          npm run build
+          { shasum app.js; find lib -type f -name '*.js' | sort | xargs shasum; } > /tmp/js-hash-1.txt
+          npm run build
+          { shasum app.js; find lib -type f -name '*.js' | sort | xargs shasum; } > /tmp/js-hash-2.txt
+          diff -u /tmp/js-hash-1.txt /tmp/js-hash-2.txt
+
       - name: Inject PROXY_SECRET into client config
         run: |
           sed -i "s|PROXY_SECRET: ''|PROXY_SECRET: '${{ secrets.PROXY_SECRET }}'|" src/app.ts
+
+      - name: Stamp app release metadata
+        run: |
+          RELEASE="sha-${GITHUB_SHA::7}-run-${GITHUB_RUN_NUMBER}"
+          sed -i "s|__APP_RELEASE__|${RELEASE}|g" src/lib/release.ts
 
       - run: npm run build
 

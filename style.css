@@ -430,6 +430,63 @@ body {
   padding-bottom: 200px; /* space for fixed player controls */
 }
 
+/* Markdown rendered content */
+.article-text h1, .article-text h2, .article-text h3,
+.article-text h4, .article-text h5, .article-text h6 {
+  color: var(--text-primary);
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.article-text h2 { font-size: 1.3em; }
+.article-text h3 { font-size: 1.15em; }
+
+.article-text a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.article-text img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  margin: 8px 0;
+}
+
+.article-text blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+
+.article-text code {
+  background: var(--bg-card);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.article-text pre {
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.article-text ul, .article-text ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.article-text li { margin-bottom: 4px; }
+
+.article-text hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
 .article-text .paragraph {
   padding: 8px 12px;
   margin-bottom: 4px;

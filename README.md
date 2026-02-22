@@ -2,22 +2,22 @@
 
 **Live app: https://fabian20ro.github.io/pixel-article-reader/**
 
-PWA that turns any article into audio using on-device TTS. Zero cost. Works offline after first load.
+PWA that turns any article into audio using on-device TTS. It now renders extracted content as formatted markdown (headings, links, lists, code blocks) and supports markdown export.
 
 ## How It Works
 
 1. **Share or paste** an article URL
-2. ArticleVoice fetches the page through a CORS proxy, extracts the readable content with [Readability.js](https://github.com/mozilla/readability), and displays it
+2. ArticleVoice fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
 3. Press **Play** — the Web Speech API reads the article aloud using your device's built-in voices
-4. Control playback with skip, speed, and language controls
+4. Optionally retry parsing with **Jina Reader** and copy the article as markdown
 
-The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches to avoid CORS restrictions.
+The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches (and optional Jina markdown fetches) to avoid CORS restrictions.
 
 ## Quick Start
 
 ### 1. Set up the Cloudflare Worker (CORS proxy)
 
-The worker deploys automatically via GitHub Actions when you push changes to `worker/`. You need to configure three repository secrets first.
+The worker deploys automatically via GitHub Actions when you push changes to `worker/`. Configure the required secrets first.
 
 #### Step-by-step: Create a Cloudflare API Token
 
@@ -52,6 +52,7 @@ Go to your repo **Settings > Secrets and variables > Actions > New repository se
 | `CLOUDFLARE_API_TOKEN` | The API token from step 1 |
 | `CLOUDFLARE_ACCOUNT_ID` | Your Account ID from step 2 |
 | `PROXY_SECRET` | The random string from step 3 |
+| `JINA_KEY` | Optional Jina Reader API key for higher markdown-mode limits |
 
 #### Step-by-step: Set the proxy secret in the app
 
@@ -67,7 +68,7 @@ const CONFIG = {
 
 Then rebuild: `npm run build`
 
-> **Note:** The secret is visible in the client-side JS. Its purpose is to prevent casual abuse of the proxy, not to be cryptographically secure. If you don't need this, leave `PROXY_SECRET` empty in both the worker and the app — the worker will skip validation.
+> **Note:** `PROXY_SECRET` is visible in client-side JS. It prevents casual abuse, not determined attackers. If you don't need it, leave it empty in both app and worker.
 
 ### 2. Deploy to GitHub Pages
 
@@ -97,6 +98,7 @@ If you prefer to deploy manually the first time:
 cd worker
 npx wrangler deploy
 npx wrangler secret put PROXY_SECRET
+npx wrangler secret put JINA_KEY   # optional
 # paste your secret when prompted
 ```
 
@@ -123,9 +125,14 @@ Open ArticleVoice directly and paste an article URL **or full article text** int
 | Speed buttons | Set reading speed (0.75x to 2x) |
 | Language toggle | Switch between Auto, EN, and RO |
 | Sentence skip | Skip forward / back one sentence within a paragraph |
-| Translate | Re-fetch the article through Google Translate (for non-English articles) |
+| Translate | Translate extracted paragraphs via Worker + Google Translate API |
 | Tap a paragraph | Jump to that paragraph and start reading |
 | Progress bar | Click to seek to a position |
+
+### Reading View Actions
+
+- **Try with Jina Reader** — re-fetches the same URL via Worker `mode=markdown` using Jina Reader and re-renders
+- **Copy as Markdown** — copies normalized article markdown to clipboard
 
 ### Settings (gear icon)
 
@@ -135,6 +142,40 @@ Open ArticleVoice directly and paste an article URL **or full article text** int
 - **Keep screen on** — uses Wake Lock API to prevent screen timeout during playback
 
 Settings are persisted in `localStorage`.
+
+## PWA Recovery (stale install)
+
+If the installed app is stuck on an older UI (for example, missing the **Check for Updates** button), run this cleanup flow.
+
+### Desktop Chrome / Edge
+
+1. Open `https://fabian20ro.github.io/pixel-article-reader/`
+2. Open DevTools → **Application** → **Service Workers** → **Unregister**
+3. DevTools → **Application** → **Storage** → **Clear site data**
+4. Hard reload (`Cmd/Ctrl+Shift+R`)
+5. Reinstall the PWA
+
+### Android Chrome PWA
+
+1. Long-press app icon → **App info**
+2. **Storage & cache** → **Clear storage** and **Clear cache**
+3. In Chrome site settings for `fabian20ro.github.io`, clear site data
+4. Uninstall the home-screen app
+5. Reopen the site in Chrome and install again
+
+### Emergency Console Reset (desktop)
+
+Run this in DevTools Console on the app page:
+
+```js
+(async () => {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(regs.map((r) => r.unregister()));
+  const keys = await caches.keys();
+  await Promise.all(keys.map((k) => caches.delete(k)));
+  location.reload();
+})();
+```
 
 ## Development
 
@@ -155,7 +196,7 @@ npm run build    # compile TypeScript once
 npm run watch    # compile on file changes
 ```
 
-TypeScript source lives in `src/`. Compiled JS output goes to the project root (`app.js`, `lib/*.js`), matching the file structure that `index.html` expects.
+TypeScript source lives in `src/`. Compiled JS output goes to the project root (`app.js`, `lib/*.js`) and is generated during build/deploy (not tracked in git).
 
 ### Test
 
@@ -176,12 +217,18 @@ npm test
 ├── index.html              # App shell
 ├── style.css               # Mobile-first dark theme
 ├── manifest.json           # PWA manifest with Share Target
-├── sw.js                   # Service Worker (cache-first)
-├── app.js                  # Compiled main orchestrator
-├── lib/                    # Compiled library modules
+├── sw.js                   # Service Worker (network-first nav + stale-while-revalidate assets)
+├── app.js                  # Generated at build time (gitignored)
+├── lib/                    # Generated JS at build time (gitignored)
 │   ├── url-utils.js
 │   ├── lang-detect.js
 │   ├── extractor.js
+│   ├── translator.js
+│   ├── settings-store.js
+│   ├── dom-refs.js
+│   ├── pwa-update-manager.js
+│   ├── article-controller.js
+│   ├── release.js
 │   └── tts-engine.js
 ├── src/                    # TypeScript source
 │   ├── app.ts
@@ -189,9 +236,17 @@ npm test
 │       ├── url-utils.ts
 │       ├── lang-detect.ts
 │       ├── extractor.ts
+│       ├── translator.ts
+│       ├── settings-store.ts
+│       ├── dom-refs.ts
+│       ├── pwa-update-manager.ts
+│       ├── article-controller.ts
+│       ├── release.ts
 │       └── tts-engine.ts
 ├── vendor/
-│   └── Readability.js      # Mozilla Readability (vendored)
+│   ├── Readability.js      # Mozilla Readability (vendored)
+│   ├── turndown.js         # Markdown conversion adapter (global TurndownService)
+│   └── marked.js           # Markdown renderer adapter (global marked.parse)
 ├── worker/
 │   ├── cors-proxy.js       # Cloudflare Worker CORS proxy
 │   └── wrangler.toml       # Wrangler deployment config
@@ -210,6 +265,8 @@ npm test
 | Web Speech API | Free, zero-network, on-device voices. No server needed for audio. |
 | Sentence-level chunking | Avoids Chrome Android's 15-second TTS cutoff bug. Each sentence is a separate `SpeechSynthesisUtterance`, chained via `onend`. |
 | Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Returns `X-Final-URL` header for redirect resolution. |
+| Markdown intermediate format | Extraction output is normalized to markdown so the app can render rich content, keep TTS chunks deterministic, and support clipboard export. |
+| Jina fallback mode | On-demand retry path for sites where Readability performs poorly; key is kept server-side in Worker `JINA_KEY`. |
 | Mozilla Readability.js | Battle-tested article extraction — same engine as Firefox Reader View. |
 | No bundler | Vanilla TypeScript compiled with `tsc`. ES modules loaded directly by the browser. Keeps deployment simple — just static files. |
 | GitHub Pages | Free HTTPS hosting (required for PWA + Share Target). |
@@ -220,4 +277,6 @@ The app auto-detects English vs Romanian using character-based heuristics (Roman
 
 ### Offline Support
 
-After the first load, the Service Worker caches the entire app shell. The app itself loads offline — only article fetching requires a network connection.
+After the first load, the Service Worker caches the app shell. Navigations use network-first with cache fallback, while same-origin static assets use stale-while-revalidate. The app itself loads offline; article fetching still requires network.
+
+`sw.js` includes `SW_VERSION`. Bump it when release changes affect cache behavior or app-shell wiring.

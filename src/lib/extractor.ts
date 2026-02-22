@@ -9,10 +9,16 @@ declare const Readability: new (doc: Document) => {
   parse(): { title: string; content: string; textContent: string; siteName: string; excerpt: string } | null;
 };
 
+// Turndown is loaded as a global via <script> tag (vendor/turndown.js)
+declare const TurndownService: new (options?: Record<string, unknown>) => {
+  turndown(html: string): string;
+};
+
 export interface Article {
   title: string;
   content: string;         // HTML from Readability
   textContent: string;     // plain text
+  markdown: string;        // markdown for rendering/export
   paragraphs: string[];    // split for TTS chunking
   lang: Language;
   htmlLang: string;        // raw lang from <html lang="...">, e.g. "de" or "de-DE"
@@ -39,23 +45,12 @@ export function createArticleFromText(text: string): Article {
   const bodyText = hasTitle ? lines.slice(1).join('\n').trim() : text.trim();
   const textContent = bodyText || text.trim();
 
-  let paragraphs = textContent
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
-
+  let paragraphs = splitPlainTextParagraphs(textContent);
   if (paragraphs.length === 0) {
-    const fallback = textContent
-      .split(/\n/)
-      .map((p) => p.trim())
-      .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
-    if (fallback.length === 0) {
-      throw new Error('Pasted text is too short to read as an article.');
-    }
-    paragraphs = fallback;
+    throw new Error('Pasted text is too short to read as an article.');
   }
 
-  const wordCount = textContent.split(/\s+/).length;
+  const wordCount = countWords(textContent);
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);
 
@@ -63,6 +58,7 @@ export function createArticleFromText(text: string): Article {
     title,
     content: '',
     textContent,
+    markdown: textContent,
     paragraphs,
     lang,
     htmlLang: '',
@@ -78,12 +74,30 @@ export function createArticleFromText(text: string): Article {
  * Fetch an article URL via the CORS proxy and extract readable content.
  */
 export async function extractArticle(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {
-  const { html, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret);
-  return parseArticle(html, finalUrl);
+  const { body, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret, 'html');
+  return parseArticleFromHtml(body, finalUrl);
 }
 
-async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: string): Promise<{ html: string; finalUrl: string }> {
-  const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}`;
+/**
+ * Fetch markdown using Jina Reader via worker `mode=markdown`.
+ * Falls back to Readability path if any step fails.
+ */
+export async function extractArticleWithJina(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {
+  try {
+    const { body, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret, 'markdown');
+    return parseArticleFromMarkdown(body, finalUrl);
+  } catch {
+    return extractArticle(url, proxyBase, proxySecret);
+  }
+}
+
+async function fetchViaProxy(
+  url: string,
+  proxyBase: string,
+  proxySecret?: string,
+  mode: 'html' | 'markdown' = 'html',
+): Promise<{ body: string; finalUrl: string }> {
+  const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}${mode === 'markdown' ? '&mode=markdown' : ''}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -96,7 +110,6 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
   try {
     const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
     if (!resp.ok) {
-      // Try to read error body from the proxy for more detail
       let detail = '';
       try {
         const body = await resp.json();
@@ -119,9 +132,13 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
       throw new Error('Article is too large (>2 MB).');
     }
 
-    const html = await resp.text();
+    const body = await resp.text();
+    if (body.length > MAX_ARTICLE_SIZE) {
+      throw new Error('Article is too large (>2 MB).');
+    }
+
     const finalUrl = resp.headers.get('X-Final-URL') || url;
-    return { html, finalUrl };
+    return { body, finalUrl };
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
       throw new Error('Timed out fetching the article. Try again later.');
@@ -135,15 +152,13 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
   }
 }
 
-function parseArticle(html: string, sourceUrl: string): Article {
+function parseArticleFromHtml(html: string, sourceUrl: string): Article {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
-  // Extract HTML lang attribute before Readability modifies the DOM
   const htmlLang = doc.documentElement.getAttribute('lang')
     || doc.documentElement.getAttribute('xml:lang')
     || '';
 
-  // Fix relative URLs so Readability can resolve them
   const base = doc.createElement('base');
   base.href = sourceUrl;
   doc.head.appendChild(base);
@@ -163,7 +178,6 @@ function parseArticle(html: string, sourceUrl: string): Article {
     siteName = parsed.siteName || new URL(sourceUrl).hostname;
     excerpt = parsed.excerpt;
   } else {
-    // Fallback: grab all <p> text
     const pElements = doc.querySelectorAll('p');
     const paragraphs = Array.from(pElements).map((p) => p.textContent?.trim() ?? '');
     textContent = paragraphs.filter((p) => p.length > 0).join('\n\n');
@@ -177,38 +191,144 @@ function parseArticle(html: string, sourceUrl: string): Article {
     throw new Error('Could not extract readable content from this page.');
   }
 
-  const paragraphs = textContent
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+  let markdown = htmlToMarkdown(content, title, textContent);
+  let paragraphs = markdownToParagraphs(markdown);
 
   if (paragraphs.length === 0) {
-    // If double-newline splitting yields nothing, try single newlines
-    const fallback = textContent
-      .split(/\n/)
-      .map((p) => p.trim())
-      .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
-    if (fallback.length === 0) {
-      throw new Error('Article appears empty after parsing.');
-    }
-    paragraphs.push(...fallback);
+    paragraphs = splitPlainTextParagraphs(textContent);
+    markdown = paragraphs.join('\n\n');
   }
 
-  const wordCount = textContent.split(/\s+/).length;
+  if (paragraphs.length === 0) {
+    throw new Error('Article appears empty after parsing.');
+  }
+
+  const normalizedText = paragraphs.join('\n\n');
+  const wordCount = countWords(normalizedText);
+  const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
+  const lang = detectLanguage(normalizedText);
+
+  return {
+    title,
+    content,
+    textContent: normalizedText,
+    markdown,
+    paragraphs,
+    lang,
+    htmlLang,
+    siteName,
+    excerpt: excerpt || normalizedText.slice(0, 200),
+    wordCount,
+    estimatedMinutes,
+    resolvedUrl: sourceUrl,
+  };
+}
+
+function parseArticleFromMarkdown(markdown: string, sourceUrl: string): Article {
+  const normalizedMarkdown = markdown.trim();
+  if (!normalizedMarkdown) {
+    throw new Error('Jina returned empty markdown content.');
+  }
+
+  const paragraphs = markdownToParagraphs(normalizedMarkdown);
+  if (paragraphs.length === 0) {
+    throw new Error('Could not extract readable paragraphs from markdown response.');
+  }
+
+  const textContent = paragraphs.join('\n\n');
+  const title = extractTitleFromMarkdown(normalizedMarkdown) || new URL(sourceUrl).hostname;
+  const wordCount = countWords(textContent);
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);
 
   return {
     title,
-    content,
+    content: '',
     textContent,
+    markdown: normalizedMarkdown,
     paragraphs,
     lang,
-    htmlLang,
-    siteName,
-    excerpt,
+    htmlLang: '',
+    siteName: new URL(sourceUrl).hostname,
+    excerpt: textContent.slice(0, 200),
     wordCount,
     estimatedMinutes,
     resolvedUrl: sourceUrl,
   };
+}
+
+function htmlToMarkdown(contentHtml: string, title: string, textContent: string): string {
+  const fallback = splitPlainTextParagraphs(textContent).join('\n\n');
+  if (!contentHtml || typeof TurndownService === 'undefined') {
+    return prependTitleHeading(fallback, title);
+  }
+
+  try {
+    const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+    const markdown = turndown.turndown(contentHtml).trim();
+    if (!markdown) return prependTitleHeading(fallback, title);
+    return prependTitleHeading(markdown, title);
+  } catch {
+    return prependTitleHeading(fallback, title);
+  }
+}
+
+function prependTitleHeading(markdown: string, title: string): string {
+  const trimmed = markdown.trim();
+  if (!trimmed) return title ? `# ${title}` : '';
+  if (!title) return trimmed;
+  if (/^#\s+/m.test(trimmed)) return trimmed;
+  return `# ${title}\n\n${trimmed}`;
+}
+
+function markdownToParagraphs(markdown: string): string[] {
+  return markdown
+    .split(/\n\s*\n+/)
+    .map((block) => stripMarkdownSyntax(block))
+    .map((text) => text.trim())
+    .filter((text) => text.length >= MIN_PARAGRAPH_LENGTH);
+}
+
+function splitPlainTextParagraphs(text: string): string[] {
+  const byBlank = text
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+
+  if (byBlank.length > 0) return byBlank;
+
+  return text
+    .split(/\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+}
+
+function stripMarkdownSyntax(block: string): string {
+  return block
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTitleFromMarkdown(markdown: string): string {
+  const lines = markdown.split('\n').map((line) => line.trim()).filter(Boolean);
+
+  const h1 = lines.find((line) => /^#\s+/.test(line));
+  if (h1) return h1.replace(/^#\s+/, '').trim();
+
+  return stripMarkdownSyntax(lines[0] ?? '').slice(0, 150);
+}
+
+function countWords(text: string): number {
+  const cleaned = text.trim();
+  if (!cleaned) return 0;
+  return cleaned.split(/\s+/).length;
 }

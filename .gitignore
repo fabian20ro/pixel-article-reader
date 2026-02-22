@@ -1,1 +1,5 @@
 node_modules/
+.idea/
+.wrangler/cache/
+app.js
+lib/*.js

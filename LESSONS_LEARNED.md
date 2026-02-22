@@ -60,9 +60,13 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 ## Process & Workflow
 
-**[2026-02-22]** Build before committing — Since compiled JS files are committed (needed for GitHub Pages deployment), always run `npm run build` after editing TypeScript source and before committing. Stale `.js` files that don't match the `.ts` source will cause confusing runtime behavior. (Note: the CI pipeline also builds, so stale JS won't reach production, but it will confuse local testing.)
+**[2026-02-22]** Build before shipping — Compiled JS files are generated outputs (gitignored) and must be produced by `npm run build` before local manual verification; CI also builds before deploy. Never edit generated root `.js` files directly.
 
 **[2026-02-22]** Three GitHub secrets are required for CI/CD — `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PROXY_SECRET`. These must be set in the repo's Settings > Secrets > Actions before the deploy-worker workflow will succeed.
+
+**[2026-02-22]** Do not add the npm package `tsc` — The package named `tsc` is not TypeScript and will shadow the real compiler binary in `node_modules/.bin/tsc`. Keep only `typescript` in `devDependencies` and use `npm run build`.
+
+**[2026-02-22]** Markdown-first rendering needs explicit TTS alignment — Rendering markdown blocks directly to DOM is great for readability, but TTS highlighting only works if each clickable rendered block is mapped to a normalized paragraph index used by `TTSEngine`. Keep this mapping in one place (article controller) and reuse it for click-to-seek + progress highlighting.
 
 ---
 

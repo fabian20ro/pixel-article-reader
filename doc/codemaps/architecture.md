@@ -8,65 +8,72 @@ User pastes URL / article text / shares from browser
   ▼
 url-utils.ts ── extractUrl() / getUrlFromParams()
   │
-  ├── URL found ──────────────────────┐
-  │                                   ▼
-  │                    extractor.ts ── fetchViaProxy() ── CORS Proxy (CF Worker)
-  │                      │                                   │
-  │                      │                                   ├── SSRF check
-  │                      │                                   ├── Auth (X-Proxy-Key)
-  │                      │                                   ├── Rate limit (20 req/min)
-  │                      │                                   └── Fetch target HTML
-  │                      │                                        │
-  │                      ▼                                        ▼
-  │                    parseArticle() ◄──── HTML response + X-Final-URL header
-  │                      │
-  │                      ├── Readability.js (global)
-  │                      ├── lang-detect.ts
-  │                      └── paragraph splitting + word count
-  │                      │
-  │                      ▼
-  │               Article object ──────────────────────┐
-  │                                                    │
-  ├── No URL (pasted text) ──┐                         │
-  │                          ▼                         │
-  │          createArticleFromText()                   │
-  │            ├── paragraph splitting                 │
-  │            ├── lang-detect.ts                      │
-  │            └── word count                          │
-  │                          │                         │
-  │                          ▼                         │
-  │               Article object ──────┐               │
-  │                                    │               │
-  ▼                                    ▼               ▼
-app.ts ── displayArticle() ── renders paragraphs to DOM
+  ├── URL found ────────────────────────────────────────────────────────┐
+  │                                                                      ▼
+  │                      extractor.ts ── fetchViaProxy(mode=html)
+  │                        │                         │
+  │                        │                         ├── SSRF check
+  │                        │                         ├── Auth (X-Proxy-Key)
+  │                        │                         ├── Rate limit (20 req/min)
+  │                        │                         └── Fetch target HTML
+  │                        │
+  │                        ▼
+  │            parseArticleFromHtml()
+  │              ├── Readability.js (global)
+  │              ├── TurndownService (global)
+  │              ├── markdown normalization
+  │              └── TTS paragraph extraction
+  │
+  │  (optional retry button)
+  │                      extractor.ts ── fetchViaProxy(mode=markdown)
+  │                        │                         │
+  │                        │                         └── Worker fetches https://r.jina.ai/<url>
+  │                        │                             with optional Bearer JINA_KEY
+  │                        ▼
+  │            parseArticleFromMarkdown() ── fallback to extractArticle() on error
+  │
+  ├── No URL (pasted text) ──┐
+  │                          ▼
+  │               createArticleFromText()
+  │                 ├── markdown = plain text
+  │                 ├── paragraph splitting
+  │                 └── lang detection
   │
   ▼
-tts-engine.ts ── loadArticle() ── splits paragraphs into sentences
-  │
-  ▼
-tts-engine.ts ── play() ── SpeechSynthesisUtterance per sentence
-                              │
-                              ├── onend → next sentence
-                              ├── paragraph boundary → onParagraphChange
-                              └── last sentence of last para → onEnd
+article-controller.ts
+  ├── marked.parse(markdown) + sanitize
+  ├── render block elements + map to TTS paragraph indices
+  ├── copy markdown / retry with Jina
+  └── call tts-engine.ts
+
+tts-engine.ts ── sentence chunking ── SpeechSynthesisUtterance per sentence
 ```
 
 ## Module Dependency Graph
 
 ```
 app.ts
-  ├── lib/url-utils.ts      (no deps)
-  ├── lib/extractor.ts
-  │     └── lib/lang-detect.ts  (no deps)
-  └── lib/tts-engine.ts
-        └── lib/lang-detect.ts  (type import only)
+  ├── lib/dom-refs.ts
+  ├── lib/settings-store.ts
+  ├── lib/pwa-update-manager.ts
+  ├── lib/article-controller.ts
+  │     ├── lib/url-utils.ts
+  │     ├── lib/extractor.ts
+  │     │     └── lib/lang-detect.ts
+  │     ├── lib/translator.ts
+  │     └── lib/lang-detect.ts
+  ├── lib/tts-engine.ts
+  │     └── lib/lang-detect.ts
+  └── lib/release.ts
 ```
 
 ## Runtime Loading Order
 
-1. `vendor/Readability.js` — loaded via `<script>` tag, declares global `Readability`
-2. `app.js` — loaded as ES module via `<script type="module">`
-3. `sw.js` — registered by `app.js` via `navigator.serviceWorker.register()`
+1. `vendor/Readability.js` — global `Readability`
+2. `vendor/turndown.js` — global `TurndownService`
+3. `vendor/marked.js` — global `marked.parse`
+4. `app.js` — ES module entrypoint
+5. `sw.js` — registered by `pwa-update-manager`
 
 ## Deployment Targets
 

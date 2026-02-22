@@ -6,12 +6,15 @@
  *
  * Endpoints:
  *   GET  /?url=<encoded_article_url>        — Fetch and return article HTML
+ *   GET  /?url=<encoded_article_url>&mode=markdown
+ *                                           — Fetch markdown via Jina Reader
  *   POST /?action=translate                  — Translate text via Google Translate API
  *        Body: { text: string, from: string, to: string }
  *
  * Environment bindings (set in wrangler.toml or via `wrangler secret put`):
  *   ALLOWED_ORIGIN  — GitHub Pages origin (e.g. "https://user.github.io")
  *   PROXY_SECRET    — shared secret the client sends via X-Proxy-Key header
+ *   JINA_KEY        — optional Jina Reader key used server-side only
  *
  * Security:
  *  - SSRF prevention: rejects private/internal IPs
@@ -159,9 +162,13 @@ export default {
     }
 
     const targetUrl = requestUrl.searchParams.get('url');
+    const mode = requestUrl.searchParams.get('mode') || 'html';
 
     if (!targetUrl) {
       return errorResponse(400, 'Missing ?url= query parameter.', allowedOrigin);
+    }
+    if (mode !== 'html' && mode !== 'markdown') {
+      return errorResponse(400, 'Invalid mode. Supported values: html, markdown.', allowedOrigin);
     }
 
     // Validate URL
@@ -179,6 +186,10 @@ export default {
     // SSRF check
     if (isPrivateHost(parsed.hostname)) {
       return errorResponse(403, 'Access to internal addresses is not allowed.', allowedOrigin);
+    }
+
+    if (mode === 'markdown') {
+      return handleJinaMarkdown(targetUrl, allowedOrigin, rateCheck, env.JINA_KEY || '');
     }
 
     // Fetch the target URL
@@ -320,6 +331,68 @@ async function handleTranslate(request, allowedOrigin, rateCheck) {
       return errorResponse(504, 'Translation request timed out after 10s.', allowedOrigin);
     }
     return errorResponse(502, `Translation fetch failed: ${err.message}`, allowedOrigin);
+  }
+}
+
+async function handleJinaMarkdown(targetUrl, allowedOrigin, rateCheck, jinaKey) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    const headers = {
+      'User-Agent': USER_AGENT,
+      Accept: 'text/markdown',
+    };
+    if (jinaKey) {
+      headers.Authorization = `Bearer ${jinaKey}`;
+    }
+
+    const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+    const response = await fetch(jinaUrl, {
+      signal: controller.signal,
+      headers,
+      redirect: 'follow',
+    });
+
+    clearTimeout(timer);
+
+    if (!response.ok) {
+      const snippet = (await response.text()).slice(0, 240);
+      return errorResponse(502, `Jina Reader returned ${response.status}: ${snippet}`, allowedOrigin);
+    }
+
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
+      return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
+    }
+
+    const markdown = await response.text();
+    if (markdown.length > MAX_RESPONSE_BYTES) {
+      return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
+    }
+
+    const finalUrl =
+      response.headers.get('X-Final-URL')
+      || response.headers.get('x-url')
+      || response.url
+      || targetUrl;
+
+    return new Response(markdown, {
+      status: 200,
+      headers: {
+        ...corsHeaders(allowedOrigin),
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Final-URL': finalUrl,
+        'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+        'X-RateLimit-Remaining': String(rateCheck.remaining),
+      },
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return errorResponse(504, 'Jina Reader request timed out.', allowedOrigin);
+    }
+    return errorResponse(502, `Jina Reader fetch failed: ${err.message}`, allowedOrigin);
   }
 }
 

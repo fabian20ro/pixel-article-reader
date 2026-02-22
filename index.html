@@ -106,6 +106,8 @@
         <h2 id="article-title" class="article-title"></h2>
         <p id="article-info" class="article-info"></p>
         <button id="translate-btn" class="translate-link hidden">Translate to English</button>
+        <button id="jina-retry-btn" class="translate-link hidden">Try with Jina Reader</button>
+        <button id="copy-md-btn" class="translate-link hidden">Copy as Markdown</button>
       </div>
       <div id="article-text" class="article-text"></div>
     </section>
@@ -176,6 +178,8 @@
   </footer>
 
   <script src="vendor/Readability.js"></script>
+  <script src="vendor/turndown.js"></script>
+  <script src="vendor/marked.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
