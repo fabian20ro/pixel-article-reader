@@ -73,6 +73,17 @@ describe('extractUrl', () => {
     const text = 'See https://first.com/a and https://second.com/b';
     expect(extractUrl(text)).toBe('https://first.com/a');
   });
+
+  it('extracts a Google share URL from title + URL text', () => {
+    const shared =
+      'Gravity Still Sucks -- But Researchers Say Quantum Interference Could Make it Push https://share.google/o5SabsH2YlQYu8x7F';
+    expect(extractUrl(shared)).toBe('https://share.google/o5SabsH2YlQYu8x7F');
+  });
+
+  it('extracts a URL when title contains special characters', () => {
+    const shared = 'Breaking: "Major Update" — 50% off! https://news.example.com/deal?id=42';
+    expect(extractUrl(shared)).toBe('https://news.example.com/deal?id=42');
+  });
 });
 
 // ── getUrlFromParams ────────────────────────────────────────────────
@@ -119,6 +130,23 @@ describe('getUrlFromParams', () => {
   it('returns null when params contain no valid URL', () => {
     window.history.replaceState(null, '', '/?text=just+some+text');
     expect(getUrlFromParams()).toBeNull();
+  });
+
+  it('extracts URL from ?title= param as fallback', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?title=Article+Title+https%3A%2F%2Fexample.com%2Fpost',
+    );
+    expect(getUrlFromParams()).toBe('https://example.com/post');
+  });
+
+  it('extracts URL from shared text with title prefix in ?text=', () => {
+    const shared = encodeURIComponent(
+      'Gravity Still Sucks -- But Researchers Say Quantum Interference Could Make it Push https://share.google/o5SabsH2YlQYu8x7F',
+    );
+    window.history.replaceState(null, '', `/?text=${shared}`);
+    expect(getUrlFromParams()).toBe('https://share.google/o5SabsH2YlQYu8x7F');
   });
 });
 
