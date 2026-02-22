@@ -18,10 +18,19 @@
  *  - No cookie forwarding
  *  - Max 2 MB response
  *  - 10 s timeout
+ *
+ * Rate limiting:
+ *  - 20 requests per minute per client IP (sliding window)
+ *  - Returns HTTP 429 with Retry-After header when exceeded
+ *  - All responses include X-RateLimit-Limit and X-RateLimit-Remaining headers
  */
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 const FETCH_TIMEOUT_MS = 10_000;
+
+// Rate limiting: 20 requests per 60-second sliding window per IP
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const USER_AGENT =
   'Mozilla/5.0 (Linux; Android 14; Pixel 9a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
@@ -40,6 +49,55 @@ const PRIVATE_IP_PATTERNS = [
   /^fd/i,
   /^localhost$/i,
 ];
+
+// ── Rate limiter (in-memory sliding window) ─────────────────────────
+// Each CF edge PoP maintains its own counters. This is slightly more
+// permissive than a global limit but sufficient for abuse prevention.
+
+const rateLimitMap = new Map(); // IP → timestamp[]
+
+function checkRateLimit(clientIp) {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+
+  let timestamps = rateLimitMap.get(clientIp);
+  if (!timestamps) {
+    timestamps = [];
+    rateLimitMap.set(clientIp, timestamps);
+  }
+
+  // Remove expired entries
+  while (timestamps.length > 0 && timestamps[0] <= windowStart) {
+    timestamps.shift();
+  }
+
+  const remaining = RATE_LIMIT_MAX - timestamps.length;
+
+  if (remaining <= 0) {
+    // Calculate when the oldest request in the window expires
+    const retryAfterMs = timestamps[0] - windowStart;
+    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+    return { allowed: false, remaining: 0, retryAfter: retryAfterSec };
+  }
+
+  // Record this request
+  timestamps.push(now);
+  return { allowed: true, remaining: remaining - 1, retryAfter: 0 };
+}
+
+// Periodic cleanup to prevent memory growth from stale IPs
+let lastCleanup = Date.now();
+function cleanupStaleEntries() {
+  const now = Date.now();
+  if (now - lastCleanup < RATE_LIMIT_WINDOW_MS) return;
+  lastCleanup = now;
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  for (const [ip, timestamps] of rateLimitMap) {
+    if (timestamps.length === 0 || timestamps[timestamps.length - 1] <= windowStart) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}
 
 // ── Worker entry ────────────────────────────────────────────────────
 
@@ -66,6 +124,24 @@ export default {
       if (clientKey !== proxySecret) {
         return errorResponse(403, 'Invalid or missing proxy key.', allowedOrigin);
       }
+    }
+
+    // Rate limiting (by client IP)
+    const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+    cleanupStaleEntries();
+    const rateCheck = checkRateLimit(clientIp);
+
+    if (!rateCheck.allowed) {
+      return errorResponse(
+        429,
+        `Rate limit exceeded. Maximum ${RATE_LIMIT_MAX} requests per minute. Try again in ${rateCheck.retryAfter} seconds.`,
+        allowedOrigin,
+        {
+          'Retry-After': String(rateCheck.retryAfter),
+          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+          'X-RateLimit-Remaining': '0',
+        },
+      );
     }
 
     const requestUrl = new URL(request.url);
@@ -138,6 +214,8 @@ export default {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
           'X-Final-URL': response.url || targetUrl,
+          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+          'X-RateLimit-Remaining': String(rateCheck.remaining),
         },
       });
     } catch (err) {
@@ -156,16 +234,17 @@ function corsHeaders(origin) {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
-    'Access-Control-Expose-Headers': 'X-Final-URL',
+    'Access-Control-Expose-Headers': 'X-Final-URL, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After',
   };
 }
 
-function errorResponse(status, message, origin) {
+function errorResponse(status, message, origin, extraHeaders = {}) {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: {
       ...corsHeaders(origin),
       'Content-Type': 'application/json',
+      ...extraHeaders,
     },
   });
 }

@@ -165,4 +165,25 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Add rate limiting, codemaps, and documentation
+
+**Context:** User requested: (1) create doc/codemaps files and link from AGENTS.md, (2) implement rate limiting at 20 req/min in the Cloudflare Worker, (3) make the UI show relevant errors when rate limits are hit, (4) document the limits.
+
+**What happened:**
+- Created `doc/codemaps/architecture.md` (data flow diagram, dependency graph, deployment targets) and `doc/codemaps/modules.md` (detailed API reference for every module).
+- Added codemaps section with links to AGENTS.md.
+- Implemented in-memory sliding window rate limiter in `worker/cors-proxy.js`: 20 requests per 60-second window per client IP (via `CF-Connecting-IP`). Returns 429 with `Retry-After` header. Includes periodic cleanup to prevent memory growth. All responses include `X-RateLimit-Limit` and `X-RateLimit-Remaining` headers. Exposed new rate limit headers via CORS `Access-Control-Expose-Headers`.
+- Updated `src/lib/extractor.ts` to handle HTTP 429 specifically: shows "Rate limit exceeded" with retry-after countdown from the response header.
+- Added 2 new tests: one for 429 with error body, one for 429 with fallback message using `Retry-After` header.
+- Documented rate limiting in AGENTS.md (new "CORS Proxy Rate Limiting" section).
+- All 92 tests pass.
+
+**Outcome:** Success. Rate limiting is enforced at the worker level, errors surface clearly in the UI, and all documentation is updated.
+
+**Insight:** Cloudflare Workers' in-memory state (global `Map`) persists across requests within the same isolate but not across PoPs or cold starts. For a personal project this provides sufficient rate limiting; for production-grade global rate limiting, Durable Objects or KV would be needed.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->

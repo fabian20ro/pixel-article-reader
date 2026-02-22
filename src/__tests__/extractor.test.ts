@@ -151,6 +151,42 @@ describe('extractArticle', () => {
     await expect(extractArticle(ARTICLE_URL, PROXY)).rejects.toThrow(/502/);
   });
 
+  it('throws with rate limit message on 429 and includes Retry-After', async () => {
+    const resp = {
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: () => Promise.resolve({ error: 'Rate limit exceeded. Maximum 20 requests per minute. Try again in 45 seconds.' }),
+      headers: {
+        get: (name: string) => {
+          if (name === 'Retry-After') return '45';
+          return null;
+        },
+      },
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(resp as unknown as Response);
+
+    await expect(extractArticle(ARTICLE_URL, PROXY)).rejects.toThrow(/rate limit/i);
+  });
+
+  it('shows fallback rate limit message when 429 has no error body', async () => {
+    const resp = {
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: () => Promise.reject(new Error('no json')),
+      headers: {
+        get: (name: string) => {
+          if (name === 'Retry-After') return '30';
+          return null;
+        },
+      },
+    };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(resp as unknown as Response);
+
+    await expect(extractArticle(ARTICLE_URL, PROXY)).rejects.toThrow(/30 seconds/);
+  });
+
   it('throws when article content is empty', async () => {
     mockFetch('<html><body></body></html>');
     mockParse.mockReturnValue({
