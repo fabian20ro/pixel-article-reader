@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { extractArticle } from '../lib/extractor.js';
+import { extractArticle, createArticleFromText } from '../lib/extractor.js';
 
 // ── Mock Readability globally ─────────────────────────────────────
 
@@ -275,6 +275,60 @@ describe('extractArticle', () => {
     });
 
     const article = await extractArticle(ARTICLE_URL, PROXY);
+    expect(article.estimatedMinutes).toBe(2);
+  });
+});
+
+// ── createArticleFromText ───────────────────────────────────────────
+
+describe('createArticleFromText', () => {
+  it('uses first line as title if short enough', () => {
+    const text = 'My Article Title\n\nFirst paragraph with enough text to pass the filter.\n\nSecond paragraph also has enough text.';
+    const article = createArticleFromText(text);
+    expect(article.title).toBe('My Article Title');
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('uses generic title if first line is too long', () => {
+    const longLine = 'A'.repeat(200);
+    const text = `${longLine}\n\nSome paragraph with enough text to pass the minimum filter.`;
+    const article = createArticleFromText(text);
+    expect(article.title).toBe('Pasted Article');
+  });
+
+  it('sets resolvedUrl to empty string', () => {
+    const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
+    const article = createArticleFromText(text);
+    expect(article.resolvedUrl).toBe('');
+  });
+
+  it('sets siteName to Pasted', () => {
+    const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
+    const article = createArticleFromText(text);
+    expect(article.siteName).toBe('Pasted');
+  });
+
+  it('throws when text is too short', () => {
+    expect(() => createArticleFromText('Short')).toThrow(/too short/i);
+  });
+
+  it('detects language from pasted text', () => {
+    const roText = 'Titlu Articol\n\nAcesta este un paragraf cu suficient text în limba română cu diacritice ă î ș ț â.';
+    const article = createArticleFromText(roText);
+    expect(article.lang).toBe('ro');
+  });
+
+  it('falls back to single-newline splitting', () => {
+    const text = 'Title\nThis is a paragraph separated by single newlines.\nAnother paragraph here with enough characters to pass the filter.';
+    const article = createArticleFromText(text);
+    expect(article.paragraphs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('calculates word count and estimated minutes', () => {
+    const words = Array(360).fill('word').join(' ');
+    const text = `Title\n\n${words}`;
+    const article = createArticleFromText(text);
+    expect(article.wordCount).toBeGreaterThan(300);
     expect(article.estimatedMinutes).toBe(2);
   });
 });

@@ -34,6 +34,10 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Readability.js is a global, not an ES module — The vendored `Readability.js` declares a global `function Readability(...)` and uses `module.exports` behind a `typeof module` guard. It's loaded via a plain `<script>` tag. In TypeScript, access it with `declare const Readability` (ambient declaration in `extractor.ts`). Don't try to `import` it — it won't work as an ES module.
 
+**[2026-02-22]** Guard TTS skip operations with a generation counter — `speechSynthesis.cancel()` fires `onend` on the current utterance (sync in some browsers, async in others). Any skip that calls `cancel()` and advances position must prevent the old `onend` from also advancing. Add a `_speakGen` counter: increment before `cancel()`, capture in each utterance's `onend` closure, bail if stale.
+
+**[2026-02-22]** `extractUrl()` should only extract URLs at/near the end of text — Pasted article content often contains embedded URLs. Extracting the first URL from any position causes false matches. Only extract when the URL is at the end and the prefix is short (≤ 150 chars, typical of share text like "Article Title\nhttps://...").
+
 ## Testing & Quality
 
 **[2026-02-22]** Test data must match actual code behavior, not assumed behavior — When writing the extractor test for "single-newline fallback", the test assumed the fallback path would be triggered, but the code's double-newline split actually succeeds with a single large paragraph. Always trace through the actual splitting logic before asserting paragraph counts.

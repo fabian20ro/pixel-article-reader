@@ -204,4 +204,28 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix URL detection, translate button, sentence skip, and docs
+
+**Context:** User reported multiple issues: (1) pasting a full article that contains embedded URLs incorrectly extracts a URL and tries to fetch it, (2) translate button is invisible/hard to find, (3) sentence skip buttons don't work reliably, (4) console warnings about deprecated meta tags and manifest. Also requested AGENTS.md simplification and library updates.
+
+**What happened:**
+- Changed `extractUrl()` to only extract URLs at/near the end of text (share-text format). Previously it grabbed the first URL anywhere. Now if a URL is embedded mid-text, it returns null, allowing the app to treat the input as pasted article content.
+- Added `createArticleFromText()` to `extractor.ts` — creates an Article directly from pasted plain text without fetching. Extracts title from first line, splits paragraphs, detects language, counts words.
+- Updated `handleUrlSubmit()` in `app.ts` to handle pasted text when `extractUrl` returns null.
+- Added `originalArticleUrl` variable to prevent double-wrapping translate.goog URLs. The translate button now always uses the original URL, and is hidden for pasted text articles.
+- Made translate button visually prominent with a bordered style (was previously unstyled text, easily missed).
+- Fixed sentence skip race condition in `tts-engine.ts`: `speechSynthesis.cancel()` fires `onend` on the old utterance, which was double-advancing the position. Added `_speakGen` generation counter — each utterance captures the generation at creation and bails out if stale.
+- Fixed console warnings: replaced deprecated `apple-mobile-web-app-capable` with `mobile-web-app-capable`, added `enctype` to manifest share_target.
+- Simplified AGENTS.md by replacing duplicated sections (Repository Layout, Build Commands, CI/CD) with links to README.md.
+- Updated codemaps, README, and all documentation.
+- All dependencies already at latest versions. 102 tests pass.
+
+**Outcome:** Success. All issues fixed, tests pass, documentation updated.
+
+**Insight:** `speechSynthesis.cancel()` fires `onend` on the current utterance (sometimes synchronously, sometimes async depending on browser). Any skip operation that calls cancel() and then advances the position must guard against the old `onend` handler also advancing. A generation counter is the cleanest fix — increment before cancel, capture in the onend closure, and bail if stale.
+
+**Promoted to Lessons Learned:** Yes — TTS cancel() race condition pattern.
+
+---
+
 <!-- New entries go above this line, most recent first -->

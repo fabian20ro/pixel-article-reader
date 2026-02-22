@@ -28,6 +28,51 @@ const FETCH_TIMEOUT = 10_000;       // 10 s
 const WORDS_PER_MINUTE = 180;       // spoken pace
 
 /**
+ * Create an Article directly from pasted plain text (no fetch needed).
+ */
+export function createArticleFromText(text: string): Article {
+  const lines = text.split('\n');
+  const firstLine = lines[0].trim();
+  const hasTitle = firstLine.length > 0 && firstLine.length <= 150;
+  const title = hasTitle ? firstLine : 'Pasted Article';
+  const bodyText = hasTitle ? lines.slice(1).join('\n').trim() : text.trim();
+  const textContent = bodyText || text.trim();
+
+  let paragraphs = textContent
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+
+  if (paragraphs.length === 0) {
+    const fallback = textContent
+      .split(/\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+    if (fallback.length === 0) {
+      throw new Error('Pasted text is too short to read as an article.');
+    }
+    paragraphs = fallback;
+  }
+
+  const wordCount = textContent.split(/\s+/).length;
+  const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
+  const lang = detectLanguage(textContent);
+
+  return {
+    title,
+    content: '',
+    textContent,
+    paragraphs,
+    lang,
+    siteName: 'Pasted',
+    excerpt: textContent.slice(0, 200),
+    wordCount,
+    estimatedMinutes,
+    resolvedUrl: '',
+  };
+}
+
+/**
  * Fetch an article URL via the CORS proxy and extract readable content.
  */
 export async function extractArticle(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {

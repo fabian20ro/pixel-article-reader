@@ -17,16 +17,26 @@ export function getUrlFromParams(): string | null {
   return null;
 }
 
-/** Try to pull a valid http(s) URL out of an arbitrary string. */
+/** Try to pull a valid http(s) URL out of an arbitrary string.
+ *
+ * Only extracts URLs at/near the end of the text (share-text format like
+ * "Article Title\nhttps://...").  If the URL is embedded in the middle of
+ * long text, returns null so the caller can treat the input as pasted
+ * article content.
+ */
 export function extractUrl(text: string): string | null {
   const trimmed = text.trim();
 
   // Direct URL
   if (isValidArticleUrl(trimmed)) return trimmed;
 
-  // URL might be embedded in surrounding text — pick the first match
-  const match = trimmed.match(/https?:\/\/[^\s"'<>]+/i);
-  if (match && isValidArticleUrl(match[0])) return match[0];
+  // URL at the end of the text with a short description prefix (≤ 150 chars).
+  // Covers the common share-text pattern: "Article Title\nhttps://..."
+  const endMatch = trimmed.match(/https?:\/\/[^\s"'<>]+$/i);
+  if (endMatch && isValidArticleUrl(endMatch[0])) {
+    const prefix = trimmed.slice(0, endMatch.index!).trim();
+    if (prefix.length <= 150) return endMatch[0];
+  }
 
   return null;
 }

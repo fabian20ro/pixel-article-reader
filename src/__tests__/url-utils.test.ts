@@ -46,13 +46,7 @@ describe('extractUrl', () => {
     expect(extractUrl('  https://example.com/article  ')).toBe('https://example.com/article');
   });
 
-  it('extracts a URL from surrounding text', () => {
-    expect(extractUrl('Check this out: https://example.com/article — great read')).toBe(
-      'https://example.com/article',
-    );
-  });
-
-  it('extracts a URL from a "shared" message format', () => {
+  it('extracts a URL from a "shared" message format (title + URL at end)', () => {
     const shared = 'Cool Article Title\nhttps://news.site.com/2024/post';
     expect(extractUrl(shared)).toBe('https://news.site.com/2024/post');
   });
@@ -69,9 +63,13 @@ describe('extractUrl', () => {
     expect(extractUrl('http://localhost:3000/page')).toBeNull();
   });
 
-  it('picks the first valid URL when multiple are present', () => {
-    const text = 'See https://first.com/a and https://second.com/b';
-    expect(extractUrl(text)).toBe('https://first.com/a');
+  it('returns null when URL is embedded mid-text (not at end)', () => {
+    expect(extractUrl('Check this out: https://example.com/article — great read')).toBeNull();
+  });
+
+  it('returns null when multiple URLs are embedded in text', () => {
+    const text = 'See https://first.com/a and https://second.com/b for details.';
+    expect(extractUrl(text)).toBeNull();
   });
 
   it('extracts a Google share URL from title + URL text', () => {
@@ -83,6 +81,16 @@ describe('extractUrl', () => {
   it('extracts a URL when title contains special characters', () => {
     const shared = 'Breaking: "Major Update" — 50% off! https://news.example.com/deal?id=42';
     expect(extractUrl(shared)).toBe('https://news.example.com/deal?id=42');
+  });
+
+  it('returns null when prefix exceeds 150 chars', () => {
+    const longTitle = 'A'.repeat(160);
+    expect(extractUrl(`${longTitle} https://example.com/article`)).toBeNull();
+  });
+
+  it('returns null for pasted article with embedded URLs', () => {
+    const article = 'Article Title\n\nFirst paragraph with https://example.com/ref in the middle.\n\nSecond paragraph continues here.';
+    expect(extractUrl(article)).toBeNull();
   });
 });
 

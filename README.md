@@ -110,9 +110,9 @@ Open the live app on your phone (Chrome or Brave). Tap the install banner or use
 
 After installing the PWA, use your browser's **Share** menu on any article. Select **ArticleVoice** — the app opens, extracts the article, and is ready to play.
 
-### Paste URL
+### Paste URL or Article Text
 
-Open ArticleVoice directly and paste an article URL into the input field. Press **GO** or hit Enter.
+Open ArticleVoice directly and paste an article URL **or full article text** into the input field. Press **GO** or hit Enter. If no URL is detected at the end of the text, it will be treated as pasted article content and displayed directly.
 
 ### Player Controls
 

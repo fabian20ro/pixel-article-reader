@@ -6,7 +6,7 @@
  */
 
 import { getUrlFromParams, extractUrl, clearQueryParams } from './lib/url-utils.js';
-import { extractArticle, type Article } from './lib/extractor.js';
+import { extractArticle, createArticleFromText, type Article } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
 import type { Language } from './lib/lang-detect.js';
 
@@ -83,6 +83,7 @@ async function main(): Promise<void> {
   const settings = loadSettings();
   let currentArticle: Article | null = null;
   let currentArticleUrl = '';
+  let originalArticleUrl = '';  // preserved across translations
   let currentLangOverride: 'auto' | Language = settings.lang;
 
   // ── TTS engine ──────────────────────────────────────────────────
@@ -271,12 +272,26 @@ async function main(): Promise<void> {
 
   function handleUrlSubmit(): void {
     const raw = urlInput.value.trim();
+    if (!raw) return;
+
     const url = extractUrl(raw);
-    if (!url) {
-      showError('Please enter a valid article URL.');
+    if (url) {
+      loadArticle(url);
       return;
     }
-    loadArticle(url);
+
+    // No URL found — treat as pasted article text
+    tts.stop();
+    try {
+      const article = createArticleFromText(raw);
+      currentArticle = article;
+      currentArticleUrl = '';
+      originalArticleUrl = '';
+      displayArticle(article);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not parse the pasted text.';
+      showError(msg);
+    }
   }
 
   // ── Player controls ─────────────────────────────────────────────
@@ -344,8 +359,8 @@ async function main(): Promise<void> {
   // ── Translate button ────────────────────────────────────────────
 
   translateBtn.addEventListener('click', () => {
-    if (!currentArticleUrl) return;
-    loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+    if (!originalArticleUrl) return;
+    loadArticle(toTranslateUrl(originalArticleUrl, 'en'));
   });
 
   // ── Article loading ─────────────────────────────────────────────
@@ -359,6 +374,10 @@ async function main(): Promise<void> {
       const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
       currentArticle = article;
       currentArticleUrl = article.resolvedUrl;
+      // Preserve original URL for translate (avoid double-wrapping translate.goog)
+      if (!url.includes('.translate.goog')) {
+        originalArticleUrl = article.resolvedUrl;
+      }
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
@@ -377,8 +396,8 @@ async function main(): Promise<void> {
       `${article.wordCount} words`,
     ].join(' \u00B7 ');
 
-    // Translate button
-    translateBtn.classList.remove('hidden');
+    // Translate button — only show when article was fetched from a URL
+    translateBtn.classList.toggle('hidden', !currentArticleUrl);
 
     // Render paragraphs
     articleText.innerHTML = '';

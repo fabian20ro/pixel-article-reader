@@ -5,7 +5,7 @@
  * install-prompt, settings persistence, and all UI interactions.
  */
 import { getUrlFromParams, extractUrl, clearQueryParams } from './lib/url-utils.js';
-import { extractArticle } from './lib/extractor.js';
+import { extractArticle, createArticleFromText } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
 // ── Helpers ─────────────────────────────────────────────────────────
 /** Convert a URL to its Google Translate proxy equivalent. */
@@ -64,6 +64,7 @@ async function main() {
     const settings = loadSettings();
     let currentArticle = null;
     let currentArticleUrl = '';
+    let originalArticleUrl = ''; // preserved across translations
     let currentLangOverride = settings.lang;
     // ── TTS engine ──────────────────────────────────────────────────
     const tts = new TTSEngine({
@@ -231,12 +232,26 @@ async function main() {
     });
     function handleUrlSubmit() {
         const raw = urlInput.value.trim();
+        if (!raw)
+            return;
         const url = extractUrl(raw);
-        if (!url) {
-            showError('Please enter a valid article URL.');
+        if (url) {
+            loadArticle(url);
             return;
         }
-        loadArticle(url);
+        // No URL found — treat as pasted article text
+        tts.stop();
+        try {
+            const article = createArticleFromText(raw);
+            currentArticle = article;
+            currentArticleUrl = '';
+            originalArticleUrl = '';
+            displayArticle(article);
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : 'Could not parse the pasted text.';
+            showError(msg);
+        }
     }
     // ── Player controls ─────────────────────────────────────────────
     playPauseBtn.addEventListener('click', () => {
@@ -297,9 +312,9 @@ async function main() {
     });
     // ── Translate button ────────────────────────────────────────────
     translateBtn.addEventListener('click', () => {
-        if (!currentArticleUrl)
+        if (!originalArticleUrl)
             return;
-        loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+        loadArticle(toTranslateUrl(originalArticleUrl, 'en'));
     });
     // ── Article loading ─────────────────────────────────────────────
     async function loadArticle(url) {
@@ -310,6 +325,10 @@ async function main() {
             const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
             currentArticle = article;
             currentArticleUrl = article.resolvedUrl;
+            // Preserve original URL for translate (avoid double-wrapping translate.goog)
+            if (!url.includes('.translate.goog')) {
+                originalArticleUrl = article.resolvedUrl;
+            }
             displayArticle(article);
         }
         catch (err) {
@@ -326,8 +345,8 @@ async function main() {
             lang.toUpperCase(),
             `${article.wordCount} words`,
         ].join(' \u00B7 ');
-        // Translate button
-        translateBtn.classList.remove('hidden');
+        // Translate button — only show when article was fetched from a URL
+        translateBtn.classList.toggle('hidden', !currentArticleUrl);
         // Render paragraphs
         articleText.innerHTML = '';
         article.paragraphs.forEach((p, i) => {
