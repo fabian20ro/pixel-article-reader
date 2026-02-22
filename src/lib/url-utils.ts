@@ -30,12 +30,13 @@ export function extractUrl(text: string): string | null {
   // Direct URL
   if (isValidArticleUrl(trimmed)) return trimmed;
 
-  // URL at the end of the text with a short description prefix (≤ 150 chars).
+  // URL at the end of the text with a description prefix (≤ 500 chars).
   // Covers the common share-text pattern: "Article Title\nhttps://..."
+  // as well as longer social-media shares (tweets, post snippets, etc.).
   const endMatch = trimmed.match(/https?:\/\/[^\s"'<>]+$/i);
   if (endMatch && isValidArticleUrl(endMatch[0])) {
     const prefix = trimmed.slice(0, endMatch.index!).trim();
-    if (prefix.length <= 150) return endMatch[0];
+    if (prefix.length <= 500) return endMatch[0];
   }
 
   return null;

@@ -83,8 +83,14 @@ describe('extractUrl', () => {
     expect(extractUrl(shared)).toBe('https://news.example.com/deal?id=42');
   });
 
-  it('returns null when prefix exceeds 150 chars', () => {
-    const longTitle = 'A'.repeat(160);
+  it('extracts URL from social-media share text with long description', () => {
+    const shared =
+      "Psychology says people who become harder to be around as they get older aren't becoming mean — they're becoming less willing to absorb other people's discomfort at the expense of their own, and that's a skill most people mistake for bitterness https://share.google/yvjomHo2mSvrYaOcf";
+    expect(extractUrl(shared)).toBe('https://share.google/yvjomHo2mSvrYaOcf');
+  });
+
+  it('returns null when prefix exceeds 500 chars', () => {
+    const longTitle = 'A'.repeat(510);
     expect(extractUrl(`${longTitle} https://example.com/article`)).toBeNull();
   });
 
