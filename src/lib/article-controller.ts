@@ -193,6 +193,11 @@ export class ArticleController {
         let pendingText = '';
         let pendingBlocks: HTMLElement[] = [];
 
+        // IMPORTANT: data-index is the canonical TTS paragraph index.
+        // Multiple DOM blocks may share the same data-index when short
+        // blocks are merged.  Consumers (highlightParagraph, click-to-seek)
+        // MUST use data-index, never ordinal DOM position, to map between
+        // TTS and DOM.
         const flush = () => {
           if (!pendingText) return;
           const index = ttsParagraphs.length;
@@ -210,12 +215,13 @@ export class ArticleController {
         };
 
         blocks.forEach((block) => {
-          // Skip code blocks — code isn't meaningful when spoken aloud
+          // Skipped blocks stay in the DOM but never receive the
+          // .paragraph class or a data-index, so they are invisible
+          // to highlightParagraph() and click-to-seek.
           if (block.tagName === 'PRE') return;
 
           let text: string;
           if (block.tagName === 'FIGURE') {
-            // For figures, only speak the caption text (skip image-only figures)
             const figcaption = block.querySelector('figcaption');
             text = this.normalizeTtsText(figcaption?.textContent ?? '');
           } else {
