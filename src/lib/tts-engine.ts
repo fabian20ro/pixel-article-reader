@@ -31,13 +31,53 @@ export interface TTSCallbacks {
 
 // ── Sentence splitting ────────────────────────────────────────────────
 
-/** Split text into sentences. Handles abbreviations reasonably well. */
-function splitSentences(text: string): string[] {
+/**
+ * Minimum character length for a sentence to stand alone as its own
+ * utterance.  Fragments shorter than this (e.g. "Ilene S.", "Ph.", "D.")
+ * are merged with the next fragment so that names and abbreviations don't
+ * produce tiny utterances with unnatural pauses between them.
+ */
+const MIN_SENTENCE_LENGTH = 40;
+
+/**
+ * After merging short fragments we still want to stay well under the
+ * ~15-second Android cutoff.  At normal speaking rate (~150 wpm) 15 s ≈
+ * 37 words ≈ 200 chars.  This cap prevents over-merging.
+ */
+const MAX_UTTERANCE_LENGTH = 200;
+
+/** Merge short fragments so abbreviations / names aren't separate utterances. */
+function mergeShortSentences(sentences: string[]): string[] {
+  if (sentences.length <= 1) return sentences;
+
+  const merged: string[] = [];
+  let current = sentences[0];
+
+  for (let i = 1; i < sentences.length; i++) {
+    const next = sentences[i];
+    if (
+      current.length < MIN_SENTENCE_LENGTH &&
+      current.length + 1 + next.length <= MAX_UTTERANCE_LENGTH
+    ) {
+      current += ' ' + next;
+    } else {
+      merged.push(current);
+      current = next;
+    }
+  }
+  merged.push(current);
+
+  return merged;
+}
+
+/** Split text into sentences, then merge short fragments back together. */
+export function splitSentences(text: string): string[] {
   // Split on sentence-ending punctuation followed by whitespace or end-of-string.
   // Keep the punctuation with the sentence.
   const raw = text.match(/[^.!?]*[.!?]+[\s]?|[^.!?]+$/g);
   if (!raw) return [text];
-  return raw.map((s) => s.trim()).filter((s) => s.length > 0);
+  const pieces = raw.map((s) => s.trim()).filter((s) => s.length > 0);
+  return mergeShortSentences(pieces);
 }
 
 // ── Voice helpers ─────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TTSEngine, selectVoice, type TTSCallbacks } from '../lib/tts-engine.js';
+import { TTSEngine, selectVoice, splitSentences, type TTSCallbacks } from '../lib/tts-engine.js';
 
 // ── SpeechSynthesis mock ────────────────────────────────────────────
 
@@ -56,6 +56,80 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+// ── splitSentences ──────────────────────────────────────────────────
+
+describe('splitSentences', () => {
+  it('splits normal sentences on punctuation boundaries', () => {
+    const result = splitSentences(
+      'First sentence is long enough to stand alone. Second sentence is also long enough on its own.',
+    );
+    expect(result).toEqual([
+      'First sentence is long enough to stand alone.',
+      'Second sentence is also long enough on its own.',
+    ]);
+  });
+
+  it('merges name abbreviations into a single utterance', () => {
+    const result = splitSentences('by Ilene S. Cohen, Ph.D.');
+    // All fragments are short — should be merged into one utterance
+    // Note: the regex splits on each period, so "Ph.D." becomes "Ph." + "D."
+    // and merging joins them with a space
+    expect(result).toEqual(['by Ilene S. Cohen, Ph. D.']);
+  });
+
+  it('merges short fragments with the following sentence', () => {
+    const result = splitSentences(
+      'Dr. Smith said the results were quite promising and noteworthy.',
+    );
+    // "Dr." (3 chars) is too short to stand alone, merged forward
+    expect(result).toEqual([
+      'Dr. Smith said the results were quite promising and noteworthy.',
+    ]);
+  });
+
+  it('handles multiple abbreviations in running text', () => {
+    const result = splitSentences(
+      'According to Dr. J. Smith, Ph.D., the experiment was a complete and total success.',
+    );
+    expect(result.length).toBe(1);
+    expect(result[0]).toContain('Dr.');
+    expect(result[0]).toContain('Ph.');
+    expect(result[0]).toContain('success.');
+  });
+
+  it('does not merge sentences that are already long enough', () => {
+    const result = splitSentences(
+      'This is a sentence that is long enough to stand on its own. And this is another sentence that should also stand alone.',
+    );
+    expect(result).toHaveLength(2);
+  });
+
+  it('respects MAX_UTTERANCE_LENGTH and avoids over-merging', () => {
+    // Build a string with many short fragments followed by a long sentence
+    const shortFragments = 'A. B. C. D. E. F. G. H. I. J. K. L. M. N. O. P. Q. R. S. T. U. V. W. X. Y. Z. ';
+    const longSentence = 'This is a much longer sentence that should eventually start a new utterance chunk on its own.';
+    const result = splitSentences(shortFragments + longSentence);
+    // Should produce multiple utterances (not everything crammed into one)
+    expect(result.length).toBeGreaterThan(1);
+    // No single utterance should exceed 200 chars
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('keeps a single sentence as-is', () => {
+    expect(splitSentences('Hello world.')).toEqual(['Hello world.']);
+  });
+
+  it('returns the full text when there is no punctuation', () => {
+    expect(splitSentences('no punctuation here')).toEqual(['no punctuation here']);
+  });
+
+  it('handles empty string gracefully', () => {
+    expect(splitSentences('')).toEqual(['']);
+  });
 });
 
 // ── selectVoice ─────────────────────────────────────────────────────
@@ -206,12 +280,12 @@ describe('TTSEngine', () => {
 
   it('calls speechSynthesis.speak with individual sentences, not full paragraphs', () => {
     const engine = createEngine();
-    engine.loadArticle(['First sentence. Second sentence.'], 'en');
+    engine.loadArticle(['The first sentence is long enough to be its own utterance. The second sentence is also sufficiently long to stand alone.'], 'en');
     engine.play();
 
     // The first speak call should be for the first sentence only
     const firstUtter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
-    expect(firstUtter.text).toBe('First sentence.');
+    expect(firstUtter.text).toBe('The first sentence is long enough to be its own utterance.');
   });
 
   it('sets rate on each utterance', () => {
@@ -351,7 +425,7 @@ describe('TTSEngine', () => {
 
   it('skipSentenceForward advances to next sentence within paragraph', () => {
     const engine = createEngine();
-    engine.loadArticle(['First sentence. Second sentence. Third sentence.'], 'en');
+    engine.loadArticle(['The first sentence is long enough to stand alone. The second sentence is also long enough by itself. The third sentence rounds out the paragraph nicely.'], 'en');
     engine.play();
 
     expect(engine.state.currentSentence).toBe(0);
@@ -385,7 +459,7 @@ describe('TTSEngine', () => {
 
   it('skipSentenceBackward goes to previous sentence within paragraph', () => {
     const engine = createEngine();
-    engine.loadArticle(['First sentence. Second sentence. Third sentence.'], 'en');
+    engine.loadArticle(['The first sentence is long enough to stand alone. The second sentence is also long enough by itself. The third sentence rounds out the paragraph nicely.'], 'en');
     engine.play();
 
     engine.skipSentenceForward(); // go to sentence 1
@@ -400,7 +474,7 @@ describe('TTSEngine', () => {
   it('skipSentenceBackward crosses to previous paragraph at first sentence', () => {
     const onParagraphChange = vi.fn();
     const engine = createEngine({ onParagraphChange });
-    engine.loadArticle(['First. Second.', 'Third.'], 'en');
+    engine.loadArticle(['The first sentence is long enough to stand alone. The second sentence is also long enough by itself.', 'The third paragraph has its own content that is long enough.'], 'en');
     engine.play();
 
     engine.skipForward(); // go to paragraph 1
