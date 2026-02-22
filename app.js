@@ -7,6 +7,18 @@
 import { getUrlFromParams, extractUrl, clearQueryParams } from './lib/url-utils.js';
 import { extractArticle } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
+// ── Helpers ─────────────────────────────────────────────────────────
+/** Convert a URL to its Google Translate proxy equivalent. */
+function toTranslateUrl(url, targetLang = 'en') {
+    const parsed = new URL(url);
+    const translatedHost = parsed.hostname.replace(/\./g, '-') + '.translate.goog';
+    const params = new URLSearchParams(parsed.search);
+    params.set('_x_tr_sl', 'auto');
+    params.set('_x_tr_tl', targetLang);
+    params.set('_x_tr_hl', targetLang);
+    params.set('_x_tr_pto', 'wapp');
+    return `https://${translatedHost}${parsed.pathname}?${params.toString()}`;
+}
 // ── Config ──────────────────────────────────────────────────────────
 const CONFIG = {
     PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
@@ -81,7 +93,7 @@ async function main() {
     const articleSection = $('article-section');
     const articleTitle = $('article-title');
     const articleInfo = $('article-info');
-    const translateLink = $('translate-link');
+    const translateBtn = $('translate-btn');
     const articleText = $('article-text');
     const playerControls = $('player-controls');
     const playPauseBtn = $('play-pause');
@@ -255,6 +267,12 @@ async function main() {
         const idx = Math.floor(ratio * currentArticle.paragraphs.length);
         tts.jumpToParagraph(idx);
     });
+    // ── Translate button ────────────────────────────────────────────
+    translateBtn.addEventListener('click', () => {
+        if (!currentArticleUrl)
+            return;
+        loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+    });
     // ── Article loading ─────────────────────────────────────────────
     async function loadArticle(url) {
         showView('loading');
@@ -280,9 +298,8 @@ async function main() {
             lang.toUpperCase(),
             `${article.wordCount} words`,
         ].join(' \u00B7 ');
-        // Translate link
-        translateLink.href = `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(currentArticleUrl)}`;
-        translateLink.classList.remove('hidden');
+        // Translate button
+        translateBtn.classList.remove('hidden');
         // Render paragraphs
         articleText.innerHTML = '';
         article.paragraphs.forEach((p, i) => {

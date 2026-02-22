@@ -10,6 +10,20 @@ import { extractArticle, type Article } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
 import type { Language } from './lib/lang-detect.js';
 
+// ── Helpers ─────────────────────────────────────────────────────────
+
+/** Convert a URL to its Google Translate proxy equivalent. */
+function toTranslateUrl(url: string, targetLang = 'en'): string {
+  const parsed = new URL(url);
+  const translatedHost = parsed.hostname.replace(/\./g, '-') + '.translate.goog';
+  const params = new URLSearchParams(parsed.search);
+  params.set('_x_tr_sl', 'auto');
+  params.set('_x_tr_tl', targetLang);
+  params.set('_x_tr_hl', targetLang);
+  params.set('_x_tr_pto', 'wapp');
+  return `https://${translatedHost}${parsed.pathname}?${params.toString()}`;
+}
+
 // ── Config ──────────────────────────────────────────────────────────
 
 const CONFIG = {
@@ -103,7 +117,7 @@ async function main(): Promise<void> {
   const articleSection = $('article-section');
   const articleTitle = $('article-title');
   const articleInfo = $('article-info');
-  const translateLink = $('translate-link') as HTMLAnchorElement;
+  const translateBtn = $('translate-btn') as HTMLButtonElement;
   const articleText = $('article-text');
   const playerControls = $('player-controls');
   const playPauseBtn = $('play-pause');
@@ -299,6 +313,13 @@ async function main(): Promise<void> {
     tts.jumpToParagraph(idx);
   });
 
+  // ── Translate button ────────────────────────────────────────────
+
+  translateBtn.addEventListener('click', () => {
+    if (!currentArticleUrl) return;
+    loadArticle(toTranslateUrl(currentArticleUrl, 'en'));
+  });
+
   // ── Article loading ─────────────────────────────────────────────
 
   async function loadArticle(url: string): Promise<void> {
@@ -328,9 +349,8 @@ async function main(): Promise<void> {
       `${article.wordCount} words`,
     ].join(' \u00B7 ');
 
-    // Translate link
-    translateLink.href = `https://translate.google.com/translate?sl=auto&tl=en&u=${encodeURIComponent(currentArticleUrl)}`;
-    translateLink.classList.remove('hidden');
+    // Translate button
+    translateBtn.classList.remove('hidden');
 
     // Render paragraphs
     articleText.innerHTML = '';
