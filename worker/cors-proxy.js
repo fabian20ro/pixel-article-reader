@@ -17,19 +17,6 @@
  *   ALLOWED_ORIGIN  — GitHub Pages origin (e.g. "https://user.github.io")
  *   PROXY_SECRET    — shared secret the client sends via X-Proxy-Key header
  *   JINA_KEY        — optional Jina Reader key used server-side only
- *
- * Security:
- *  - SSRF prevention: rejects private/internal IPs
- *  - Origin allowlist
- *  - Shared secret validation
- *  - No cookie forwarding
- *  - Max 2 MB response
- *  - 10 s timeout
- *
- * Rate limiting:
- *  - 20 requests per minute per client IP (sliding window)
- *  - Returns HTTP 429 with Retry-After header when exceeded
- *  - All responses include X-RateLimit-Limit and X-RateLimit-Remaining headers
  */
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
@@ -43,7 +30,6 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 const USER_AGENT =
   'Mozilla/5.0 (Linux; Android 14; Pixel 9a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
 
-// Private IP ranges to block (SSRF prevention)
 const PRIVATE_IP_PATTERNS = [
   /^127\./,
   /^10\./,
@@ -58,92 +44,33 @@ const PRIVATE_IP_PATTERNS = [
   /^localhost$/i,
 ];
 
-// ── Rate limiter (in-memory sliding window) ─────────────────────────
-// Each CF edge PoP maintains its own counters. This is slightly more
-// permissive than a global limit but sufficient for abuse prevention.
+const LANG_CODE_RE = /^[a-z]{2,5}(-[a-zA-Z]{2,5})?$/;
 
-const rateLimitMap = new Map(); // IP → timestamp[]
-
-function checkRateLimit(clientIp) {
-  const now = Date.now();
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-
-  let timestamps = rateLimitMap.get(clientIp);
-  if (!timestamps) {
-    timestamps = [];
-    rateLimitMap.set(clientIp, timestamps);
-  }
-
-  // Remove expired entries
-  while (timestamps.length > 0 && timestamps[0] <= windowStart) {
-    timestamps.shift();
-  }
-
-  const remaining = RATE_LIMIT_MAX - timestamps.length;
-
-  if (remaining <= 0) {
-    // Calculate when the oldest request in the window expires
-    const retryAfterMs = timestamps[0] - windowStart;
-    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
-    return { allowed: false, remaining: 0, retryAfter: retryAfterSec };
-  }
-
-  // Record this request
-  timestamps.push(now);
-  return { allowed: true, remaining: remaining - 1, retryAfter: 0 };
-}
-
-// Periodic cleanup to prevent memory growth from stale IPs
+// Each edge location keeps its own counters.
+const rateLimitMap = new Map(); // IP -> timestamp[]
 let lastCleanup = Date.now();
-function cleanupStaleEntries() {
-  const now = Date.now();
-  if (now - lastCleanup < RATE_LIMIT_WINDOW_MS) return;
-  lastCleanup = now;
-  const windowStart = now - RATE_LIMIT_WINDOW_MS;
-  for (const [ip, timestamps] of rateLimitMap) {
-    if (timestamps.length === 0 || timestamps[timestamps.length - 1] <= windowStart) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}
-
-// ── Worker entry ────────────────────────────────────────────────────
 
 export default {
   async fetch(request, env) {
-    const allowedOrigin = env.ALLOWED_ORIGIN || '*';
-    const proxySecret = env.PROXY_SECRET || '';
+    const context = createRequestContext(request, env);
 
-    // CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(allowedOrigin),
-      });
+      return noContentResponse(context.allowedOrigin);
     }
 
-    if (request.method !== 'GET' && request.method !== 'POST') {
-      return errorResponse(405, 'Only GET and POST requests are allowed.', allowedOrigin);
+    if (!isMethodAllowed(request.method)) {
+      return errorResponse(405, 'Only GET and POST requests are allowed.', context.allowedOrigin);
     }
 
-    // Validate shared secret (if configured)
-    if (proxySecret) {
-      const clientKey = request.headers.get('X-Proxy-Key') || '';
-      if (clientKey !== proxySecret) {
-        return errorResponse(403, 'Invalid or missing proxy key.', allowedOrigin);
-      }
-    }
+    const authError = validateProxyKey(request, context.proxySecret, context.allowedOrigin);
+    if (authError) return authError;
 
-    // Rate limiting (by client IP)
-    const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
-    cleanupStaleEntries();
-    const rateCheck = checkRateLimit(clientIp);
-
+    const rateCheck = applyRateLimit(request);
     if (!rateCheck.allowed) {
       return errorResponse(
         429,
         `Rate limit exceeded. Maximum ${RATE_LIMIT_MAX} requests per minute. Try again in ${rateCheck.retryAfter} seconds.`,
-        allowedOrigin,
+        context.allowedOrigin,
         {
           'Retry-After': String(rateCheck.retryAfter),
           'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
@@ -152,277 +79,312 @@ export default {
       );
     }
 
-    const requestUrl = new URL(request.url);
+    context.rateCheck = rateCheck;
 
-    // ── Translate action (POST preferred, GET compatibility) ───────
+    const requestUrl = new URL(request.url);
     if (requestUrl.searchParams.get('action') === 'translate') {
-      if (request.method === 'POST') {
-        return handleTranslatePost(request, allowedOrigin, rateCheck);
-      }
-      if (request.method === 'GET') {
-        return handleTranslateGet(requestUrl, allowedOrigin, rateCheck);
-      }
-      return errorResponse(405, 'Translate endpoint supports GET or POST only.', allowedOrigin);
+      return routeTranslate(request, requestUrl, context);
     }
 
     if (request.method !== 'GET') {
-      return errorResponse(405, 'Only GET requests are allowed.', allowedOrigin);
+      return errorResponse(405, 'Only GET requests are allowed.', context.allowedOrigin);
     }
 
-    const targetUrl = requestUrl.searchParams.get('url');
-    const mode = requestUrl.searchParams.get('mode') || 'html';
-
-    if (!targetUrl) {
-      return errorResponse(400, 'Missing ?url= query parameter.', allowedOrigin);
-    }
-    if (mode !== 'html' && mode !== 'markdown') {
-      return errorResponse(400, 'Invalid mode. Supported values: html, markdown.', allowedOrigin);
-    }
-
-    // Validate URL
-    let parsed;
-    try {
-      parsed = new URL(targetUrl);
-    } catch {
-      return errorResponse(400, 'Invalid URL.', allowedOrigin);
-    }
-
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return errorResponse(400, 'Only http and https URLs are allowed.', allowedOrigin);
-    }
-
-    // SSRF check
-    if (isPrivateHost(parsed.hostname)) {
-      return errorResponse(403, 'Access to internal addresses is not allowed.', allowedOrigin);
-    }
-
-    if (mode === 'markdown') {
-      return handleJinaMarkdown(targetUrl, allowedOrigin, rateCheck, env.JINA_KEY || '');
-    }
-
-    // Fetch the target URL
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-      const response = await fetch(targetUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9,ro;q=0.8',
-        },
-        redirect: 'follow',
-      });
-
-      clearTimeout(timer);
-
-      if (!response.ok) {
-        return errorResponse(502, `Upstream returned ${response.status}.`, allowedOrigin);
-      }
-
-      // Check content type
-      const ct = response.headers.get('content-type') || '';
-      if (!ct.includes('text/html') && !ct.includes('application/xhtml')) {
-        return errorResponse(400, 'URL does not point to an HTML page.', allowedOrigin);
-      }
-
-      // Check size
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
-        return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
-      }
-
-      const html = await response.text();
-
-      if (html.length > MAX_RESPONSE_BYTES) {
-        return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
-      }
-
-      return new Response(html, {
-        status: 200,
-        headers: {
-          ...corsHeaders(allowedOrigin),
-          'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'no-store',
-          'X-Final-URL': response.url || targetUrl,
-          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-          'X-RateLimit-Remaining': String(rateCheck.remaining),
-        },
-      });
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        return errorResponse(504, 'Upstream request timed out.', allowedOrigin);
-      }
-      return errorResponse(502, `Fetch failed: ${err.message}`, allowedOrigin);
-    }
+    return routeArticleFetch(requestUrl, context);
   },
 };
 
-// ── Translate handlers ───────────────────────────────────────────────
+function createRequestContext(request, env) {
+  return {
+    request,
+    allowedOrigin: env.ALLOWED_ORIGIN || '*',
+    proxySecret: env.PROXY_SECRET || '',
+    jinaKey: env.JINA_KEY || '',
+    rateCheck: null,
+  };
+}
 
-const LANG_CODE_RE = /^[a-z]{2,5}(-[a-zA-Z]{2,5})?$/;
+function isMethodAllowed(method) {
+  return method === 'GET' || method === 'POST';
+}
 
-async function handleTranslatePost(request, allowedOrigin, rateCheck) {
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse(400, 'Invalid JSON body.', allowedOrigin);
+function validateProxyKey(request, proxySecret, allowedOrigin) {
+  if (!proxySecret) return null;
+  const clientKey = request.headers.get('X-Proxy-Key') || '';
+  if (clientKey === proxySecret) return null;
+  return errorResponse(403, 'Invalid or missing proxy key.', allowedOrigin);
+}
+
+function applyRateLimit(request) {
+  cleanupStaleEntries();
+  const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+  return checkRateLimit(clientIp);
+}
+
+async function routeTranslate(request, requestUrl, context) {
+  if (request.method === 'POST') {
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return errorResponse(400, 'Invalid JSON body.', context.allowedOrigin);
+    }
+    return translateText(body?.text, body?.from, body?.to, context);
   }
 
-  return handleTranslateCore(
-    body?.text,
-    body?.from,
-    body?.to,
-    allowedOrigin,
-    rateCheck,
-  );
+  if (request.method === 'GET') {
+    return translateText(
+      requestUrl.searchParams.get('text'),
+      requestUrl.searchParams.get('from') || 'auto',
+      requestUrl.searchParams.get('to') || 'en',
+      context,
+    );
+  }
+
+  return errorResponse(405, 'Translate endpoint supports GET or POST only.', context.allowedOrigin);
 }
 
-async function handleTranslateGet(requestUrl, allowedOrigin, rateCheck) {
-  return handleTranslateCore(
-    requestUrl.searchParams.get('text'),
-    requestUrl.searchParams.get('from') || 'auto',
-    requestUrl.searchParams.get('to') || 'en',
-    allowedOrigin,
-    rateCheck,
-  );
+async function routeArticleFetch(requestUrl, context) {
+  const parsedRequest = parseAndValidateArticleRequest(requestUrl, context.allowedOrigin);
+  if ('error' in parsedRequest) return parsedRequest.error;
+
+  const { targetUrl, mode } = parsedRequest;
+  if (mode === 'markdown') {
+    return fetchViaJina(targetUrl, context);
+  }
+  return fetchArticleHtml(targetUrl, context);
 }
 
-async function handleTranslateCore(text, from, to, allowedOrigin, rateCheck) {
+function parseAndValidateArticleRequest(requestUrl, allowedOrigin) {
+  const targetUrl = requestUrl.searchParams.get('url');
+  const mode = requestUrl.searchParams.get('mode') || 'html';
+
+  if (!targetUrl) {
+    return { error: errorResponse(400, 'Missing ?url= query parameter.', allowedOrigin) };
+  }
+  if (mode !== 'html' && mode !== 'markdown') {
+    return { error: errorResponse(400, 'Invalid mode. Supported values: html, markdown.', allowedOrigin) };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(targetUrl);
+  } catch {
+    return { error: errorResponse(400, 'Invalid URL.', allowedOrigin) };
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { error: errorResponse(400, 'Only http and https URLs are allowed.', allowedOrigin) };
+  }
+  if (isPrivateHost(parsed.hostname)) {
+    return { error: errorResponse(403, 'Access to internal addresses is not allowed.', allowedOrigin) };
+  }
+
+  return { targetUrl, mode };
+}
+
+async function fetchArticleHtml(targetUrl, context) {
+  let response;
+  try {
+    response = await fetchWithTimeout(targetUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,ro;q=0.8',
+      },
+      redirect: 'follow',
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      return errorResponse(504, 'Upstream request timed out.', context.allowedOrigin);
+    }
+    return errorResponse(502, `Fetch failed: ${getErrorMessage(err)}`, context.allowedOrigin);
+  }
+
+  if (!response.ok) {
+    return errorResponse(502, `Upstream returned ${response.status}.`, context.allowedOrigin);
+  }
+
+  const ct = response.headers.get('content-type') || '';
+  if (!ct.includes('text/html') && !ct.includes('application/xhtml')) {
+    return errorResponse(400, 'URL does not point to an HTML page.', context.allowedOrigin);
+  }
+
+  const tooLargeByHeader = isResponseTooLargeByHeader(response);
+  if (tooLargeByHeader) {
+    return errorResponse(400, 'Response too large (>2 MB).', context.allowedOrigin);
+  }
+
+  const html = await response.text();
+  if (html.length > MAX_RESPONSE_BYTES) {
+    return errorResponse(400, 'Response too large (>2 MB).', context.allowedOrigin);
+  }
+
+  return new Response(html, {
+    status: 200,
+    headers: successHeaders(context, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Final-URL': response.url || targetUrl,
+    }),
+  });
+}
+
+async function fetchViaJina(targetUrl, context) {
+  const headers = {
+    'User-Agent': USER_AGENT,
+    Accept: 'text/markdown',
+  };
+  if (context.jinaKey) {
+    headers.Authorization = `Bearer ${context.jinaKey}`;
+  }
+
+  let response;
+  try {
+    response = await fetchWithTimeout(`https://r.jina.ai/${targetUrl}`, {
+      headers,
+      redirect: 'follow',
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      return errorResponse(504, 'Jina Reader request timed out.', context.allowedOrigin);
+    }
+    return errorResponse(502, `Jina Reader fetch failed: ${getErrorMessage(err)}`, context.allowedOrigin);
+  }
+
+  if (!response.ok) {
+    const snippet = (await response.text()).slice(0, 240);
+    return errorResponse(502, `Jina Reader returned ${response.status}: ${snippet}`, context.allowedOrigin);
+  }
+
+  const tooLargeByHeader = isResponseTooLargeByHeader(response);
+  if (tooLargeByHeader) {
+    return errorResponse(400, 'Response too large (>2 MB).', context.allowedOrigin);
+  }
+
+  const markdown = await response.text();
+  if (markdown.length > MAX_RESPONSE_BYTES) {
+    return errorResponse(400, 'Response too large (>2 MB).', context.allowedOrigin);
+  }
+
+  const finalUrl =
+    response.headers.get('X-Final-URL')
+    || response.headers.get('x-url')
+    || response.url
+    || targetUrl;
+
+  return new Response(markdown, {
+    status: 200,
+    headers: successHeaders(context, {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Final-URL': finalUrl,
+    }),
+  });
+}
+
+async function translateText(text, from, to, context) {
+  const validationError = validateTranslateParams(text, from, to, context.allowedOrigin);
+  if (validationError) return validationError;
+
+  const apiUrl = buildTranslateApiUrl(text, from, to);
+
+  let resp;
+  try {
+    resp = await fetchWithTimeout(apiUrl, {
+      headers: { 'User-Agent': USER_AGENT },
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      return errorResponse(504, 'Translation request timed out after 10s.', context.allowedOrigin);
+    }
+    return errorResponse(502, `Translation fetch failed: ${getErrorMessage(err)}`, context.allowedOrigin);
+  }
+
+  if (!resp.ok) {
+    const snippet = (await resp.text()).slice(0, 200);
+    return errorResponse(
+      502,
+      `Google Translate API returned ${resp.status}: ${snippet}`,
+      context.allowedOrigin,
+    );
+  }
+
+  const data = await resp.json();
+  if (!Array.isArray(data) || !Array.isArray(data[0])) {
+    return errorResponse(
+      502,
+      `Unexpected Google Translate response format: ${JSON.stringify(data).slice(0, 200)}`,
+      context.allowedOrigin,
+    );
+  }
+
+  const translatedText = data[0].map((segment) => segment[0]).join('');
+  const detectedLang = data[2] || from;
+
+  return new Response(JSON.stringify({ translatedText, detectedLang }), {
+    status: 200,
+    headers: successHeaders(context, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    }),
+  });
+}
+
+function validateTranslateParams(text, from, to, allowedOrigin) {
   if (!text || typeof text !== 'string') {
     return errorResponse(400, 'Missing or invalid "text" field (must be a non-empty string).', allowedOrigin);
   }
   if (text.length > MAX_TRANSLATE_CHARS) {
     return errorResponse(400, `Text too long (${text.length} chars, max ${MAX_TRANSLATE_CHARS}).`, allowedOrigin);
   }
-  if (!from || !LANG_CODE_RE.test(from) && from !== 'auto') {
+  if (!from || (!LANG_CODE_RE.test(from) && from !== 'auto')) {
     return errorResponse(400, `Invalid "from" language code: "${from}".`, allowedOrigin);
   }
   if (!to || !LANG_CODE_RE.test(to)) {
     return errorResponse(400, `Invalid "to" language code: "${to}".`, allowedOrigin);
   }
+  return null;
+}
 
-  const apiUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(from)}&tl=${encodeURIComponent(to)}&dt=t&q=${encodeURIComponent(text)}`;
+function buildTranslateApiUrl(text, from, to) {
+  return `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(from)}&tl=${encodeURIComponent(to)}&dt=t&q=${encodeURIComponent(text)}`;
+}
 
+function successHeaders(context, extra = {}) {
+  return {
+    ...corsHeaders(context.allowedOrigin),
+    'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+    'X-RateLimit-Remaining': String(context.rateCheck.remaining),
+    ...extra,
+  };
+}
+
+async function fetchWithTimeout(url, init = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    const resp = await fetch(apiUrl, {
+    return await fetch(url, {
+      ...init,
       signal: controller.signal,
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
     });
-
-    clearTimeout(timer);
-
-    if (!resp.ok) {
-      const snippet = (await resp.text()).slice(0, 200);
-      return errorResponse(
-        502,
-        `Google Translate API returned ${resp.status}: ${snippet}`,
-        allowedOrigin,
-      );
-    }
-
-    const data = await resp.json();
-
-    // Response format: [[["translated","original",...],...], null, "detected_lang"]
-    if (!Array.isArray(data) || !Array.isArray(data[0])) {
-      return errorResponse(
-        502,
-        `Unexpected Google Translate response format: ${JSON.stringify(data).slice(0, 200)}`,
-        allowedOrigin,
-      );
-    }
-
-    const translatedText = data[0].map((seg) => seg[0]).join('');
-    const detectedLang = data[2] || from;
-
-    return new Response(JSON.stringify({ translatedText, detectedLang }), {
-      status: 200,
-      headers: {
-        ...corsHeaders(allowedOrigin),
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-        'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-        'X-RateLimit-Remaining': String(rateCheck.remaining),
-      },
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      return errorResponse(504, 'Translation request timed out after 10s.', allowedOrigin);
-    }
-    return errorResponse(502, `Translation fetch failed: ${err.message}`, allowedOrigin);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
-async function handleJinaMarkdown(targetUrl, allowedOrigin, rateCheck, jinaKey) {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-    const headers = {
-      'User-Agent': USER_AGENT,
-      Accept: 'text/markdown',
-    };
-    if (jinaKey) {
-      headers.Authorization = `Bearer ${jinaKey}`;
-    }
-
-    const jinaUrl = `https://r.jina.ai/${targetUrl}`;
-    const response = await fetch(jinaUrl, {
-      signal: controller.signal,
-      headers,
-      redirect: 'follow',
-    });
-
-    clearTimeout(timer);
-
-    if (!response.ok) {
-      const snippet = (await response.text()).slice(0, 240);
-      return errorResponse(502, `Jina Reader returned ${response.status}: ${snippet}`, allowedOrigin);
-    }
-
-    const contentLength = response.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_BYTES) {
-      return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
-    }
-
-    const markdown = await response.text();
-    if (markdown.length > MAX_RESPONSE_BYTES) {
-      return errorResponse(400, 'Response too large (>2 MB).', allowedOrigin);
-    }
-
-    const finalUrl =
-      response.headers.get('X-Final-URL')
-      || response.headers.get('x-url')
-      || response.url
-      || targetUrl;
-
-    return new Response(markdown, {
-      status: 200,
-      headers: {
-        ...corsHeaders(allowedOrigin),
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Final-URL': finalUrl,
-        'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
-        'X-RateLimit-Remaining': String(rateCheck.remaining),
-      },
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      return errorResponse(504, 'Jina Reader request timed out.', allowedOrigin);
-    }
-    return errorResponse(502, `Jina Reader fetch failed: ${err.message}`, allowedOrigin);
-  }
+function isResponseTooLargeByHeader(response) {
+  const contentLength = response.headers.get('content-length');
+  if (!contentLength) return false;
+  return parseInt(contentLength, 10) > MAX_RESPONSE_BYTES;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
+function noContentResponse(origin) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(origin),
+  });
+}
 
 function corsHeaders(origin) {
   return {
@@ -444,6 +406,52 @@ function errorResponse(status, message, origin, extraHeaders = {}) {
   });
 }
 
+function checkRateLimit(clientIp) {
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+
+  let timestamps = rateLimitMap.get(clientIp);
+  if (!timestamps) {
+    timestamps = [];
+    rateLimitMap.set(clientIp, timestamps);
+  }
+
+  while (timestamps.length > 0 && timestamps[0] <= windowStart) {
+    timestamps.shift();
+  }
+
+  const remaining = RATE_LIMIT_MAX - timestamps.length;
+  if (remaining <= 0) {
+    const retryAfterMs = timestamps[0] - windowStart;
+    return { allowed: false, remaining: 0, retryAfter: Math.ceil(retryAfterMs / 1000) };
+  }
+
+  timestamps.push(now);
+  return { allowed: true, remaining: remaining - 1, retryAfter: 0 };
+}
+
+function cleanupStaleEntries() {
+  const now = Date.now();
+  if (now - lastCleanup < RATE_LIMIT_WINDOW_MS) return;
+
+  lastCleanup = now;
+  const windowStart = now - RATE_LIMIT_WINDOW_MS;
+  for (const [ip, timestamps] of rateLimitMap) {
+    if (timestamps.length === 0 || timestamps[timestamps.length - 1] <= windowStart) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}
+
 function isPrivateHost(hostname) {
   return PRIVATE_IP_PATTERNS.some((pattern) => pattern.test(hostname));
+}
+
+function isAbortError(err) {
+  return Boolean(err && typeof err === 'object' && err.name === 'AbortError');
+}
+
+function getErrorMessage(err) {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
