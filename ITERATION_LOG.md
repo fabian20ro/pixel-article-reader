@@ -243,4 +243,29 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix translate button — replace broken Google Translate proxy with API-based translation
+
+**Context:** User reported that clicking the translate button on a German article (web.de) left the text in German. The root cause: the translate button was constructing a `translate.goog` proxy URL and re-fetching through the CORS proxy, but `translate.goog` relies on client-side JavaScript to translate text. Since the proxy returns raw HTML and `DOMParser` doesn't execute JavaScript, the text stayed in the original language.
+
+**What happened:**
+- Replaced the broken `translate.goog` proxy approach entirely.
+- Added a `POST /?action=translate` endpoint to the Cloudflare Worker that calls Google Translate's `translate.googleapis.com` API server-side and returns translated text as JSON.
+- Created new `translator.ts` module that batches paragraphs into ~3000-char chunks, sends them to the worker in parallel (max 3 concurrent), and reassembles translated paragraphs.
+- Improved `lang-detect.ts` with `detectLangFromHtml()` (normalizes `<html lang="de-DE">` to `"de"`), `detectLangFromUrl()` (maps TLDs like `.de` → German), `needsTranslation()` (decides if translation needed), and `getSourceLang()`.
+- Added `htmlLang` field to the `Article` interface in `extractor.ts` — extracted from the parsed HTML's `<html lang="...">` attribute.
+- Updated `app.ts`: removed `toTranslateUrl()` and `originalArticleUrl`, translate button now calls `translateParagraphs()` directly on the extracted text.
+- The translate button now shows for both URL-based and pasted text articles when the detected language is not English or Romanian.
+- Per user requirement: if language can't be determined from URL/metadata, assume it's NOT English → show translate button.
+- Error handling propagates root cause at every level (worker → client → UI).
+- Updated AGENTS.md, codemaps, iteration log.
+- All 150 tests pass (48 new tests for lang-detect, translator, and extractor htmlLang).
+
+**Outcome:** Success. Translate button now works via API-based translation instead of the broken proxy approach.
+
+**Insight:** `translate.goog` URLs rely on client-side JavaScript to perform translation. Any server-side HTML fetching (CORS proxy, headless fetch) will return untranslated content. The correct approach for a proxy-based app is to translate the already-extracted text via a translation API, not to re-fetch a translated page.
+
+**Promoted to Lessons Learned:** Yes — the translate.goog JS execution insight.
+
+---
+
 <!-- New entries go above this line, most recent first -->

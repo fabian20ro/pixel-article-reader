@@ -8,21 +8,8 @@
 import { getUrlFromParams, extractUrl, clearQueryParams } from './lib/url-utils.js';
 import { extractArticle, createArticleFromText, type Article } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
-import type { Language } from './lib/lang-detect.js';
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-/** Convert a URL to its Google Translate proxy equivalent. */
-function toTranslateUrl(url: string, targetLang = 'en'): string {
-  const parsed = new URL(url);
-  const translatedHost = parsed.hostname.replace(/\./g, '-') + '.translate.goog';
-  const params = new URLSearchParams(parsed.search);
-  params.set('_x_tr_sl', 'auto');
-  params.set('_x_tr_tl', targetLang);
-  params.set('_x_tr_hl', targetLang);
-  params.set('_x_tr_pto', 'wapp');
-  return `https://${translatedHost}${parsed.pathname}?${params.toString()}`;
-}
+import { needsTranslation, getSourceLang, type Language } from './lib/lang-detect.js';
+import { translateParagraphs } from './lib/translator.js';
 
 // ── Config ──────────────────────────────────────────────────────────
 
@@ -83,7 +70,6 @@ async function main(): Promise<void> {
   const settings = loadSettings();
   let currentArticle: Article | null = null;
   let currentArticleUrl = '';
-  let originalArticleUrl = '';  // preserved across translations
   let currentLangOverride: 'auto' | Language = settings.lang;
 
   // ── TTS engine ──────────────────────────────────────────────────
@@ -286,7 +272,6 @@ async function main(): Promise<void> {
       const article = createArticleFromText(raw);
       currentArticle = article;
       currentArticleUrl = '';
-      originalArticleUrl = '';
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not parse the pasted text.';
@@ -358,9 +343,40 @@ async function main(): Promise<void> {
 
   // ── Translate button ────────────────────────────────────────────
 
-  translateBtn.addEventListener('click', () => {
-    if (!originalArticleUrl) return;
-    loadArticle(toTranslateUrl(originalArticleUrl, 'en'));
+  translateBtn.addEventListener('click', async () => {
+    if (!currentArticle) return;
+
+    const savedLabel = translateBtn.textContent;
+    translateBtn.disabled = true;
+    translateBtn.textContent = 'Translating...';
+
+    try {
+      const sourceLang = getSourceLang(currentArticle.htmlLang, currentArticleUrl);
+      const translated = await translateParagraphs(
+        currentArticle.paragraphs,
+        sourceLang,
+        'en',
+        CONFIG.PROXY_BASE,
+        CONFIG.PROXY_SECRET,
+      );
+
+      // Update article with translated content
+      currentArticle.paragraphs = translated;
+      currentArticle.textContent = translated.join('\n\n');
+      currentArticle.lang = 'en';
+      currentArticle.htmlLang = 'en';
+
+      // Re-render
+      displayArticle(currentArticle);
+
+      // Hide translate button after successful translation
+      translateBtn.classList.add('hidden');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Translation failed.';
+      translateBtn.textContent = savedLabel;
+      translateBtn.disabled = false;
+      showError(msg);
+    }
   });
 
   // ── Article loading ─────────────────────────────────────────────
@@ -374,10 +390,6 @@ async function main(): Promise<void> {
       const article = await extractArticle(url, CONFIG.PROXY_BASE, CONFIG.PROXY_SECRET);
       currentArticle = article;
       currentArticleUrl = article.resolvedUrl;
-      // Preserve original URL for translate (avoid double-wrapping translate.goog)
-      if (!url.includes('.translate.goog')) {
-        originalArticleUrl = article.resolvedUrl;
-      }
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
@@ -396,8 +408,11 @@ async function main(): Promise<void> {
       `${article.wordCount} words`,
     ].join(' \u00B7 ');
 
-    // Translate button — only show when article was fetched from a URL
-    translateBtn.classList.toggle('hidden', !currentArticleUrl);
+    // Translate button — show when article needs translation (non-EN, non-RO)
+    const showTranslate = needsTranslation(article.htmlLang, currentArticleUrl, article.lang);
+    translateBtn.classList.toggle('hidden', !showTranslate);
+    translateBtn.disabled = false;
+    translateBtn.textContent = 'Translate to English';
 
     // Render paragraphs
     articleText.innerHTML = '';

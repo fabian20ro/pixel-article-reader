@@ -1,17 +1,17 @@
 # Module Reference
 
-## src/app.ts — Main Orchestrator (453 lines)
+## src/app.ts — Main Orchestrator
 
 Entry point. Wires all modules together and manages UI state.
 
 **Key functions:**
 - `main()` — boot sequence: registers SW, loads settings, inits TTS, binds all event listeners
-- `toTranslateUrl(url, targetLang)` — converts article URL to Google Translate proxy URL
 - `loadArticle(url)` — full pipeline: show loading → extract → display → init TTS
-- `displayArticle(article)` — renders paragraphs to DOM, loads into TTS engine
+- `displayArticle(article)` — renders paragraphs to DOM, loads into TTS engine, shows translate button if needed
 - `showView(view)` — switches between `input | loading | error | article` views
 - `showError(msg)` — displays error message to user
 - `handleUrlSubmit()` — reads input, extracts URL or parses pasted text, calls loadArticle or createArticleFromText
+- Translate button handler — calls `translateParagraphs()`, updates article with translated text
 
 **Config:**
 ```ts
@@ -36,15 +36,21 @@ Pure functions, no side effects (except `clearQueryParams` which uses `history.r
 
 ---
 
-## src/lib/lang-detect.ts — Language Detection (37 lines)
+## src/lib/lang-detect.ts — Language Detection
 
-Pure function, no dependencies.
+Pure functions, no dependencies.
 
 | Function | Purpose |
 |----------|---------|
-| `detectLanguage(text)` | Returns `'en'` or `'ro'` based on first 1000 chars |
+| `detectLanguage(text)` | Returns `'en'` or `'ro'` based on first 1000 chars (for TTS voice selection) |
+| `detectLangFromHtml(htmlLang)` | Normalizes HTML `lang` attribute (e.g. `"de-DE"` → `"de"`) |
+| `detectLangFromUrl(url)` | Maps URL TLDs to language codes (`.de` → `"de"`, `.com` → `""`) |
+| `needsTranslation(htmlLang, url, textLang?)` | Returns true if article should be translated to English |
+| `getSourceLang(htmlLang, url)` | Best-guess source language code for translation API (`'auto'` if unknown) |
 
-**Strategy:** counts Romanian diacritics (ă, â, î, ș, ț) and checks for 23 common Romanian words. If >3 diacritics or >2 word matches → Romanian.
+**Strategy for `detectLanguage`:** counts Romanian diacritics (ă, â, î, ș, ț) and checks for 23 common Romanian words. If >3 diacritics or >2 word matches → Romanian.
+
+**Strategy for `needsTranslation`:** checks htmlLang → URL TLD → text detection in priority order. If language can't be determined, defaults to true (assumes non-English).
 
 ---
 
@@ -66,7 +72,22 @@ Fetches HTML through CORS proxy, parses with Readability.js.
 - HTTP 429 → rate limit exceeded, shows retry-after time
 - Content-length > 2 MB → rejects
 
-**Interface:** `Article { title, content, textContent, paragraphs, lang, siteName, excerpt, wordCount, estimatedMinutes, resolvedUrl }`
+**Interface:** `Article { title, content, textContent, paragraphs, lang, htmlLang, siteName, excerpt, wordCount, estimatedMinutes, resolvedUrl }`
+
+---
+
+## src/lib/translator.ts — Translation via CORS Proxy
+
+Sends text to the Cloudflare Worker's translate endpoint for server-side Google Translate API calls.
+
+| Function | Purpose |
+|----------|---------|
+| `translateParagraphs(paragraphs, sourceLang, targetLang, proxyBase, proxySecret?)` | Translates an array of paragraphs, returns translated array of same length |
+| `buildBatches(paragraphs)` | Groups paragraphs into ~3000-char batches joined by `\n\n` |
+
+**Concurrency:** max 3 in-flight translation requests. Batching minimizes API calls for typical articles (3-10 batches instead of 20-30 per-paragraph calls).
+
+**Error handling:** propagates root cause from worker response — includes HTTP status, batch index, rate limit info, and network errors.
 
 ---
 
@@ -98,9 +119,9 @@ Web Speech API wrapper with sentence-level chunking.
 
 ---
 
-## worker/cors-proxy.js — Cloudflare Worker (190 lines)
+## worker/cors-proxy.js — Cloudflare Worker
 
-CORS proxy that fetches article HTML on behalf of the browser client.
+CORS proxy that fetches article HTML and provides server-side translation.
 
 | Component | Detail |
 |-----------|--------|
@@ -108,9 +129,10 @@ CORS proxy that fetches article HTML on behalf of the browser client.
 | Auth | `X-Proxy-Key` header validated against `env.PROXY_SECRET` |
 | Rate limit | 20 requests/minute per client IP (in-memory sliding window) |
 | SSRF | Blocks private IP ranges (127.x, 10.x, 172.16-31.x, 192.168.x, etc.) |
-| Limits | 2 MB max response, 10s fetch timeout |
+| Limits | 2 MB max HTML response, 5000 chars max translate text, 10s fetch timeout |
 | Headers | Returns `X-Final-URL` (resolved URL after redirects) |
 | CORS | `Access-Control-Allow-Origin` set to `env.ALLOWED_ORIGIN` |
+| Translate | `POST /?action=translate` — accepts `{ text, from, to }`, calls Google Translate API, returns `{ translatedText, detectedLang }` |
 
 **Rate limit response headers:**
 - `X-RateLimit-Limit` — max requests per window (20)

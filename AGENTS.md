@@ -67,8 +67,8 @@ See [README.md — Project Structure](README.md#project-structure) for the full 
 ### TTS Sentence Chunking & Skip Safety (tts-engine.ts)
 Chrome on Android silently stops speaking after ~15 seconds of continuous text. The engine splits each paragraph into sentences and speaks one `SpeechSynthesisUtterance` per sentence, chaining them via `onend` callbacks. **Do not combine sentences into a single utterance.** A generation counter (`_speakGen`) prevents stale `onend` callbacks from double-advancing the position during skip operations.
 
-### Translate Button (app.ts)
-The translate button converts the article URL to a Google Translate proxy URL and re-fetches it. It uses `originalArticleUrl` (not `currentArticleUrl`) to avoid double-wrapping `translate.goog` URLs. The button is hidden when the article was loaded from pasted text (no URL to translate).
+### Translate Button (app.ts + translator.ts + lang-detect.ts)
+The translate button sends the already-extracted article text to the Cloudflare Worker's `POST /?action=translate` endpoint, which calls Google Translate's API server-side and returns translated text. Language detection uses the HTML `lang` attribute and URL TLD to decide if translation is needed; if the language can't be determined, it defaults to "needs translation" (assumes non-English). The button works for both URL-fetched and pasted-text articles. Paragraphs are batched into ~3000-char chunks to minimize API calls.
 
 ### Share Target (manifest.json + url-utils.ts)
 The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query params (`?url=...`). Some apps put the URL in `?text=` instead — `url-utils.ts` checks both fields.
@@ -77,6 +77,7 @@ The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query p
 - **Security:** Rejects private IPs (SSRF), enforces 2 MB limit, 10s timeout, strips cookies. Auth via `X-Proxy-Key` header.
 - **Rate limiting:** 20 req/min per client IP (in-memory sliding window). HTTP 429 with `Retry-After` header when exceeded.
 - **URL resolution:** Follows redirects and returns final URL in `X-Final-URL` header. Critical for shortened URLs (e.g. `share.google`).
+- **Translation:** `POST /?action=translate` accepts `{ text, from, to }` JSON body, calls Google Translate API server-side, returns `{ translatedText, detectedLang }`. Max 5000 chars per request.
 
 ## Configuration
 
