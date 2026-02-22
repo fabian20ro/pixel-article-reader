@@ -85,4 +85,23 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix PWA share target and proxy error handling
+
+**Context:** User reported two issues: (1) the PWA doesn't appear as a share target when sharing from articles, (2) entering a URL gives "Failed to fetch. Try pasting the article text directly."
+
+**What happened:**
+- Investigated the CORS proxy — confirmed it IS deployed but returns 403 because `PROXY_SECRET` is configured on the worker while the client has `CONFIG.PROXY_SECRET = ''`. The client sends no `X-Proxy-Key` header, worker rejects with 403. If the user isn't on the exact `ALLOWED_ORIGIN`, CORS blocks the 403 response, causing a raw "Failed to fetch" TypeError.
+- Fixed `sw.js`: added `ignoreSearch: true` for navigation requests so share target URLs (`?url=...`) match the cached app shell instead of missing the cache and falling through to network. Bumped cache version to v2 to force SW update.
+- Fixed `extractor.ts`: added specific error handling for `TypeError` (network unreachable → "Could not reach the article proxy"), for 403 responses (parses JSON error body from proxy, hints about PROXY_SECRET), and removed misleading "Try pasting the article text directly" from all error paths.
+- Fixed `app.ts`: removed duplicate "Try pasting the article text directly" suffix appended to all errors in the `loadArticle` catch block.
+- All 75 tests pass.
+
+**Outcome:** Partial success. Error messages are now accurate and actionable. Share target caching is fixed. However, the root cause of "Failed to fetch" — the missing `PROXY_SECRET` in the client config — requires the user to set the secret value in `CONFIG.PROXY_SECRET` in `src/app.ts` and rebuild.
+
+**Insight:** The "Failed to fetch" TypeError in browsers means the network request never completed — usually CORS blocking or DNS failure, NOT an HTTP error. When a CORS proxy returns an error (like 403) and the `Access-Control-Allow-Origin` doesn't match the caller's origin, the browser hides the HTTP status entirely and throws a generic TypeError. Always add specific TypeError handling for cross-origin fetch calls.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->
