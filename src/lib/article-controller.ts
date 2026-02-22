@@ -210,7 +210,17 @@ export class ArticleController {
         };
 
         blocks.forEach((block) => {
-          const text = this.normalizeTtsText(block.textContent ?? '');
+          // Skip code blocks — code isn't meaningful when spoken aloud
+          if (block.tagName === 'PRE') return;
+
+          let text: string;
+          if (block.tagName === 'FIGURE') {
+            // For figures, only speak the caption text (skip image-only figures)
+            const figcaption = block.querySelector('figcaption');
+            text = this.normalizeTtsText(figcaption?.textContent ?? '');
+          } else {
+            text = this.normalizeTtsText(block.textContent ?? '');
+          }
           if (!text) return;
 
           pendingText = pendingText ? pendingText + ' ' + text : text;

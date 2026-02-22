@@ -286,25 +286,47 @@ function markdownToParagraphs(markdown: string): string[] {
     .split(/\n\s*\n+/)
     .map((block) => stripMarkdownSyntax(block))
     .map((text) => text.trim())
-    .filter((text) => text.length >= MIN_PARAGRAPH_LENGTH);
+    .filter((text) => text.length >= MIN_PARAGRAPH_LENGTH)
+    .filter((text) => isSpeakableText(text));
+}
+
+/**
+ * Check if text contains enough real words to be worth speaking aloud.
+ * Filters out paragraphs that are mostly URLs, base64 data, or non-text artifacts.
+ */
+function isSpeakableText(text: string): boolean {
+  const words = text.match(/[a-zA-Z\u00C0-\u024F]{2,}/g);
+  return !!words && words.length >= 3;
 }
 
 function splitPlainTextParagraphs(text: string): string[] {
   const byBlank = text
     .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+    .map((p) => stripNonTextContent(p))
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
+    .filter((p) => isSpeakableText(p));
 
   if (byBlank.length > 0) return byBlank;
 
   return text
     .split(/\n/)
-    .map((p) => p.trim())
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH);
+    .map((p) => stripNonTextContent(p))
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
+    .filter((p) => isSpeakableText(p));
+}
+
+/** Strip content that shouldn't be read aloud: HTML tags, data URIs, long URLs. */
+function stripNonTextContent(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
+    .replace(/https?:\/\/\S{80,}/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function stripMarkdownSyntax(block: string): string {
-  return block
+  const stripped = block
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
@@ -313,9 +335,8 @@ function stripMarkdownSyntax(block: string): string {
     .replace(/^\s*\d+\.\s+/gm, '')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*_~]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[*_~]/g, '');
+  return stripNonTextContent(stripped);
 }
 
 function extractTitleFromMarkdown(markdown: string): string {
