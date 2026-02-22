@@ -80,4 +80,4 @@ app.ts
 | Component | Target | Trigger |
 |-----------|--------|---------|
 | App (HTML/CSS/JS) | GitHub Pages | Push to main → `deploy-pages.yml` |
-| CORS Proxy Worker | Cloudflare Workers | Push changes in `worker/` → `deploy-worker.yml` |
+| CORS Proxy Worker | Cloudflare Workers | Cloudflare Git integration redeploy on `main` changes in `worker/` |

@@ -333,4 +333,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Remove redundant GitHub Worker deploy workflow (Cloudflare Git is source of truth)
+
+**Context:** Cloudflare already redeploys the Worker from Git commits on `main` for `worker/**`. The repo intentionally does not store Cloudflare credentials in GitHub secrets.
+
+**What happened:**
+- Deleted `.github/workflows/deploy-worker.yml` to stop guaranteed-failing duplicate deploy attempts.
+- Updated docs to reflect the real deployment ownership:
+  - `README.md` now documents Cloudflare Git integration + Worker bindings in Cloudflare.
+  - `AGENTS.md` and `doc/codemaps/architecture.md` now describe Pages-via-GitHub-Actions and Worker-via-Cloudflare split.
+  - `worker/cors-proxy.js` header comments now reference Cloudflare Git/Wrangler deploy paths.
+- Kept `PROXY_SECRET` injection in `deploy-pages.yml` (conditional on secret presence) so authenticated Worker setups continue working.
+
+**Outcome:** Success. CI scope is cleaner and aligned with operational reality without breaking authenticated proxy requests.
+
+**Insight:** When deployment ownership is external (Cloudflare Git), redundant in-repo deploy workflows create noise and failures; remove them and document one deploy authority.
+
+**Promoted to Lessons Learned:** Yes — single-source deployment ownership.
+
+---
+
 <!-- New entries go above this line, most recent first -->

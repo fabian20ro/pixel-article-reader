@@ -50,7 +50,7 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** GitHub Pages deploy via Actions needs a clean artifact — The `deploy-pages.yml` workflow builds a `_site/` directory containing only deployable files (no `src/`, `node_modules/`, etc.) and uses `actions/upload-pages-artifact`. Pages source must be set to "GitHub Actions" in repo settings.
 
-**[2026-02-22]** Cloudflare Worker uses env bindings, not hardcoded constants — `ALLOWED_ORIGIN` is a `[vars]` entry in `wrangler.toml`, `PROXY_SECRET` is a secret set via `wrangler secret put` or injected by GitHub Actions. The worker reads them from the `env` parameter in `fetch(request, env)`. This avoids committing secrets and allows per-environment configuration.
+**[2026-02-22]** Cloudflare Worker uses env bindings, not hardcoded constants — `ALLOWED_ORIGIN` is a `[vars]` entry in `wrangler.toml`, while `PROXY_SECRET`/`JINA_KEY` are Worker secrets set in Cloudflare (dashboard or `wrangler secret put`). The worker reads them from the `env` parameter in `fetch(request, env)`. This avoids committing secrets and supports per-environment config.
 
 ## Dependencies & External Services
 
@@ -62,7 +62,7 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Build before shipping — Compiled JS files are generated outputs (gitignored) and must be produced by `npm run build` before local manual verification; CI also builds before deploy. Never edit generated root `.js` files directly.
 
-**[2026-02-22]** Three GitHub secrets are required for CI/CD — `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `PROXY_SECRET`. These must be set in the repo's Settings > Secrets > Actions before the deploy-worker workflow will succeed.
+**[2026-02-22]** Worker deploy ownership must be single-source — if Cloudflare Git integration deploys `worker/**`, remove overlapping GitHub deploy workflows. Cloudflare API credentials belong in Cloudflare (not GitHub), but `PROXY_SECRET` may still need to exist as a GitHub Pages build secret so the client can send `X-Proxy-Key`.
 
 **[2026-02-22]** Do not add the npm package `tsc` — The package named `tsc` is not TypeScript and will shadow the real compiler binary in `node_modules/.bin/tsc`. Keep only `typescript` in `devDependencies` and use `npm run build`.
 

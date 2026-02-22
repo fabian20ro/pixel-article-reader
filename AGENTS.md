@@ -38,7 +38,7 @@ This project maintains a persistent learning system across AI agent sessions.
 - **Build:** `tsc` only — no bundler. Run `npm run build` to compile
 - **Testing:** Vitest with jsdom environment. Run `npm test`
 - **Hosting target:** GitHub Pages (static files)
-- **CI/CD:** GitHub Actions — auto-deploys Pages on push, auto-deploys CF Worker on `worker/` changes
+- **CI/CD:** GitHub Actions deploys Pages; Cloudflare Git integration deploys the Worker on `worker/` changes
 
 ## Codemaps
 
@@ -57,7 +57,7 @@ See [README.md — Project Structure](README.md#project-structure) for the full 
 2. **Compiled JS goes to root and is generated-only.** `tsconfig.json` has `outDir: "."` and `rootDir: "src"`, so `src/app.ts` compiles to `./app.js` and `src/lib/foo.ts` compiles to `./lib/foo.js`. These outputs are gitignored; do not hand-edit them.
 3. **Service Worker is plain JS.** `sw.js` is not TypeScript — it runs in a different scope and is kept simple.
 4. **Readability/Turndown/marked are globals.** They are loaded via `<script>` tags before `app.js`. In TypeScript, they're accessed through ambient declarations in the modules that use them.
-5. **The Cloudflare Worker is deployed separately.** `worker/cors-proxy.js` is deployed via GitHub Actions using wrangler. It uses environment bindings (`ALLOWED_ORIGIN`, `PROXY_SECRET`, optional `JINA_KEY`) instead of hardcoded constants.
+5. **The Cloudflare Worker is deployed separately.** `worker/cors-proxy.js` is deployed by Cloudflare Git integration (or manually via Wrangler). It uses environment bindings (`ALLOWED_ORIGIN`, `PROXY_SECRET`, optional `JINA_KEY`) instead of hardcoded constants.
 
 ## Critical Implementation Details
 
@@ -88,21 +88,22 @@ The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query p
 
 ## Configuration
 
-The proxy URL and secret must be set in `src/app.ts`:
+The proxy URL is set in `src/app.ts`. `PROXY_SECRET` can be set in source for local/manual builds or injected by Pages CI from the GitHub `PROXY_SECRET` repository secret:
 
 ```ts
 const CONFIG = {
   PROXY_BASE: 'https://article-voice-proxy.fabian20ro.workers.dev',
-  PROXY_SECRET: '',  // same value as the PROXY_SECRET worker secret
+  PROXY_SECRET: '',  // same value as Worker PROXY_SECRET when auth is enabled
 };
 ```
 
-After changing, run `npm run build` to recompile.
+If Worker auth is enabled and the client sends no matching `X-Proxy-Key`, Worker requests fail with HTTP 403.
+After changing config, run `npm run build` to recompile.
 Never add the npm package `tsc` to dependencies; it shadows the real TypeScript compiler binary.
 
 ## CI/CD
 
-See [README.md — CI/CD](README.md#cicd) for workflow details and required GitHub secrets (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `PROXY_SECRET`, optional `JINA_KEY`).
+See [README.md — CI/CD](README.md#cicd) for Pages workflow details and [README.md — Set up the Cloudflare Worker](README.md#1-set-up-the-cloudflare-worker-cors-proxy) for Worker deploy/binding setup.
 
 ## Testing Notes
 

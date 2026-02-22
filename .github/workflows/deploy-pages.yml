@@ -35,6 +35,7 @@ jobs:
           diff -u /tmp/js-hash-1.txt /tmp/js-hash-2.txt
 
       - name: Inject PROXY_SECRET into client config
+        if: ${{ secrets.PROXY_SECRET != '' }}
         run: |
           sed -i "s|PROXY_SECRET: ''|PROXY_SECRET: '${{ secrets.PROXY_SECRET }}'|" src/app.ts
 

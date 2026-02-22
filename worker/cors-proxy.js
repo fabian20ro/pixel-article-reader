@@ -1,8 +1,8 @@
 /**
  * ArticleVoice CORS Proxy — Cloudflare Worker
  *
- * Deployed automatically via GitHub Actions when worker/ changes.
- * See .github/workflows/deploy-worker.yml for the CI pipeline.
+ * Deployed automatically via Cloudflare Git integration when worker/ changes.
+ * Can also be deployed manually with Wrangler.
  *
  * Endpoints:
  *   GET  /?url=<encoded_article_url>        — Fetch and return article HTML

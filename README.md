@@ -17,23 +17,7 @@ The entire app runs client-side. The only server component is a lightweight Clou
 
 ### 1. Set up the Cloudflare Worker (CORS proxy)
 
-The worker deploys automatically via GitHub Actions when you push changes to `worker/`. Configure the required secrets first.
-
-#### Step-by-step: Create a Cloudflare API Token
-
-1. Sign up for a free account at [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Go to **My Profile > API Tokens > Create Token**
-3. Use the **"Edit Cloudflare Workers"** template, or create a custom token with:
-   - **Account / Workers Scripts**: Edit
-   - **Zone / Zone**: Read (optional, only if using a custom domain)
-4. Copy the generated token — you'll need it for GitHub
-
-#### Step-by-step: Find your Cloudflare Account ID
-
-1. Go to the [Cloudflare dashboard](https://dash.cloudflare.com)
-2. Click any domain (or Workers & Pages)
-3. Your **Account ID** is shown on the right sidebar under the API section
-4. Copy it
+The worker deploys via **Cloudflare Git integration** (not GitHub Actions). Connect this repo in Cloudflare so pushes to `main` that change `worker/**` trigger a redeploy.
 
 #### Step-by-step: Choose a Proxy Secret
 
@@ -43,30 +27,30 @@ Pick any random string to use as a shared secret between the app and the worker.
 openssl rand -hex 32
 ```
 
-#### Step-by-step: Add secrets to GitHub
+#### Step-by-step: Configure Worker bindings in Cloudflare
 
-Go to your repo **Settings > Secrets and variables > Actions > New repository secret** and add:
+In Cloudflare Worker settings:
 
-| Secret name | Value |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | The API token from step 1 |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Account ID from step 2 |
-| `PROXY_SECRET` | The random string from step 3 |
-| `JINA_KEY` | Optional Jina Reader API key for higher markdown-mode limits |
+1. Set `ALLOWED_ORIGIN` to `https://fabian20ro.github.io`
+2. Add secret `PROXY_SECRET` (optional)
+3. Add secret `JINA_KEY` (optional, for higher Jina limits)
 
-#### Step-by-step: Set the proxy secret in the app
+You can also set secrets with Wrangler:
 
-In `src/app.ts`, set `CONFIG.PROXY_SECRET` to the same value you used for `PROXY_SECRET` above:
-
-```ts
-const CONFIG = {
-  PROXY_BASE: 'https://article-voice-proxy.fabian20ro.workers.dev',
-  PROXY_SECRET: 'your-secret-here',
-  // ...
-};
+```sh
+cd worker
+npx wrangler secret put PROXY_SECRET
+npx wrangler secret put JINA_KEY   # optional
 ```
 
-Then rebuild: `npm run build`
+#### Step-by-step: Set `PROXY_SECRET` for the client build (optional)
+
+For GitHub Pages deployments, add repository secret `PROXY_SECRET` in:
+`Settings -> Secrets and variables -> Actions`.
+
+`deploy-pages.yml` injects this value into `src/app.ts` at CI build time.
+For local/manual builds, set `CONFIG.PROXY_SECRET` directly in `src/app.ts` before running `npm run build`.
+If Worker `PROXY_SECRET` is set but the client secret is missing/mismatched, proxy calls fail with HTTP 403.
 
 > **Note:** `PROXY_SECRET` is visible in client-side JS. It prevents casual abuse, not determined attackers. If you don't need it, leave it empty in both app and worker.
 
@@ -76,7 +60,8 @@ GitHub Actions handles this automatically. On every push to `main`:
 
 1. TypeScript is compiled
 2. Tests are run
-3. The app shell is deployed to GitHub Pages
+3. `PROXY_SECRET` is injected into the client config when the GitHub secret is set
+4. The app shell is deployed to GitHub Pages
 
 To enable: go to **Settings > Pages > Source** and select **GitHub Actions**.
 
@@ -84,9 +69,9 @@ The site will be available at `https://fabian20ro.github.io/pixel-article-reader
 
 ### 3. Deploy the Cloudflare Worker
 
-The worker deploys automatically on push to `main` when any file in `worker/` changes. The GitHub Action uses `wrangler` with your `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets.
-
-To trigger the first deploy, push any change to `worker/` (or push after setting up the secrets).
+Cloudflare redeploys the worker automatically from Git when changes land in `worker/` on `main`.
+No GitHub Action or GitHub Cloudflare API credentials are required for this path.
+If Worker auth is enabled, keep `PROXY_SECRET` configured for Pages builds so the browser can send `X-Proxy-Key`.
 
 The worker URL will be: `https://article-voice-proxy.fabian20ro.workers.dev`
 
@@ -209,7 +194,6 @@ npm test
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `deploy-pages.yml` | Push to `main` | Builds TS, runs tests, deploys to GitHub Pages |
-| `deploy-worker.yml` | Push to `main` changing `worker/**` | Deploys Cloudflare Worker via wrangler |
 
 ### Project Structure
 
@@ -252,7 +236,6 @@ npm test
 │   └── wrangler.toml       # Wrangler deployment config
 ├── .github/workflows/
 │   ├── deploy-pages.yml    # GitHub Pages CI/CD
-│   └── deploy-worker.yml   # Cloudflare Worker CI/CD
 ├── icons/                  # PWA icons (192px, 512px)
 ├── tsconfig.json
 └── package.json
