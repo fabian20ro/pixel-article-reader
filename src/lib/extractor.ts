@@ -56,6 +56,11 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
         if (body.error) detail = body.error;
       } catch { /* ignore parse errors */ }
 
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get('Retry-After');
+        const waitMsg = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Please wait a moment and try again.';
+        throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
+      }
       if (resp.status === 403) {
         throw new Error(detail || 'Proxy rejected the request — check that PROXY_SECRET is configured in the app.');
       }

@@ -40,6 +40,13 @@ This project maintains a persistent learning system across AI agent sessions.
 - **Hosting target:** GitHub Pages (static files)
 - **CI/CD:** GitHub Actions — auto-deploys Pages on push, auto-deploys CF Worker on `worker/` changes
 
+## Codemaps
+
+Detailed architecture diagrams and module references live in `doc/codemaps/`:
+
+- **[Architecture Overview](doc/codemaps/architecture.md)** — data flow, dependency graph, deployment targets
+- **[Module Reference](doc/codemaps/modules.md)** — every module's API, functions, and key design notes
+
 ## Repository Layout
 
 ```
@@ -99,6 +106,17 @@ The PWA uses `method: "GET"` for its share target. Shared URLs arrive as query p
 
 ### CORS Proxy Security (worker/cors-proxy.js)
 The proxy rejects private IPs (SSRF prevention), enforces a 2 MB response limit, sets a 10-second timeout, and strips cookies. It validates requests via a shared secret (`X-Proxy-Key` header, checked against the `PROXY_SECRET` env binding). `ALLOWED_ORIGIN` is set to the GitHub Pages domain in `wrangler.toml`.
+
+### CORS Proxy Rate Limiting (worker/cors-proxy.js)
+The proxy enforces a rate limit of **20 requests per minute per client IP** using an in-memory sliding window. Each Cloudflare edge PoP maintains its own counters (slightly more permissive than a global limit, but sufficient for abuse prevention).
+
+- **Limit:** 20 requests per 60-second window
+- **Scope:** per client IP (from `CF-Connecting-IP` header)
+- **HTTP 429** response when exceeded, with `Retry-After` header (seconds)
+- **Response headers on all requests:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`
+- **Client-side:** `extractor.ts` detects 429 and shows a user-friendly "Rate limit exceeded" message with the retry-after countdown
+
+If you're building a tool or script that calls this proxy, stay under 20 requests/minute or you'll get 429 errors.
 
 ### URL Resolution (worker/cors-proxy.js + extractor.ts)
 The proxy follows redirects (`redirect: 'follow'`) and returns the final resolved URL in the `X-Final-URL` response header. The extractor reads this header and stores it as `article.resolvedUrl`. This is critical for shortened URLs (e.g. `share.google`) — the translate button uses the resolved URL to construct the Google Translate proxy host. Without it, shortened domains produce invalid translate URLs.
