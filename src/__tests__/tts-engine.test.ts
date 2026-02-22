@@ -285,6 +285,81 @@ describe('TTSEngine', () => {
     expect(engine.state.currentParagraph).toBe(2);
   });
 
+  // ── Sentence skip tests ───────────────────────────────────────────
+
+  it('skipSentenceForward advances to next sentence within paragraph', () => {
+    const engine = createEngine();
+    engine.loadArticle(['First sentence. Second sentence. Third sentence.'], 'en');
+    engine.play();
+
+    expect(engine.state.currentSentence).toBe(0);
+    engine.skipSentenceForward();
+    expect(engine.state.currentSentence).toBe(1);
+    expect(engine.state.currentParagraph).toBe(0);
+  });
+
+  it('skipSentenceForward crosses to next paragraph at end of sentences', () => {
+    const onParagraphChange = vi.fn();
+    const engine = createEngine({ onParagraphChange });
+    engine.loadArticle(['Only sentence.', 'Next paragraph.'], 'en');
+    engine.play();
+
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(0);
+    engine.skipSentenceForward();
+    expect(engine.state.currentParagraph).toBe(1);
+    expect(engine.state.currentSentence).toBe(0);
+  });
+
+  it('skipSentenceForward does nothing at last sentence of last paragraph', () => {
+    const engine = createEngine();
+    engine.loadArticle(['Only sentence.'], 'en');
+    engine.play();
+
+    engine.skipSentenceForward();
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(0);
+  });
+
+  it('skipSentenceBackward goes to previous sentence within paragraph', () => {
+    const engine = createEngine();
+    engine.loadArticle(['First sentence. Second sentence. Third sentence.'], 'en');
+    engine.play();
+
+    engine.skipSentenceForward(); // go to sentence 1
+    engine.skipSentenceForward(); // go to sentence 2
+    expect(engine.state.currentSentence).toBe(2);
+
+    engine.skipSentenceBackward();
+    expect(engine.state.currentSentence).toBe(1);
+    expect(engine.state.currentParagraph).toBe(0);
+  });
+
+  it('skipSentenceBackward crosses to previous paragraph at first sentence', () => {
+    const onParagraphChange = vi.fn();
+    const engine = createEngine({ onParagraphChange });
+    engine.loadArticle(['First. Second.', 'Third.'], 'en');
+    engine.play();
+
+    engine.skipForward(); // go to paragraph 1
+    expect(engine.state.currentParagraph).toBe(1);
+    expect(engine.state.currentSentence).toBe(0);
+
+    engine.skipSentenceBackward();
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(1); // last sentence of previous paragraph
+  });
+
+  it('skipSentenceBackward does nothing at first sentence of first paragraph', () => {
+    const engine = createEngine();
+    engine.loadArticle(['First sentence. Second sentence.'], 'en');
+    engine.play();
+
+    engine.skipSentenceBackward();
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(0);
+  });
+
   it('jumpToParagraph ignores out-of-range indices', () => {
     const engine = createEngine();
     engine.loadArticle(['A.', 'B.'], 'en');
