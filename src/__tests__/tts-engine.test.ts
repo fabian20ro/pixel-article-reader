@@ -100,6 +100,11 @@ describe('selectVoice', () => {
     expect(v?.name).toBe('Google US English');
   });
 
+  it('ignores preferred voice when it does not match requested language', () => {
+    const v = selectVoice(voices, 'en', 'Maria');
+    expect(v?.name).toBe('Google US English');
+  });
+
   it('returns null for empty voice list', () => {
     expect(selectVoice([], 'en')).toBeNull();
   });

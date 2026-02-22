@@ -73,12 +73,12 @@ export function selectVoice(
   lang: Language,
   preferred?: string,
 ): SpeechSynthesisVoice | null {
+  const code = langToCode(lang);
+
   if (preferred) {
-    const match = voices.find((v) => v.name === preferred);
+    const match = voices.find((v) => v.name === preferred && v.lang.startsWith(code));
     if (match) return match;
   }
-
-  const code = langToCode(lang);
   const matching = voices.filter((v) => v.lang.startsWith(code));
 
   // Prefer Google enhanced / premium voices
