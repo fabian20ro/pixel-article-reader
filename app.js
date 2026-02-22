@@ -9,7 +9,7 @@ import { extractArticle } from './lib/extractor.js';
 import { TTSEngine } from './lib/tts-engine.js';
 // ── Config ──────────────────────────────────────────────────────────
 const CONFIG = {
-    PROXY_BASE: 'https://article-voice-proxy.fabian20ro.workers.dev',
+    PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
     PROXY_SECRET: '', // Set at build time or leave empty if secret is not configured
     DEFAULT_RATE: 1.0,
     DEFAULT_LANG: 'auto',
