@@ -11,7 +11,7 @@ Entry point. Wires all modules together and manages UI state.
 - `displayArticle(article)` — renders paragraphs to DOM, loads into TTS engine
 - `showView(view)` — switches between `input | loading | error | article` views
 - `showError(msg)` — displays error message to user
-- `handleUrlSubmit()` — reads input, extracts URL, calls loadArticle
+- `handleUrlSubmit()` — reads input, extracts URL or parses pasted text, calls loadArticle or createArticleFromText
 
 **Config:**
 ```ts
@@ -30,7 +30,7 @@ Pure functions, no side effects (except `clearQueryParams` which uses `history.r
 | Function | Purpose |
 |----------|---------|
 | `getUrlFromParams()` | Reads `?url=`, `?text=`, `?title=` from current page URL |
-| `extractUrl(text)` | Pulls first `http(s)://` URL from arbitrary text |
+| `extractUrl(text)` | Extracts URL from text only if at/near the end (share-text format); returns null for pasted article content |
 | `isValidArticleUrl(input)` | Validates: must be http/https with dotted hostname |
 | `clearQueryParams()` | Removes query string from URL bar without reload |
 
@@ -55,6 +55,7 @@ Fetches HTML through CORS proxy, parses with Readability.js.
 | Function | Purpose |
 |----------|---------|
 | `extractArticle(url, proxyBase, proxySecret?)` | Main entry: fetch + parse |
+| `createArticleFromText(text)` | Creates Article from pasted plain text (no fetch needed) |
 | `fetchViaProxy(url, proxyBase, proxySecret?)` | Fetches HTML via CORS proxy, returns `{ html, finalUrl }` |
 | `parseArticle(html, sourceUrl)` | Parses with Readability, splits into paragraphs, detects language |
 
@@ -93,7 +94,7 @@ Web Speech API wrapper with sentence-level chunking.
 | `selectVoice(voices, lang, preferred?)` | Picks best voice, prefers Google voices |
 | `waitForVoices(timeout?)` | Async wait for `voiceschanged` event |
 
-**Key design:** Each sentence is one `SpeechSynthesisUtterance`, chained via `onend` callbacks. This avoids Chrome Android's 15-second speech cutoff bug.
+**Key design:** Each sentence is one `SpeechSynthesisUtterance`, chained via `onend` callbacks. This avoids Chrome Android's 15-second speech cutoff bug. A generation counter (`_speakGen`) prevents stale `onend` callbacks from double-advancing during skip operations.
 
 ---
 

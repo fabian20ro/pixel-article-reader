@@ -120,6 +120,10 @@ export class TTSEngine {
   // Callbacks
   private cb: TTSCallbacks = {};
 
+  // Generation counter — incremented before every cancel() to invalidate
+  // stale onend callbacks (prevents double-advancement on skip).
+  private _speakGen = 0;
+
   // Resume watchdog
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -205,6 +209,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = true;
     this.clearResumeTimer();
+    this._speakGen++;
     speechSynthesis.cancel();
     this.releaseWakeLock();
     this.paraIdx = 0;
@@ -214,6 +219,7 @@ export class TTSEngine {
 
   skipForward(): void {
     if (this.paraIdx >= this.paragraphs.length - 1) return;
+    this._speakGen++;
     speechSynthesis.cancel();
     this.paraIdx++;
     this.sentIdx = 0;
@@ -226,6 +232,7 @@ export class TTSEngine {
 
   skipBackward(): void {
     if (this.paraIdx <= 0) return;
+    this._speakGen++;
     speechSynthesis.cancel();
     this.paraIdx--;
     this.sentIdx = 0;
@@ -241,10 +248,12 @@ export class TTSEngine {
     const sentences = this.paragraphs[this.paraIdx];
     if (this.sentIdx < sentences.length - 1) {
       // Move to next sentence within current paragraph
+      this._speakGen++;
       speechSynthesis.cancel();
       this.sentIdx++;
     } else if (this.paraIdx < this.paragraphs.length - 1) {
       // Move to first sentence of next paragraph
+      this._speakGen++;
       speechSynthesis.cancel();
       this.paraIdx++;
       this.sentIdx = 0;
@@ -262,10 +271,12 @@ export class TTSEngine {
     if (this.paragraphs.length === 0) return;
     if (this.sentIdx > 0) {
       // Move to previous sentence within current paragraph
+      this._speakGen++;
       speechSynthesis.cancel();
       this.sentIdx--;
     } else if (this.paraIdx > 0) {
       // Move to last sentence of previous paragraph
+      this._speakGen++;
       speechSynthesis.cancel();
       this.paraIdx--;
       this.sentIdx = this.paragraphs[this.paraIdx].length - 1;
@@ -281,6 +292,7 @@ export class TTSEngine {
 
   jumpToParagraph(index: number): void {
     if (index < 0 || index >= this.paragraphs.length) return;
+    this._speakGen++;
     speechSynthesis.cancel();
     this.paraIdx = index;
     this.sentIdx = 0;
@@ -352,8 +364,9 @@ export class TTSEngine {
     utter.lang = langToCode(this.lang);
     if (this.voice) utter.voice = this.voice;
 
+    const gen = this._speakGen;
     utter.onend = () => {
-      if (this._stopped) return;
+      if (this._stopped || gen !== this._speakGen) return;
       this.sentIdx++;
       this.emitProgress();
       this.speakCurrent();

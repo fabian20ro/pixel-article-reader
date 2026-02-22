@@ -408,17 +408,21 @@ body {
 .translate-link {
   display: inline-block;
   margin-top: 8px;
-  padding: 0;
+  padding: 6px 12px;
   font-size: 13px;
   color: var(--accent);
   background: none;
-  border: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-family: inherit;
+  transition: background 0.15s, color 0.15s;
 }
 
-.translate-link:hover {
-  text-decoration: underline;
+.translate-link:hover,
+.translate-link:active {
+  background: var(--accent);
+  color: #fff;
 }
 
 .article-text {

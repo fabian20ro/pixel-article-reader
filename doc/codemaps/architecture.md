@@ -3,27 +3,41 @@
 ## Data Flow
 
 ```
-User pastes URL / shares from browser
+User pastes URL / article text / shares from browser
   │
   ▼
 url-utils.ts ── extractUrl() / getUrlFromParams()
   │
-  ▼
-extractor.ts ── fetchViaProxy() ─── CORS Proxy (Cloudflare Worker)
-  │                                    │
-  │                                    ├── SSRF check
-  │                                    ├── Auth (X-Proxy-Key)
-  │                                    ├── Rate limit (20 req/min per IP)
-  │                                    └── Fetch target HTML
-  │                                         │
-  ▼                                         ▼
-extractor.ts ── parseArticle() ◄──── HTML response + X-Final-URL header
-  │
-  ├── Readability.js (global) ── extracts article content
-  ├── lang-detect.ts ── detectLanguage() ── EN vs RO
-  └── paragraph splitting + word count
-  │
-  ▼
+  ├── URL found ──────────────────────┐
+  │                                   ▼
+  │                    extractor.ts ── fetchViaProxy() ── CORS Proxy (CF Worker)
+  │                      │                                   │
+  │                      │                                   ├── SSRF check
+  │                      │                                   ├── Auth (X-Proxy-Key)
+  │                      │                                   ├── Rate limit (20 req/min)
+  │                      │                                   └── Fetch target HTML
+  │                      │                                        │
+  │                      ▼                                        ▼
+  │                    parseArticle() ◄──── HTML response + X-Final-URL header
+  │                      │
+  │                      ├── Readability.js (global)
+  │                      ├── lang-detect.ts
+  │                      └── paragraph splitting + word count
+  │                      │
+  │                      ▼
+  │               Article object ──────────────────────┐
+  │                                                    │
+  ├── No URL (pasted text) ──┐                         │
+  │                          ▼                         │
+  │          createArticleFromText()                   │
+  │            ├── paragraph splitting                 │
+  │            ├── lang-detect.ts                      │
+  │            └── word count                          │
+  │                          │                         │
+  │                          ▼                         │
+  │               Article object ──────┐               │
+  │                                    │               │
+  ▼                                    ▼               ▼
 app.ts ── displayArticle() ── renders paragraphs to DOM
   │
   ▼
