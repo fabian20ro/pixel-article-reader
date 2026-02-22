@@ -5,9 +5,13 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "jsdom": "^28.1.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
   }
 }
