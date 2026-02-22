@@ -67,7 +67,7 @@ export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-/** Pick the best voice for a language, preferring Google voices. */
+/** Pick the best voice for a language, preferring enhanced/premium voices. */
 export function selectVoice(
   voices: SpeechSynthesisVoice[],
   lang: Language,
@@ -81,9 +81,9 @@ export function selectVoice(
   }
   const matching = voices.filter((v) => v.lang.startsWith(code));
 
-  // Prefer Google enhanced / premium voices
-  const google = matching.filter((v) => /google/i.test(v.name));
-  if (google.length > 0) return google[0];
+  // Prefer enhanced/premium voices (Google on Android, "Enhanced"/"Premium" on iOS/Samsung)
+  const enhanced = matching.filter((v) => /google|enhanced|premium/i.test(v.name));
+  if (enhanced.length > 0) return enhanced[0];
 
   // Any voice for the language
   if (matching.length > 0) return matching[0];
