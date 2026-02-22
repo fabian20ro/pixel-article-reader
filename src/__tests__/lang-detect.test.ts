@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { detectLanguage } from '../lib/lang-detect.js';
+import {
+  detectLanguage,
+  detectLangFromHtml,
+  detectLangFromUrl,
+  needsTranslation,
+  getSourceLang,
+} from '../lib/lang-detect.js';
 
 describe('detectLanguage', () => {
   // ── English detection ───────────────────────────────────────────
@@ -75,5 +81,150 @@ describe('detectLanguage', () => {
   it('detects Romanian when exactly 4 diacritics are present', () => {
     const text = 'Word ă word â word î word ș and nothing else here.';
     expect(detectLanguage(text)).toBe('ro');
+  });
+});
+
+// ── detectLangFromHtml ─────────────────────────────────────────────
+
+describe('detectLangFromHtml', () => {
+  it('normalizes "de-DE" to "de"', () => {
+    expect(detectLangFromHtml('de-DE')).toBe('de');
+  });
+
+  it('normalizes "en-US" to "en"', () => {
+    expect(detectLangFromHtml('en-US')).toBe('en');
+  });
+
+  it('handles simple code like "fr"', () => {
+    expect(detectLangFromHtml('fr')).toBe('fr');
+  });
+
+  it('handles underscore variant "pt_BR"', () => {
+    expect(detectLangFromHtml('pt_BR')).toBe('pt');
+  });
+
+  it('lowercases the result', () => {
+    expect(detectLangFromHtml('DE')).toBe('de');
+  });
+
+  it('trims whitespace', () => {
+    expect(detectLangFromHtml('  de  ')).toBe('de');
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(detectLangFromHtml('')).toBe('');
+  });
+});
+
+// ── detectLangFromUrl ──────────────────────────────────────────────
+
+describe('detectLangFromUrl', () => {
+  it('detects German from .de TLD', () => {
+    expect(detectLangFromUrl('https://web.de/magazine/article')).toBe('de');
+  });
+
+  it('detects French from .fr TLD', () => {
+    expect(detectLangFromUrl('https://lemonde.fr/article')).toBe('fr');
+  });
+
+  it('detects English from .uk TLD', () => {
+    expect(detectLangFromUrl('https://bbc.co.uk/news')).toBe('en');
+  });
+
+  it('returns empty for .com TLD', () => {
+    expect(detectLangFromUrl('https://example.com/article')).toBe('');
+  });
+
+  it('returns empty for .org TLD', () => {
+    expect(detectLangFromUrl('https://wikipedia.org/wiki/Test')).toBe('');
+  });
+
+  it('returns empty for .io TLD', () => {
+    expect(detectLangFromUrl('https://app.io/page')).toBe('');
+  });
+
+  it('returns empty for empty URL', () => {
+    expect(detectLangFromUrl('')).toBe('');
+  });
+
+  it('returns empty for invalid URL', () => {
+    expect(detectLangFromUrl('not-a-url')).toBe('');
+  });
+
+  it('detects Romanian from .ro TLD', () => {
+    expect(detectLangFromUrl('https://digi24.ro/stiri/test')).toBe('ro');
+  });
+});
+
+// ── needsTranslation ───────────────────────────────────────────────
+
+describe('needsTranslation', () => {
+  it('returns false for English htmlLang', () => {
+    expect(needsTranslation('en', 'https://example.com/article')).toBe(false);
+  });
+
+  it('returns false for English with region code in htmlLang', () => {
+    expect(needsTranslation('en-US', 'https://example.com/article')).toBe(false);
+  });
+
+  it('returns false for Romanian htmlLang', () => {
+    expect(needsTranslation('ro', 'https://example.com/article')).toBe(false);
+  });
+
+  it('returns true for German htmlLang', () => {
+    expect(needsTranslation('de', 'https://example.com/article')).toBe(true);
+  });
+
+  it('returns true for French htmlLang', () => {
+    expect(needsTranslation('fr-FR', 'https://example.com/article')).toBe(true);
+  });
+
+  it('returns false for English URL TLD when htmlLang is empty', () => {
+    expect(needsTranslation('', 'https://bbc.co.uk/news')).toBe(false);
+  });
+
+  it('returns false for Romanian URL TLD when htmlLang is empty', () => {
+    expect(needsTranslation('', 'https://digi24.ro/stiri')).toBe(false);
+  });
+
+  it('returns true for German URL TLD when htmlLang is empty', () => {
+    expect(needsTranslation('', 'https://web.de/magazine')).toBe(true);
+  });
+
+  it('returns false when textLang is ro and no other signals', () => {
+    expect(needsTranslation('', '', 'ro')).toBe(false);
+  });
+
+  it('defaults to true (needs translation) with no signals', () => {
+    expect(needsTranslation('', '', 'en')).toBe(true);
+  });
+
+  it('defaults to true with no signals at all', () => {
+    expect(needsTranslation('', '')).toBe(true);
+  });
+
+  it('htmlLang takes priority over URL TLD', () => {
+    // English htmlLang on a .de domain → no translation needed
+    expect(needsTranslation('en', 'https://web.de/article')).toBe(false);
+  });
+});
+
+// ── getSourceLang ──────────────────────────────────────────────────
+
+describe('getSourceLang', () => {
+  it('returns language from htmlLang when available', () => {
+    expect(getSourceLang('de-DE', 'https://example.com/article')).toBe('de');
+  });
+
+  it('falls back to URL TLD when htmlLang is empty', () => {
+    expect(getSourceLang('', 'https://web.de/article')).toBe('de');
+  });
+
+  it('returns auto when no signals available', () => {
+    expect(getSourceLang('', 'https://example.com/article')).toBe('auto');
+  });
+
+  it('returns auto when URL is empty', () => {
+    expect(getSourceLang('', '')).toBe('auto');
   });
 });

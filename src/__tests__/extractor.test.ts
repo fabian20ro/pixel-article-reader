@@ -277,6 +277,35 @@ describe('extractArticle', () => {
     const article = await extractArticle(ARTICLE_URL, PROXY);
     expect(article.estimatedMinutes).toBe(2);
   });
+
+  it('extracts htmlLang from <html lang="de"> attribute', async () => {
+    const html = `<!DOCTYPE html><html lang="de"><head><title>German</title></head><body><p>Inhalt</p></body></html>`;
+    mockFetch(html);
+    mockParse.mockReturnValue({
+      title: 'German Article',
+      content: '<p>Inhalt</p>',
+      textContent: 'Dies ist ein deutscher Artikel mit genug Text um den Filter zu passieren.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+    expect(article.htmlLang).toBe('de');
+  });
+
+  it('returns empty htmlLang when <html> has no lang attribute', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent: 'This paragraph has enough text to pass the minimum character filter threshold.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+    expect(article.htmlLang).toBe('');
+  });
 });
 
 // ── createArticleFromText ───────────────────────────────────────────
@@ -330,5 +359,11 @@ describe('createArticleFromText', () => {
     const article = createArticleFromText(text);
     expect(article.wordCount).toBeGreaterThan(300);
     expect(article.estimatedMinutes).toBe(2);
+  });
+
+  it('sets htmlLang to empty string for pasted text', () => {
+    const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
+    const article = createArticleFromText(text);
+    expect(article.htmlLang).toBe('');
   });
 });

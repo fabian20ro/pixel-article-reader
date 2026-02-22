@@ -4,8 +4,10 @@
  * Deployed automatically via GitHub Actions when worker/ changes.
  * See .github/workflows/deploy-worker.yml for the CI pipeline.
  *
- * Accepts:  GET /?url=<encoded_article_url>
- * Returns:  The HTML of the article with appropriate CORS headers.
+ * Endpoints:
+ *   GET  /?url=<encoded_article_url>        — Fetch and return article HTML
+ *   POST /?action=translate                  — Translate text via Google Translate API
+ *        Body: { text: string, from: string, to: string }
  *
  * Environment bindings (set in wrangler.toml or via `wrangler secret put`):
  *   ALLOWED_ORIGIN  — GitHub Pages origin (e.g. "https://user.github.io")
@@ -26,6 +28,7 @@
  */
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_TRANSLATE_CHARS = 5000;
 const FETCH_TIMEOUT_MS = 10_000;
 
 // Rate limiting: 20 requests per 60-second sliding window per IP
@@ -114,8 +117,8 @@ export default {
       });
     }
 
-    if (request.method !== 'GET') {
-      return errorResponse(405, 'Only GET requests are allowed.', allowedOrigin);
+    if (request.method !== 'GET' && request.method !== 'POST') {
+      return errorResponse(405, 'Only GET and POST requests are allowed.', allowedOrigin);
     }
 
     // Validate shared secret (if configured)
@@ -145,6 +148,16 @@ export default {
     }
 
     const requestUrl = new URL(request.url);
+
+    // ── Translate action (POST) ────────────────────────────────────
+    if (request.method === 'POST' && requestUrl.searchParams.get('action') === 'translate') {
+      return handleTranslate(request, allowedOrigin, rateCheck);
+    }
+
+    if (request.method !== 'GET') {
+      return errorResponse(405, 'POST is only supported for ?action=translate.', allowedOrigin);
+    }
+
     const targetUrl = requestUrl.searchParams.get('url');
 
     if (!targetUrl) {
@@ -227,12 +240,95 @@ export default {
   },
 };
 
+// ── Translate handler ────────────────────────────────────────────────
+
+const LANG_CODE_RE = /^[a-z]{2,5}(-[a-zA-Z]{2,5})?$/;
+
+async function handleTranslate(request, allowedOrigin, rateCheck) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse(400, 'Invalid JSON body.', allowedOrigin);
+  }
+
+  const { text, from, to } = body;
+
+  if (!text || typeof text !== 'string') {
+    return errorResponse(400, 'Missing or invalid "text" field (must be a non-empty string).', allowedOrigin);
+  }
+  if (text.length > MAX_TRANSLATE_CHARS) {
+    return errorResponse(400, `Text too long (${text.length} chars, max ${MAX_TRANSLATE_CHARS}).`, allowedOrigin);
+  }
+  if (!from || !LANG_CODE_RE.test(from) && from !== 'auto') {
+    return errorResponse(400, `Invalid "from" language code: "${from}".`, allowedOrigin);
+  }
+  if (!to || !LANG_CODE_RE.test(to)) {
+    return errorResponse(400, `Invalid "to" language code: "${to}".`, allowedOrigin);
+  }
+
+  const apiUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(from)}&tl=${encodeURIComponent(to)}&dt=t&q=${encodeURIComponent(text)}`;
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    const resp = await fetch(apiUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+
+    clearTimeout(timer);
+
+    if (!resp.ok) {
+      const snippet = (await resp.text()).slice(0, 200);
+      return errorResponse(
+        502,
+        `Google Translate API returned ${resp.status}: ${snippet}`,
+        allowedOrigin,
+      );
+    }
+
+    const data = await resp.json();
+
+    // Response format: [[["translated","original",...],...], null, "detected_lang"]
+    if (!Array.isArray(data) || !Array.isArray(data[0])) {
+      return errorResponse(
+        502,
+        `Unexpected Google Translate response format: ${JSON.stringify(data).slice(0, 200)}`,
+        allowedOrigin,
+      );
+    }
+
+    const translatedText = data[0].map((seg) => seg[0]).join('');
+    const detectedLang = data[2] || from;
+
+    return new Response(JSON.stringify({ translatedText, detectedLang }), {
+      status: 200,
+      headers: {
+        ...corsHeaders(allowedOrigin),
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+        'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+        'X-RateLimit-Remaining': String(rateCheck.remaining),
+      },
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return errorResponse(504, 'Translation request timed out after 10s.', allowedOrigin);
+    }
+    return errorResponse(502, `Translation fetch failed: ${err.message}`, allowedOrigin);
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
     'Access-Control-Expose-Headers': 'X-Final-URL, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After',
   };

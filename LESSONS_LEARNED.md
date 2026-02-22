@@ -56,6 +56,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Vendored Readability.js comes from `mozilla/readability` main branch — Downloaded from `https://raw.githubusercontent.com/mozilla/readability/main/Readability.js`. It's ~2800 lines. When updating, verify the export format hasn't changed (must still declare global `function Readability` and use `module.exports` guard).
 
+**[2026-02-22]** Google Translate's `translate.goog` proxy requires client-side JavaScript — The `translate.goog` domain serves the original page HTML plus JavaScript that translates text in the DOM. Server-side fetching (CORS proxy, headless fetch without JS execution) returns untranslated content. To translate in a proxy-based app, use the `translate.googleapis.com` API to translate already-extracted text instead of re-fetching a translated page.
+
 ## Process & Workflow
 
 **[2026-02-22]** Build before committing — Since compiled JS files are committed (needed for GitHub Pages deployment), always run `npm run build` after editing TypeScript source and before committing. Stale `.js` files that don't match the `.ts` source will cause confusing runtime behavior. (Note: the CI pipeline also builds, so stale JS won't reach production, but it will confuse local testing.)

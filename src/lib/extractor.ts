@@ -15,6 +15,7 @@ export interface Article {
   textContent: string;     // plain text
   paragraphs: string[];    // split for TTS chunking
   lang: Language;
+  htmlLang: string;        // raw lang from <html lang="...">, e.g. "de" or "de-DE"
   siteName: string;
   excerpt: string;
   wordCount: number;
@@ -64,6 +65,7 @@ export function createArticleFromText(text: string): Article {
     textContent,
     paragraphs,
     lang,
+    htmlLang: '',
     siteName: 'Pasted',
     excerpt: textContent.slice(0, 200),
     wordCount,
@@ -136,6 +138,11 @@ async function fetchViaProxy(url: string, proxyBase: string, proxySecret?: strin
 function parseArticle(html: string, sourceUrl: string): Article {
   const doc = new DOMParser().parseFromString(html, 'text/html');
 
+  // Extract HTML lang attribute before Readability modifies the DOM
+  const htmlLang = doc.documentElement.getAttribute('lang')
+    || doc.documentElement.getAttribute('xml:lang')
+    || '';
+
   // Fix relative URLs so Readability can resolve them
   const base = doc.createElement('base');
   base.href = sourceUrl;
@@ -197,6 +204,7 @@ function parseArticle(html: string, sourceUrl: string): Article {
     textContent,
     paragraphs,
     lang,
+    htmlLang,
     siteName,
     excerpt,
     wordCount,
