@@ -144,4 +144,25 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-22] Fix translate button for shortened/redirect URLs
+
+**Context:** User reported that the translate button doesn't work with shortened URLs like `https://share.google/RNxfVVbNyIhn3lvPa`. The `toTranslateUrl()` function was converting `share.google` → `share-google.translate.goog`, which is not a valid Google Translate proxy host.
+
+**What happened:**
+- Diagnosed the issue: the CORS proxy follows redirects (`redirect: 'follow'`) but the resolved URL was discarded. The app stored the original shortened URL as `currentArticleUrl`, which produced invalid translate URLs.
+- Added `X-Final-URL` response header to the CORS proxy worker (`worker/cors-proxy.js`) that returns `response.url` (the final URL after all redirects). Added `Access-Control-Expose-Headers: X-Final-URL` to CORS headers so the browser can read it.
+- Updated `fetchViaProxy()` in `extractor.ts` to return `{ html, finalUrl }` where `finalUrl` comes from the `X-Final-URL` header (with fallback to the original URL).
+- Added `resolvedUrl: string` field to the `Article` interface.
+- Updated `app.ts` to use `article.resolvedUrl` for `currentArticleUrl`, so the translate button uses the actual article domain.
+- Added 2 new tests: one verifying `X-Final-URL` header is used, one verifying fallback to the original URL.
+- All 90 tests pass (2 new + 88 existing after the test count shift from previous sessions).
+
+**Outcome:** Success. Shortened URLs now resolve to their final destination before being used for translation.
+
+**Insight:** When a CORS proxy follows redirects, the final URL information is lost unless explicitly forwarded back to the client. This affects any feature that operates on the domain/path of the URL (like Google Translate proxy URL construction). Always expose the resolved URL as a response header.
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->

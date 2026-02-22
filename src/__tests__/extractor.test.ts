@@ -76,6 +76,38 @@ describe('extractArticle', () => {
     );
   });
 
+  it('uses X-Final-URL header as resolvedUrl when proxy returns it', async () => {
+    const REDIRECTED_URL = 'https://web.de/magazine/politik/article-title-123';
+    mockFetch(SAMPLE_HTML, 200, { 'x-final-url': REDIRECTED_URL });
+    mockParse.mockReturnValue({
+      title: 'Redirected Article',
+      content: '<p>Content</p>',
+      textContent: 'This is a full paragraph of text that is long enough to pass the filter.\n\nThis is a second paragraph of text that is also long enough.',
+      siteName: 'WEB.DE',
+      excerpt: 'This is a full paragraph...',
+    });
+
+    const article = await extractArticle('https://share.google/abc123', PROXY);
+
+    expect(article.resolvedUrl).toBe(REDIRECTED_URL);
+    expect(article.siteName).toBe('WEB.DE');
+  });
+
+  it('falls back to original URL when X-Final-URL header is absent', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Test Article Title',
+      content: '<p>Content here</p>',
+      textContent: 'This is the first paragraph of the article. It contains enough text.\n\nThis is the second paragraph with additional content that is also long enough.',
+      siteName: 'Example News',
+      excerpt: 'This is the first paragraph...',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    expect(article.resolvedUrl).toBe(ARTICLE_URL);
+  });
+
   it('returns a well-formed Article object on success', async () => {
     mockFetch(SAMPLE_HTML);
     mockParse.mockReturnValue({
