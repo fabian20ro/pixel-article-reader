@@ -71,6 +71,7 @@ describe('settings-store', () => {
       lang: 'en',
       voiceName: 'Samantha',
       wakeLock: false,
+      theme: 'dark',
     };
 
     saveSettings(expected);

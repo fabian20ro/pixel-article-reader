@@ -4,7 +4,7 @@
 
 import { TTSEngine } from './lib/tts-engine.js';
 import { getAppDomRefs } from './lib/dom-refs.js';
-import { loadSettings, saveSettings, type AppSettings } from './lib/settings-store.js';
+import { loadSettings, saveSettings, type AppSettings, type Theme } from './lib/settings-store.js';
 import { PwaUpdateManager } from './lib/pwa-update-manager.js';
 import { ArticleController } from './lib/article-controller.js';
 import { APP_RELEASE, shortRelease } from './lib/release.js';
@@ -140,16 +140,39 @@ async function main(): Promise<void> {
     persistSettings(settings);
   });
 
-  // Language controls
-  refs.settingsLangRadios.forEach((radio) => {
-    radio.addEventListener('change', () => {
-      setLangOverride(radio.value as 'auto' | Language);
+  // Theme controls
+  applyTheme(settings.theme);
+  updateSegmentButtons(refs.themeBtns, settings.theme);
+
+  refs.themeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.value as Theme;
+      applyTheme(theme);
+      settings.theme = theme;
+      persistSettings(settings);
+      updateSegmentButtons(refs.themeBtns, theme);
     });
   });
 
-  refs.playerLangRadios.forEach((radio) => {
-    radio.addEventListener('change', () => {
-      setLangOverride(radio.value as 'auto' | Language);
+  // Language controls
+  updateSegmentButtons(refs.settingsLangBtns, settings.lang);
+  updateSegmentButtons(refs.playerLangBtns, settings.lang);
+
+  refs.settingsLangBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.value as 'auto' | Language;
+      setLangOverride(lang);
+      updateSegmentButtons(refs.settingsLangBtns, lang);
+      updateSegmentButtons(refs.playerLangBtns, lang);
+    });
+  });
+
+  refs.playerLangBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const lang = btn.dataset.value as 'auto' | Language;
+      setLangOverride(lang);
+      updateSegmentButtons(refs.settingsLangBtns, lang);
+      updateSegmentButtons(refs.playerLangBtns, lang);
     });
   });
 
@@ -201,6 +224,16 @@ async function main(): Promise<void> {
 
   await articleController.handleInitialSharedUrl();
   updateSpeedButtons(settings.rate);
+
+  function applyTheme(theme: Theme): void {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  function updateSegmentButtons(btns: NodeListOf<HTMLButtonElement>, activeValue: string): void {
+    btns.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.value === activeValue);
+    });
+  }
 
   function setLangOverride(lang: 'auto' | Language): void {
     settings.lang = lang;

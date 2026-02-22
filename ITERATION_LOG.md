@@ -397,4 +397,23 @@ Each entry should follow this structure:
 
 ---
 
+### 2026-02-22 — Add 3 themes + segment control UI for theme/language
+
+**Task:** Add three selectable themes (Dark, Light, Khaki), replace radio buttons with horizontal segment controls for theme and language selection, use flag emojis for language options.
+
+**Changes:**
+- `settings-store.ts`: Added `Theme` type via `THEMES` const array for easy extensibility, added `theme` field to `AppSettings`
+- `style.css`: Replaced `@media (prefers-color-scheme: light)` with `[data-theme]` attribute selectors for 3 themes (Dark=light blue accent, Light=dark green accent, Khaki=warm accent). Added `.segment-control` component. Added `--hover-overlay` variable for theme-aware hover states
+- `index.html`: Added `data-theme="dark"` to `<html>`, added theme selector segment control in settings, replaced language radio groups with segment controls using flag emojis (🌐/🇬🇧/🇷🇴)
+- `dom-refs.ts`: Replaced `settingsLangRadios`/`playerLangRadios` with `themeBtns`/`settingsLangBtns`/`playerLangBtns`
+- `app.ts`: Added `applyTheme()` and `updateSegmentButtons()` helpers, wired up theme buttons and new language segment buttons
+- `article-controller.ts`: Updated `syncLanguageControls()` to use segment buttons instead of radio inputs
+- Updated test to include `theme` field in `AppSettings`
+
+**Outcome:** Success. Build clean, all 170 tests pass.
+
+**Insight:** Using a `THEMES` const array with `as const` and deriving the type via `typeof THEMES[number]` makes adding new themes a one-line change in the array + a CSS block. The `[data-theme]` attribute approach on `<html>` is cleaner than media queries for user-selectable themes.
+
+---
+
 <!-- New entries go above this line, most recent first -->
