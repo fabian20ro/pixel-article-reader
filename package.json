@@ -1,0 +1,13 @@
+{
+  "name": "article-voice",
+  "version": "1.0.0",
+  "description": "PWA that turns any article into audio using on-device TTS",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

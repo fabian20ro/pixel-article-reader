@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#e94560">
+  <meta name="description" content="Listen to any article — paste a URL or share from your browser">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ArticleVoice</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Install Banner -->
+  <div id="install-banner" class="install-banner hidden">
+    <div class="install-banner-content">
+      <p>Install ArticleVoice to share articles directly from your browser.</p>
+      <div class="install-banner-actions">
+        <button id="install-btn" class="btn btn-accent">Install</button>
+        <button id="install-dismiss" class="btn btn-ghost">Maybe Later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <h1 class="header-title">ArticleVoice</h1>
+    <button id="settings-toggle" class="icon-btn" aria-label="Settings">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.32 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Settings Panel -->
+  <div id="settings-panel" class="settings-panel hidden">
+    <div class="settings-group">
+      <label class="settings-label">
+        Default Speed
+        <span id="speed-value" class="settings-value">1.0x</span>
+      </label>
+      <input type="range" id="settings-speed" class="settings-slider" min="0.5" max="3.0" step="0.25" value="1.0">
+    </div>
+    <div class="settings-group">
+      <label class="settings-label">Preferred Language</label>
+      <div class="radio-group">
+        <label class="radio-option"><input type="radio" name="settings-lang" value="auto" checked> Auto</label>
+        <label class="radio-option"><input type="radio" name="settings-lang" value="en"> EN</label>
+        <label class="radio-option"><input type="radio" name="settings-lang" value="ro"> RO</label>
+      </div>
+    </div>
+    <div class="settings-group">
+      <label class="settings-label">Voice</label>
+      <select id="settings-voice" class="settings-select">
+        <option value="">Default</option>
+      </select>
+    </div>
+    <div class="settings-group">
+      <label class="settings-label">
+        <input type="checkbox" id="settings-wakelock"> Keep screen on while playing
+      </label>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- URL Input Section -->
+    <section id="input-section" class="input-section">
+      <div class="url-input-group">
+        <input type="url" id="url-input" class="url-input" placeholder="Paste article URL here..." autocomplete="off" enterkeyhint="go">
+        <button id="go-btn" class="btn btn-accent go-btn">GO</button>
+      </div>
+      <div class="divider">
+        <span>or share from your browser</span>
+      </div>
+    </section>
+
+    <!-- Loading State -->
+    <section id="loading-section" class="loading-section hidden">
+      <div class="spinner"></div>
+      <p id="loading-message" class="loading-message">Extracting article...</p>
+    </section>
+
+    <!-- Error State -->
+    <section id="error-section" class="error-section hidden">
+      <p id="error-message" class="error-message"></p>
+      <button id="error-retry" class="btn btn-accent">Try Again</button>
+    </section>
+
+    <!-- Article Display -->
+    <section id="article-section" class="article-section hidden">
+      <div class="article-meta">
+        <h2 id="article-title" class="article-title"></h2>
+        <p id="article-info" class="article-info"></p>
+      </div>
+      <div id="article-text" class="article-text"></div>
+    </section>
+  </main>
+
+  <!-- Player Controls -->
+  <footer id="player-controls" class="player-controls hidden">
+    <!-- Progress -->
+    <div class="progress-bar-container">
+      <div id="progress-bar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <div class="progress-info">
+        <span id="progress-text" class="progress-text">0 / 0</span>
+      </div>
+    </div>
+
+    <!-- Main Playback Controls -->
+    <div class="playback-controls">
+      <button id="skip-back" class="icon-btn control-btn" aria-label="Previous paragraph">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+        </svg>
+      </button>
+      <button id="play-pause" class="icon-btn play-btn" aria-label="Play">
+        <svg id="play-icon" width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+        <svg id="pause-icon" class="hidden" width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+        </svg>
+      </button>
+      <button id="skip-forward" class="icon-btn control-btn" aria-label="Next paragraph">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Speed Controls -->
+    <div class="speed-controls">
+      <button class="speed-btn" data-rate="0.75">0.75x</button>
+      <button class="speed-btn active" data-rate="1">1x</button>
+      <button class="speed-btn" data-rate="1.25">1.25x</button>
+      <button class="speed-btn" data-rate="1.5">1.5x</button>
+      <button class="speed-btn" data-rate="2">2x</button>
+    </div>
+
+    <!-- Language Toggle -->
+    <div class="lang-controls">
+      <span class="lang-label">Lang:</span>
+      <div class="radio-group compact">
+        <label class="radio-option"><input type="radio" name="player-lang" value="auto" checked> Auto</label>
+        <label class="radio-option"><input type="radio" name="player-lang" value="en"> EN</label>
+        <label class="radio-option"><input type="radio" name="player-lang" value="ro"> RO</label>
+      </div>
+    </div>
+  </footer>
+
+  <script src="vendor/Readability.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
