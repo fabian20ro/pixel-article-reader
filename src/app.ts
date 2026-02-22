@@ -303,7 +303,7 @@ async function main(): Promise<void> {
       displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
-      showError(msg + ' Try pasting the article text directly.');
+      showError(msg);
     }
   }
 
