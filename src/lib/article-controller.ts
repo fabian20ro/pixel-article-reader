@@ -344,11 +344,11 @@ export class ArticleController {
 
   private syncLanguageControls(): void {
     const { refs } = this.options;
-    refs.settingsLangRadios.forEach((radio) => {
-      radio.checked = radio.value === this.langOverride;
+    refs.settingsLangBtns.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.value === this.langOverride);
     });
-    refs.playerLangRadios.forEach((radio) => {
-      radio.checked = radio.value === this.langOverride;
+    refs.playerLangBtns.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.value === this.langOverride);
     });
   }
 }

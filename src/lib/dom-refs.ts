@@ -37,8 +37,9 @@ export interface AppDomRefs {
   installBtn: HTMLElement;
   installDismiss: HTMLElement;
   speedBtns: NodeListOf<HTMLButtonElement>;
-  settingsLangRadios: NodeListOf<HTMLInputElement>;
-  playerLangRadios: NodeListOf<HTMLInputElement>;
+  themeBtns: NodeListOf<HTMLButtonElement>;
+  settingsLangBtns: NodeListOf<HTMLButtonElement>;
+  playerLangBtns: NodeListOf<HTMLButtonElement>;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -89,7 +90,8 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     installBtn: requireElement('install-btn', root),
     installDismiss: requireElement('install-dismiss', root),
     speedBtns: root.querySelectorAll<HTMLButtonElement>('.speed-btn'),
-    settingsLangRadios: root.querySelectorAll<HTMLInputElement>('input[name="settings-lang"]'),
-    playerLangRadios: root.querySelectorAll<HTMLInputElement>('input[name="player-lang"]'),
+    themeBtns: root.querySelectorAll<HTMLButtonElement>('#theme-selector .segment-btn'),
+    settingsLangBtns: root.querySelectorAll<HTMLButtonElement>('#settings-lang-selector .segment-btn'),
+    playerLangBtns: root.querySelectorAll<HTMLButtonElement>('#player-lang-selector .segment-btn'),
   };
 }

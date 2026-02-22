@@ -6,32 +6,55 @@
 }
 
 :root {
+  --radius: 12px;
+  --radius-sm: 8px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Dark theme (default) — dark background, light blue accent */
   --bg: #1a1a2e;
   --bg-card: #16213e;
   --bg-surface: #0f3460;
-  --accent: #e94560;
-  --accent-hover: #d63851;
+  --accent: #5dade2;
+  --accent-hover: #3498db;
   --text-primary: #eee;
   --text-secondary: #8888aa;
   --text-dim: #555577;
   --border: #2a2a4a;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --hover-overlay: rgba(255, 255, 255, 0.08);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #f5f5f5;
-    --bg-card: #ffffff;
-    --bg-surface: #e8e8f0;
-    --accent: #d63851;
-    --accent-hover: #c02a43;
-    --text-primary: #1a1a2e;
-    --text-secondary: #666688;
-    --text-dim: #9999aa;
-    --border: #d0d0e0;
-  }
+/*
+ * To add a new theme: copy a [data-theme] block below, change the selector
+ * to [data-theme="your-name"], pick new colors, then add the name to the
+ * THEMES array in settings-store.ts and a <button> in index.html #theme-selector.
+ */
+
+/* Light theme — whitish background, dark green buttons */
+[data-theme="light"] {
+  --bg: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-surface: #e8e8f0;
+  --accent: #2e7d32;
+  --accent-hover: #1b5e20;
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-dim: #999999;
+  --border: #d0d0d0;
+  --hover-overlay: rgba(0, 0, 0, 0.08);
+}
+
+/* Khaki theme — light khaki background, warm buttons */
+[data-theme="khaki"] {
+  --bg: #f0e6c8;
+  --bg-card: #f7f0dd;
+  --bg-surface: #e0d4b0;
+  --accent: #8b7355;
+  --accent-hover: #6d5a42;
+  --text-primary: #2a2218;
+  --text-secondary: #5a5040;
+  --text-dim: #9a8d78;
+  --border: #c8b890;
+  --hover-overlay: rgba(0, 0, 0, 0.08);
 }
 
 html, body {
@@ -244,30 +267,56 @@ body {
 
 .icon-btn:hover,
 .icon-btn:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-overlay);
 }
 
-/* === Radio Group === */
-.radio-group {
+/* === Segment Control === */
+.segment-control {
   display: flex;
-  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
-.radio-group.compact {
-  gap: 8px;
-}
-
-.radio-option {
+.segment-control .segment-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  min-height: 36px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  font-size: 14px;
-  color: var(--text-secondary);
-  cursor: pointer;
 }
 
-.radio-option input[type="radio"] {
-  accent-color: var(--accent);
+.segment-control .segment-btn + .segment-btn {
+  border-left: 1px solid var(--border);
+}
+
+.segment-control .segment-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.segment-control .segment-btn:not(.active):hover {
+  background: var(--hover-overlay);
+}
+
+.segment-control.compact {
+  border-radius: 16px;
+}
+
+.segment-control.compact .segment-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  min-height: 28px;
 }
 
 /* === Main Content === */
@@ -622,12 +671,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-}
-
-.lang-label {
-  font-size: 12px;
-  color: var(--text-dim);
 }
 
 /* === Utility === */
