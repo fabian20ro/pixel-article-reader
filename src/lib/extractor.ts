@@ -320,8 +320,8 @@ function stripNonTextContent(text: string): string {
   return text
     .replace(/<[^>]+>/g, ' ')
     .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
-    .replace(/!\[[^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/g, '')           // image markdown ![alt](url) (handles parens in URLs)
-    .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/gi, '') // [Image: ...](url) Jina format
+    .replace(/!\[[^\]]*\]\((?:[^()]+|\([^()]*\))*\)/g, '')           // image markdown ![alt](url) (handles parens in URLs)
+    .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^()]+|\([^()]*\))*\)/gi, '') // [Image: ...](url) Jina format
     .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(?=\s|$|\)|])/gi, '') // image URLs
     .replace(/https?:\/\/\S{80,}/g, '')
     .replace(/\[Image\s*[:\d][^\]]*\]/gi, '')            // standalone [Image: ...] references
@@ -337,8 +337,8 @@ function stripMarkdownSyntax(block: string): string {
     .replace(/^\s*>\s?/gm, '')
     .replace(/^\s*[-*+]\s+/gm, '')
     .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/!\[[^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/g, '')           // Remove image markdown entirely (handles parens in URLs)
-    .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/gi, '') // Remove [Image: ...](url) Jina format
+    .replace(/!\[[^\]]*\]\((?:[^()]+|\([^()]*\))*\)/g, '')           // Remove image markdown entirely (handles parens in URLs)
+    .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^()]+|\([^()]*\))*\)/gi, '') // Remove [Image: ...](url) Jina format
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_~]/g, '');
   return stripNonTextContent(stripped);
