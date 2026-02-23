@@ -266,7 +266,11 @@ export class ArticleController {
     if (typeof marked === 'undefined' || typeof marked.parse !== 'function') return '';
 
     try {
-      const html = marked.parse(markdown);
+      // Strip raw HTML <img> tags from markdown before parsing.
+      // Without this, marked's escapeHtml converts them to literal "&lt;img&gt;"
+      // text visible in rendered paragraphs.
+      const cleaned = markdown.replace(/<img[^>]*\/?>/gi, '');
+      const html = marked.parse(cleaned);
       return sanitizeRenderedHtml(String(html));
     } catch {
       return '';
@@ -402,7 +406,7 @@ function sanitizeRenderedHtml(html: string): string {
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) return '';
 
-  container.querySelectorAll('script, style, iframe, object, embed').forEach((el) => el.remove());
+  container.querySelectorAll('script, style, iframe, object, embed, img').forEach((el) => el.remove());
 
   container.querySelectorAll<HTMLElement>('*').forEach((el) => {
     const attrs = Array.from(el.attributes);
