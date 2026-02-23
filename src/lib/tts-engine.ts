@@ -10,6 +10,7 @@
  */
 
 import type { Language } from './lang-detect.js';
+import { MediaSessionController } from './media-session.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -162,6 +163,10 @@ export class TTSEngine {
   private wakeLock: WakeLockSentinel | null = null;
   private useWakeLock = false;
 
+  // Media session (background audio + lock screen controls)
+  private mediaSession = new MediaSessionController();
+  private articleTitle = '';
+
   // Callbacks
   private cb: TTSCallbacks = {};
 
@@ -175,9 +180,19 @@ export class TTSEngine {
   constructor(callbacks?: TTSCallbacks) {
     if (callbacks) this.cb = callbacks;
 
-    // Handle visibility change — try to resume if TTS was killed in background
+    this.mediaSession.setActions({
+      play: () => this.play(),
+      pause: () => this.pause(),
+      stop: () => this.stop(),
+      nexttrack: () => this.skipForward(),
+      previoustrack: () => this.skipBackward(),
+    });
+
+    // Handle visibility change — re-acquire wake lock (released automatically
+    // when page becomes hidden per W3C spec) and resume TTS if it was killed.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
+        this.acquireWakeLock();
         // If synth stopped while we were in background, restart from current pos
         if (!speechSynthesis.speaking && !speechSynthesis.pending) {
           this.speakCurrent();
@@ -196,11 +211,12 @@ export class TTSEngine {
     return this.allVoices;
   }
 
-  loadArticle(paragraphs: string[], lang: Language): void {
+  loadArticle(paragraphs: string[], lang: Language, title?: string): void {
     this.stop();
     this.rawParagraphs = paragraphs;
     this.paragraphs = paragraphs.map((p) => splitSentences(p));
     this.lang = lang;
+    this.articleTitle = title || '';
     this.paraIdx = 0;
     this.sentIdx = 0;
     this.voice = selectVoice(this.allVoices, lang, this.preferredVoiceName);
@@ -219,6 +235,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = false;
     this.acquireWakeLock();
+    this.mediaSession.activate(this.articleTitle);
     this.speakCurrent();
     this.emitState();
   }
@@ -227,6 +244,7 @@ export class TTSEngine {
     if (!this._isPlaying) return;
     this._isPaused = true;
     speechSynthesis.pause();
+    this.mediaSession.notifyPause();
     this.emitState();
   }
 
@@ -236,6 +254,7 @@ export class TTSEngine {
 
     // Try native resume
     speechSynthesis.resume();
+    this.mediaSession.notifyResume();
 
     // Watchdog: if still paused after 500 ms, cancel and re-speak
     this.clearResumeTimer();
@@ -257,6 +276,7 @@ export class TTSEngine {
     this._speakGen++;
     speechSynthesis.cancel();
     this.releaseWakeLock();
+    this.mediaSession.deactivate();
     this.paraIdx = 0;
     this.sentIdx = 0;
     this.emitState();
@@ -437,6 +457,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = true;
     this.releaseWakeLock();
+    this.mediaSession.deactivate();
     this.emitState();
     this.cb.onEnd?.();
   }
