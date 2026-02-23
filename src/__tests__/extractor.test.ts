@@ -485,6 +485,41 @@ describe('extractArticle', () => {
     expect(article.paragraphs.length).toBe(1);
     expect(article.paragraphs[0]).toContain('română');
   });
+
+  it('strips <img> elements from DOM before Readability processes it', async () => {
+    const htmlWithImages = `
+      <html><head><title>Test</title></head><body>
+        <article>
+          <p>First paragraph with enough words to pass the filter.</p>
+          <img src="https://example.com/photo.jpg" alt="A photo">
+          <figure>
+            <img src="https://example.com/fig.jpg">
+            <figcaption>Caption text preserved here.</figcaption>
+          </figure>
+          <p>Second paragraph also has enough words for the filter.</p>
+        </article>
+      </body></html>`;
+
+    mockFetch(htmlWithImages);
+
+    let capturedDoc: Document | null = null;
+    (globalThis as Record<string, unknown>).Readability = class {
+      constructor(doc: Document) { capturedDoc = doc; }
+      parse = vi.fn().mockReturnValue({
+        title: 'Test',
+        content: '<p>First paragraph.</p><p>Second paragraph.</p>',
+        textContent: 'First paragraph with enough words to pass the filter.\n\nSecond paragraph also has enough words for the filter.',
+        siteName: '',
+        excerpt: '',
+      });
+    };
+
+    await extractArticle(ARTICLE_URL, PROXY);
+
+    expect(capturedDoc).not.toBeNull();
+    expect(capturedDoc!.querySelectorAll('img').length).toBe(0);
+    expect(capturedDoc!.querySelectorAll('figcaption').length).toBe(1);
+  });
 });
 
 describe('extractArticleWithJina', () => {

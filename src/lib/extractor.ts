@@ -371,6 +371,9 @@ function parseArticleFromHtml(html: string, sourceUrl: string): Article {
   base.href = sourceUrl;
   doc.head.appendChild(base);
 
+  // Strip images before Readability — this is a text reader, not an image viewer.
+  doc.querySelectorAll('img').forEach((el) => el.remove());
+
   const parsed = new Readability(doc).parse();
 
   let title: string;
