@@ -414,6 +414,8 @@ Each entry should follow this structure:
 
 **Insight:** Using a `THEMES` const array with `as const` and deriving the type via `typeof THEMES[number]` makes adding new themes a one-line change in the array + a CSS block. The `[data-theme]` attribute approach on `<html>` is cleaner than media queries for user-selectable themes.
 
+**Promoted to Lessons Learned:** No
+
 ---
 
 ### [2026-02-22] Fix TTS pauses on names and abbreviations
@@ -560,6 +562,27 @@ Each entry should follow this structure:
 **Outcome:** All 213 tests pass (189 existing + 24 new), build clean.
 
 **Insight:** When composing functions (`createArticleFromTextFile` → `createArticleFromText`), the inner function's assumptions (first line = title) may not match the outer context (title = filename). Direct construction is safer than post-hoc overriding when the inner function mutates the input.
+
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-02-23] Periodic maintenance — audit and clean all config files
+
+**Context:** Ran the periodic maintenance protocol per `SETUP_AI_AGENT_CONFIG.md`. First maintenance pass on this project.
+
+**What happened:**
+- **AGENTS.md audit:** Stripped from 114 lines to ~42 lines. Removed all discoverable content (project overview, tech stack, codemaps links, repository layout, CI/CD, testing notes) and all content duplicated in LESSONS_LEARNED.md (9 items: .js extensions, outDir overlap, SW plain JS, globals, Worker env bindings, extractUrl behavior, TTS _speakGen, POST-hostile paths, npm tsc). Restructured to spec template: Constraints (2 non-discoverable items), Legacy (empty), Learning System, Sub-Agents table.
+- **LESSONS_LEARNED.md audit:** All 24 lessons verified current and relevant. Zero stale, zero duplicated. No changes needed.
+- **ITERATION_LOG.md audit:** 25 entries reviewed. All 3 repeated patterns already promoted. Added missing "Promoted to Lessons Learned" fields to 2 entries (themes, document support).
+- **Sub-agents audit:** Trimmed 5 agents from over 100 lines to under 100 each — removed generic content irrelevant to this browser-only PWA (React/Next.js patterns, SQL injection, CQRS/Event Sourcing, Stripe example, Redis ADR). Created 2 missing agents (agent-creator.md, ux-expert.md).
+- **Cross-file check:** Eliminated all AGENTS.md ↔ LESSONS_LEARNED overlap. Updated sub-agents table to match 8 agents in .claude/agents/.
+
+**Outcome:** Success. All files pass the maintenance spec verification checklist.
+
+**Insight:** AGENTS.md had grown to 114 lines mostly through discoverable content and duplicated lessons — exactly what the research (Evaluating AGENTS.md) warns against. Stripping to bootstrap-only content reduced it by 63%. The sub-agents inherited from a template repo contained generic patterns (React, SQL, Redis) irrelevant to this project.
+
+**Promoted to Lessons Learned:** No — first maintenance pass, no reusable lesson yet.
 
 ---
 
