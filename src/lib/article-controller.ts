@@ -164,6 +164,7 @@ export class ArticleController {
 
   private async handleFileUpload(file: File): Promise<void> {
     this.showView('loading');
+    this.options.refs.loadingMessage.textContent = 'Processing file...';
     this.options.tts.stop();
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';

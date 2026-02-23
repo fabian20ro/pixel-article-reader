@@ -101,6 +101,10 @@ export function createArticleFromText(text: string): Article {
  * Create an Article from a local text file (.txt, .text).
  */
 export async function createArticleFromTextFile(file: File): Promise<Article> {
+  if (file.size > MAX_ARTICLE_SIZE) {
+    throw new Error('File is too large (>2 MB). Please use a smaller file.');
+  }
+
   const text = await file.text();
   const textContent = text.trim();
 
@@ -163,6 +167,10 @@ async function loadPdfJs(): Promise<PdfJsLib> {
  * Create an Article from a local PDF file.
  */
 export async function createArticleFromPdf(file: File): Promise<Article> {
+  if (file.size > MAX_ARTICLE_SIZE) {
+    throw new Error('PDF is too large (>2 MB). Please use a smaller file.');
+  }
+
   const pdfjsLib = await loadPdfJs();
 
   const buffer = await file.arrayBuffer();
@@ -185,8 +193,10 @@ export async function createArticleFromPdf(file: File): Promise<Article> {
 
   // If structural detection yields ≤1 paragraph, try sentence-based splitting
   if (paragraphs.length <= 1) {
+    const saved = paragraphs[0];
     const fullText = allParagraphs.join(' ');
-    paragraphs = splitPlainTextParagraphs(fullText);
+    const fromSentences = splitPlainTextParagraphs(fullText);
+    paragraphs = fromSentences.length > 0 ? fromSentences : (saved ? [saved] : []);
   }
 
   if (paragraphs.length === 0) {

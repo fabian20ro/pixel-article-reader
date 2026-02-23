@@ -354,7 +354,7 @@ body {
   min-height: 48px;
   max-height: 200px;
   resize: none;
-  overflow: hidden;
+  overflow-x: hidden;
   overflow-y: auto;
   field-sizing: content;
 }
