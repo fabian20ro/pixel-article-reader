@@ -514,4 +514,27 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-23] Fix img tags appearing as text in rendered article paragraphs
+
+**Context:** User reported `<img>` tags still appearing in text paragraphs despite the earlier TTS-level fix (commit 74ea693).
+
+**What happened:**
+- Traced the full rendering pipeline: HTML → Readability → Turndown (HTML→markdown) → marked.parse (markdown→HTML) → sanitizeRenderedHtml → innerHTML.
+- Identified two distinct leak paths for `<img>` in the visual rendering:
+  1. **Raw HTML `<img>` tags in markdown** (especially from Jina Reader): `marked.js`'s `parseInline()` calls `escapeHtml()` first, converting `<img src="...">` to literal `&lt;img src=&quot;...&quot;&gt;` text visible in paragraphs.
+  2. **Markdown image syntax `![alt](src)`** from Turndown: `marked.parse()` converts these back to actual `<img>` HTML elements, and `sanitizeRenderedHtml()` did not remove `<img>` — only `script, style, iframe, object, embed`.
+- The previous fix (commit 74ea693) added `stripNonTextContent()` and `isSpeakableText()` in `extractor.ts`, but that only addressed the TTS paragraph extraction path. The visual rendering path (`renderMarkdownHtml → sanitizeRenderedHtml → innerHTML`) was untouched.
+- Applied two-layer fix:
+  1. Strip raw HTML `<img>` tags from markdown before `marked.parse()` in `renderMarkdownHtml()`.
+  2. Added `img` to the removal selector in `sanitizeRenderedHtml()`.
+- All 185 tests pass, build clean.
+
+**Outcome:** Success. Both literal `<img>` text and rendered `<img>` elements are now removed from the visual article display.
+
+**Insight:** Content filtering must be applied in BOTH the TTS extraction path AND the visual rendering path. The TTS path uses `stripNonTextContent()` + `isSpeakableText()` in `extractor.ts`. The visual path uses `sanitizeRenderedHtml()` in `article-controller.ts`. Fixing one doesn't fix the other — they are independent pipelines operating on different representations (plain text vs. HTML DOM). This is the 2nd occurrence of needing to fix both paths for the same content issue.
+
+**Promoted to Lessons Learned:** Yes — content filtering must cover both TTS and visual rendering paths.
+
+---
+
 <!-- New entries go above this line, most recent first -->
