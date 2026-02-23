@@ -167,7 +167,7 @@ export class ArticleController {
 
     const ttsParagraphs = this.renderArticleBody(article);
 
-    this.options.tts.loadArticle(ttsParagraphs, resolvedLang);
+    this.options.tts.loadArticle(ttsParagraphs, resolvedLang, article.title);
     this.syncLanguageControls();
 
     this.showView('article');

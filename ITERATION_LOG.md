@@ -493,4 +493,25 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-23] Fix PWA background audio and wake lock re-acquisition
+
+**Context:** User reported two issues: (1) audio stops when the PWA goes to background on Android, (2) screen doesn't stay awake during playback.
+
+**What happened:**
+- **Background audio fix:** Chrome on Android suspends JavaScript when a PWA goes to background, killing the `speechSynthesis` callback chain. The existing `visibilitychange` handler only resumes TTS when returning to foreground — it can't prevent the suspension. Added `src/lib/media-session.ts` which plays a silent `<audio>` track (1-second WAV generated programmatically) and registers `navigator.mediaSession` handlers. The active media session prevents Chrome from suspending the page, and adds lock screen playback controls (play/pause/skip).
+- **Wake Lock fix:** The Screen Wake Lock API was already implemented and enabled by default, but per W3C spec the lock is automatically released when the page becomes hidden. The `visibilitychange` handler never re-acquired it. Added `this.acquireWakeLock()` to the visibility handler so the lock is re-acquired on return to foreground.
+- Integrated `MediaSessionController` into `TTSEngine`: activated on play, paused/resumed in sync, deactivated on stop/end.
+- Added article title pass-through from `ArticleController.displayArticle()` to `tts.loadArticle()` for lock screen metadata.
+- Updated `sw.js` precache list to include `lib/media-session.js`, bumped SW version.
+- Wrapped `audio.play()` return in `Promise.resolve()` to handle jsdom's non-spec-compliant `undefined` return.
+- All 185 tests pass, build clean.
+
+**Outcome:** Success. Both background audio persistence and wake lock re-acquisition are fixed.
+
+**Insight:** The Web Speech API (`speechSynthesis`) is not treated as "media playback" by Android Chrome — it doesn't create a media session and gets suspended with the page. Playing a silent `<audio>` track creates a proper media session that Android keeps alive. The `navigator.mediaSession` API adds lock screen controls as a bonus. For wake lock: it's released on visibility change per W3C spec, so re-acquiring on `visibilitychange` → `visible` is mandatory.
+
+**Promoted to Lessons Learned:** Yes — background audio via silent track + MediaSession, and wake lock re-acquisition pattern.
+
+---
+
 <!-- New entries go above this line, most recent first -->

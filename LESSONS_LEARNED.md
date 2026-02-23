@@ -44,6 +44,10 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Mock SpeechSynthesis carefully — The TTS engine tests require mocking both `speechSynthesis` (the global singleton) and `SpeechSynthesisUtterance` (the constructor). Set them on `globalThis` in `beforeEach` and restore in `afterEach`. The mock `speak()` should call `onend` via `setTimeout` to simulate the async callback chain. Use `vi.useFakeTimers()` for tests that involve the resume watchdog timer.
 
+**[2026-02-23]** Background audio requires a real media session on Android — `speechSynthesis` is not treated as media playback by Chrome on Android. When the PWA goes to background, Chrome suspends the page and kills TTS. The fix is to play a silent `<audio>` track (generate a 1-second WAV programmatically, loop it) and register `navigator.mediaSession` action handlers. The active media session prevents page suspension and adds lock screen controls. Activate the silent audio from a user-gesture call stack (play button click) and deactivate on stop/end.
+
+**[2026-02-23]** Screen Wake Lock must be re-acquired on visibility change — The W3C Screen Wake Lock API automatically releases the lock when the page becomes hidden (backgrounded). The `visibilitychange` handler must call `acquireWakeLock()` when returning to `visible` state while playback is active, or the screen will sleep on the next timeout after the user returns to the app.
+
 ## Performance & Infrastructure
 
 **[2026-02-22]** Manifest and SW paths must be relative for subdirectory deployment — GitHub Pages serves at `/<repo>/`, not `/`. Using absolute paths like `"start_url": "/"` or `'/index.html'` in the SW precache list will break. Use `"."` for manifest `start_url`/`scope`/`share_target.action` and `'./'`-prefixed paths in the SW precache list.
