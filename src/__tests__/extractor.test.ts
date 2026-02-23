@@ -439,9 +439,29 @@ describe('extractArticle', () => {
 
     const article = await extractArticle(ARTICLE_URL, PROXY);
 
+    expect(article.paragraphs.length).toBe(2);
+    expect(article.paragraphs[0]).toContain('First paragraph');
+    expect(article.paragraphs[1]).toContain('Second paragraph');
     for (const p of article.paragraphs) {
       expect(p).not.toContain('sunset');
     }
+  });
+
+  it('preserves links whose text starts with "Image" but is not a Jina reference', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'First paragraph with enough words to satisfy the speakable text filter.\n\nFor more details see [Image processing techniques](https://example.com/guide) in the documentation.\n\nSecond paragraph also has enough words to be considered real content.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    const joined = article.paragraphs.join(' ');
+    expect(joined).toContain('Image processing techniques');
   });
 
   it('keeps paragraphs with Romanian diacritics', async () => {

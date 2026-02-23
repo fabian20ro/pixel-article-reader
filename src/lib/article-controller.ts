@@ -269,9 +269,9 @@ export class ArticleController {
       // Strip image-related content before rendering — this is a text reader,
       // not an image viewer, so images add no value and produce visual noise.
       const cleaned = markdown
-        .replace(/<img[^>]*\/?>/gi, '')                    // raw HTML <img> tags (escapeHtml makes them literal text)
-        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')              // ![alt](url) → remove
-        .replace(/\[Image[^\]]*\]\([^)]*\)/gi, '');        // [Image: ...](url) → remove
+        .replace(/<img[^>]*\/?>/gi, '')                                        // raw HTML <img> tags (escapeHtml makes them literal text)
+        .replace(/!\[[^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/g, '')                 // ![alt](url) → remove (handles parens in URLs)
+        .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^)(]*|\([^)]*\))*\)/gi, '');   // [Image: ...](url) Jina format → remove
       const html = marked.parse(cleaned);
       return sanitizeRenderedHtml(String(html));
     } catch {
