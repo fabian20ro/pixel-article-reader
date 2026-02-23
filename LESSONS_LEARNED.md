@@ -78,6 +78,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Never use ordinal DOM position for TTS paragraph lookup — When short blocks are merged into one TTS paragraph, multiple DOM elements share the same `data-index`. Using `querySelectorAll('.paragraph')[i]` to find TTS paragraph `i` is wrong; always use `querySelector('.paragraph[data-index="N"]')` or compare `element.dataset.index`. This applies to highlighting, scrolling, and any future feature that maps between TTS position and DOM. (Promoted from iteration log: 2nd occurrence of TTS-DOM index mismatch.)
 
+**[2026-02-23]** Content filtering must cover both TTS and visual rendering paths — The TTS path (`stripNonTextContent` + `isSpeakableText` in `extractor.ts`) and the visual rendering path (`sanitizeRenderedHtml` in `article-controller.ts`) are independent pipelines. Fixing content issues (e.g., `<img>` tags, data URIs, code blocks) in one path does NOT fix the other. Always check and fix both when addressing content-leak bugs. (Promoted from iteration log: 2nd occurrence of same content issue needing fixes in both paths.)
+
 ---
 
 ## Archive
