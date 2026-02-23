@@ -1,5 +1,5 @@
 export interface AppDomRefs {
-  urlInput: HTMLInputElement;
+  urlInput: HTMLTextAreaElement;
   goBtn: HTMLElement;
   inputSection: HTMLElement;
   loadingSection: HTMLElement;
@@ -33,6 +33,8 @@ export interface AppDomRefs {
   settingsWakelock: HTMLInputElement;
   checkUpdateBtn: HTMLElement;
   updateStatus: HTMLElement;
+  fileInput: HTMLInputElement;
+  fileBtn: HTMLElement;
   installBanner: HTMLElement;
   installBtn: HTMLElement;
   installDismiss: HTMLElement;
@@ -52,7 +54,7 @@ function requireElement<T extends HTMLElement>(id: string, root: Document): T {
 
 export function getAppDomRefs(root: Document = document): AppDomRefs {
   return {
-    urlInput: requireElement<HTMLInputElement>('url-input', root),
+    urlInput: requireElement<HTMLTextAreaElement>('url-input', root),
     goBtn: requireElement('go-btn', root),
     inputSection: requireElement('input-section', root),
     loadingSection: requireElement('loading-section', root),
@@ -86,6 +88,8 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     settingsWakelock: requireElement<HTMLInputElement>('settings-wakelock', root),
     checkUpdateBtn: requireElement('check-update-btn', root),
     updateStatus: requireElement('update-status', root),
+    fileInput: requireElement<HTMLInputElement>('file-input', root),
+    fileBtn: requireElement('file-btn', root),
     installBanner: requireElement('install-banner', root),
     installBtn: requireElement('install-btn', root),
     installDismiss: requireElement('install-dismiss', root),

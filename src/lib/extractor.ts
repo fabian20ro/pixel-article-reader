@@ -1,5 +1,6 @@
 /**
  * Article extraction: fetch HTML through CORS proxy, parse with Readability.
+ * Also handles local files (PDF, TXT) and pasted text.
  */
 
 import { detectLanguage, type Language } from './lang-detect.js';
@@ -13,6 +14,32 @@ declare const Readability: new (doc: Document) => {
 declare const TurndownService: new (options?: Record<string, unknown>) => {
   turndown(html: string): string;
 };
+
+/** Minimal typing for pdf.js library (loaded lazily via dynamic import). */
+interface PdfJsTextItem {
+  str: string;
+  transform: number[];
+  height: number;
+}
+
+interface PdfJsLib {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument(src: { data: ArrayBuffer }): {
+    promise: Promise<{
+      numPages: number;
+      getPage(num: number): Promise<{
+        getTextContent(): Promise<{
+          items: PdfJsTextItem[];
+        }>;
+      }>;
+    }>;
+  };
+}
+
+const PDF_JS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs';
+const PDF_JS_WORKER_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
+
+let _pdfjsLib: PdfJsLib | null = null;
 
 export interface Article {
   title: string;
@@ -68,6 +95,187 @@ export function createArticleFromText(text: string): Article {
     estimatedMinutes,
     resolvedUrl: '',
   };
+}
+
+/**
+ * Create an Article from a local text file (.txt, .text).
+ */
+export async function createArticleFromTextFile(file: File): Promise<Article> {
+  if (file.size > MAX_ARTICLE_SIZE) {
+    throw new Error('File is too large (>2 MB). Please use a smaller file.');
+  }
+
+  const text = await file.text();
+  const textContent = text.trim();
+
+  if (!textContent) {
+    throw new Error('The text file is empty.');
+  }
+
+  const paragraphs = splitPlainTextParagraphs(textContent);
+  if (paragraphs.length === 0) {
+    throw new Error('The text file has no readable content.');
+  }
+
+  const title = file.name.replace(/\.(txt|text)$/i, '') || 'Text Document';
+  const wordCount = countWords(textContent);
+  const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
+  const lang = detectLanguage(textContent);
+
+  return {
+    title,
+    content: '',
+    textContent,
+    markdown: textContent,
+    paragraphs,
+    lang,
+    htmlLang: '',
+    siteName: 'Text File',
+    excerpt: textContent.slice(0, 200),
+    wordCount,
+    estimatedMinutes,
+    resolvedUrl: '',
+  };
+}
+
+/**
+ * Load pdf.js library lazily from CDN on first use.
+ */
+async function loadPdfJs(): Promise<PdfJsLib> {
+  // Check for globally-available pdfjsLib (e.g. loaded via <script> tag or test mock)
+  const global = globalThis as Record<string, unknown>;
+  if (global.pdfjsLib && typeof (global.pdfjsLib as PdfJsLib).getDocument === 'function') {
+    return global.pdfjsLib as PdfJsLib;
+  }
+
+  if (_pdfjsLib) return _pdfjsLib;
+
+  try {
+    // Dynamic import from CDN — browser resolves the URL at runtime.
+    // TypeScript cannot resolve CDN URLs, so we use a variable to suppress static analysis.
+    const url = PDF_JS_CDN;
+    const module = await import(/* webpackIgnore: true */ url) as PdfJsLib;
+    module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_CDN;
+    _pdfjsLib = module;
+    return module;
+  } catch {
+    throw new Error('Could not load PDF support. Check your internet connection and try again.');
+  }
+}
+
+/**
+ * Create an Article from a local PDF file.
+ */
+export async function createArticleFromPdf(file: File): Promise<Article> {
+  if (file.size > MAX_ARTICLE_SIZE) {
+    throw new Error('PDF is too large (>2 MB). Please use a smaller file.');
+  }
+
+  const pdfjsLib = await loadPdfJs();
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+  const allParagraphs: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageParagraphs = extractParagraphsFromTextItems(content.items);
+    allParagraphs.push(...pageParagraphs);
+  }
+
+  // Apply text cleaning and paragraph filtering
+  let paragraphs = allParagraphs
+    .map((p) => stripNonTextContent(p))
+    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
+    .filter((p) => isSpeakableText(p));
+
+  // If structural detection yields ≤1 paragraph, try sentence-based splitting
+  if (paragraphs.length <= 1) {
+    const saved = paragraphs[0];
+    const fullText = allParagraphs.join(' ');
+    const fromSentences = splitPlainTextParagraphs(fullText);
+    paragraphs = fromSentences.length > 0 ? fromSentences : (saved ? [saved] : []);
+  }
+
+  if (paragraphs.length === 0) {
+    throw new Error('Could not extract readable text from this PDF.');
+  }
+
+  const title = file.name.replace(/\.pdf$/i, '') || 'PDF Document';
+  const textContent = paragraphs.join('\n\n');
+  const wordCount = countWords(textContent);
+  const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
+  const lang = detectLanguage(textContent);
+
+  return {
+    title,
+    content: '',
+    textContent,
+    markdown: textContent,
+    paragraphs,
+    lang,
+    htmlLang: '',
+    siteName: 'PDF',
+    excerpt: textContent.slice(0, 200),
+    wordCount,
+    estimatedMinutes,
+    resolvedUrl: '',
+  };
+}
+
+/**
+ * Detect paragraph boundaries from PDF text items using vertical position gaps.
+ * PDF text items include position data: transform[5] is the Y coordinate.
+ * A gap larger than 1.8x line height suggests a paragraph break.
+ */
+export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[] {
+  if (items.length === 0) return [];
+
+  const paragraphs: string[] = [];
+  let currentParagraph = '';
+  let lastY: number | null = null;
+  let lastHeight = 0;
+
+  for (const item of items) {
+    const text = item.str;
+    if (!text.trim()) continue;
+
+    const y = item.transform[5];
+    const height = item.height || 12;
+
+    if (lastY !== null) {
+      const gap = Math.abs(lastY - y);
+      const lineSpacing = lastHeight * 1.5;
+
+      if (gap > lineSpacing * 1.8) {
+        // Large vertical gap — paragraph break
+        if (currentParagraph.trim()) {
+          paragraphs.push(currentParagraph.trim());
+        }
+        currentParagraph = text;
+      } else {
+        // Same paragraph — join with space (handle hyphenation)
+        if (currentParagraph.endsWith('-')) {
+          currentParagraph = currentParagraph.slice(0, -1) + text;
+        } else {
+          currentParagraph += (currentParagraph ? ' ' : '') + text;
+        }
+      }
+    } else {
+      currentParagraph = text;
+    }
+
+    lastY = y;
+    lastHeight = height;
+  }
+
+  if (currentParagraph.trim()) {
+    paragraphs.push(currentParagraph.trim());
+  }
+
+  return paragraphs;
 }
 
 /**
@@ -306,13 +514,106 @@ function splitPlainTextParagraphs(text: string): string[] {
     .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
     .filter((p) => isSpeakableText(p));
 
-  if (byBlank.length > 0) return byBlank;
+  if (byBlank.length > 1) return byBlank;
 
-  return text
+  const byLine = text
     .split(/\n/)
     .map((p) => stripNonTextContent(p))
     .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
     .filter((p) => isSpeakableText(p));
+
+  if (byLine.length > 1) return byLine;
+
+  // Fallback: split by sentences when no paragraph breaks are found
+  const cleaned = stripNonTextContent(text);
+  const bySentence = splitTextBySentences(cleaned);
+  if (bySentence.length > 0) return bySentence;
+
+  // Final fallback: return whatever we got from earlier splits
+  if (byBlank.length > 0) return byBlank;
+  if (byLine.length > 0) return byLine;
+  return [];
+}
+
+/**
+ * Split text into paragraphs of N sentences each.
+ * Used as a fallback when text has no detectable paragraph breaks (blank lines, newlines).
+ */
+export function splitTextBySentences(text: string, sentencesPerParagraph = 3): string[] {
+  const sentences = splitSentences(text);
+  if (sentences.length <= sentencesPerParagraph) {
+    const trimmed = text.trim();
+    if (trimmed.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(trimmed)) {
+      return [trimmed];
+    }
+    return [];
+  }
+
+  const paragraphs: string[] = [];
+  for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
+    const chunk = sentences.slice(i, i + sentencesPerParagraph);
+    const para = chunk.join(' ').trim();
+    if (para.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(para)) {
+      paragraphs.push(para);
+    }
+  }
+  return paragraphs;
+}
+
+/** Common abbreviations that should not be treated as sentence endings. */
+const ABBREVIATIONS = new Set([
+  'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st', 'ave', 'blvd',
+  'gen', 'gov', 'sgt', 'cpl', 'pvt', 'capt', 'lt', 'col', 'maj',
+  'dept', 'univ', 'assn', 'bros', 'inc', 'ltd', 'co', 'corp',
+  'vs', 'etc', 'approx', 'appt', 'est', 'min', 'max',
+  'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+]);
+
+/**
+ * Split text into individual sentences.
+ * Handles abbreviations, decimal numbers, and ellipses.
+ */
+function splitSentences(text: string): string[] {
+  const sentences: string[] = [];
+  // Match sentence-ending punctuation followed by space and uppercase letter
+  const parts = text.split(/(?<=[.!?])\s+/);
+  let current = '';
+
+  for (const part of parts) {
+    if (!current) {
+      current = part;
+      continue;
+    }
+
+    // Check if the previous part ended with an abbreviation
+    const lastWord = current.match(/(\w+)\.$/);
+    if (lastWord && ABBREVIATIONS.has(lastWord[1].toLowerCase())) {
+      // Abbreviation — don't split
+      current += ' ' + part;
+      continue;
+    }
+
+    // Check if it ended with a decimal number (e.g., "3.14" split as "3." + "14...")
+    if (/\d\.$/.test(current) && /^\d/.test(part)) {
+      current += ' ' + part;
+      continue;
+    }
+
+    // Check if the next part starts with uppercase (real sentence boundary)
+    if (/^[A-Z\u00C0-\u024F]/.test(part)) {
+      sentences.push(current.trim());
+      current = part;
+    } else {
+      // Doesn't start with uppercase — likely not a real sentence boundary
+      current += ' ' + part;
+    }
+  }
+
+  if (current.trim()) {
+    sentences.push(current.trim());
+  }
+
+  return sentences.filter((s) => s.length > 0);
 }
 
 /** Strip content that shouldn't be read aloud: HTML tags, data URIs, image refs, image URLs. */
