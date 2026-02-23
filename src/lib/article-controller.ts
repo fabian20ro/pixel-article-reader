@@ -266,10 +266,12 @@ export class ArticleController {
     if (typeof marked === 'undefined' || typeof marked.parse !== 'function') return '';
 
     try {
-      // Strip raw HTML <img> tags from markdown before parsing.
-      // Without this, marked's escapeHtml converts them to literal "&lt;img&gt;"
-      // text visible in rendered paragraphs.
-      const cleaned = markdown.replace(/<img[^>]*\/?>/gi, '');
+      // Strip image-related content before rendering — this is a text reader,
+      // not an image viewer, so images add no value and produce visual noise.
+      const cleaned = markdown
+        .replace(/<img[^>]*\/?>/gi, '')                                        // raw HTML <img> tags (escapeHtml makes them literal text)
+        .replace(/!\[[^\]]*\]\((?:[^()]+|\([^()]*\))*\)/g, '')                 // ![alt](url) → remove (handles parens in URLs)
+        .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^()]+|\([^()]*\))*\)/gi, '');  // [Image: ...](url) Jina format → remove
       const html = marked.parse(cleaned);
       return sanitizeRenderedHtml(String(html));
     } catch {
@@ -406,7 +408,17 @@ function sanitizeRenderedHtml(html: string): string {
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) return '';
 
-  container.querySelectorAll('script, style, iframe, object, embed, img').forEach((el) => el.remove());
+  // Remove dangerous elements and image-related elements (this is a text reader).
+  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg').forEach((el) => el.remove());
+
+  // Remove links that became empty after image removal (linked images)
+  // and links whose text is just an image reference (Jina Reader format).
+  container.querySelectorAll('a').forEach((el) => {
+    const text = el.textContent?.trim() ?? '';
+    if (!text || /^Image\s*[:\d]/i.test(text)) {
+      el.remove();
+    }
+  });
 
   container.querySelectorAll<HTMLElement>('*').forEach((el) => {
     const attrs = Array.from(el.attributes);

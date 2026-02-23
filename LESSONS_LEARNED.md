@@ -66,6 +66,10 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-22]** Google Translate's `translate.goog` proxy requires client-side JavaScript — The `translate.goog` domain serves the original page HTML plus JavaScript that translates text in the DOM. Server-side fetching (CORS proxy, headless fetch without JS execution) returns untranslated content. To translate in a proxy-based app, use the `translate.googleapis.com` API to translate already-extracted text instead of re-fetching a translated page.
 
+## Content Filtering
+
+**[2026-02-23]** Apply content filtering at every layer of the rendering pipeline — Image and non-text content must be stripped at ALL layers independently: (1) the markdown source before `marked.parse()` (strip `![...](...)` and `[Image...](...)` syntax), (2) the HTML sanitizer (`sanitizeRenderedHtml`) as safety net (remove `<img>`, `<picture>`, `<svg>` elements and empty/image-text links), and (3) the TTS text extraction functions (`stripMarkdownSyntax`, `stripNonTextContent`, `isSpeakableText`). Fixing only one layer leaves the others exposed. (Promoted from iteration log: 3rd occurrence of image content leaking through — previous fixes at the TTS layer didn't address visual rendering.)
+
 ## Process & Workflow
 
 **[2026-02-22]** Build before shipping — Compiled JS files are generated outputs (gitignored) and must be produced by `npm run build` before local manual verification; CI also builds before deploy. Never edit generated root `.js` files directly.
@@ -77,8 +81,6 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 **[2026-02-22]** Markdown-first rendering needs explicit TTS alignment — Rendering markdown blocks directly to DOM is great for readability, but TTS highlighting only works if each clickable rendered block is mapped to a normalized paragraph index used by `TTSEngine`. Keep this mapping in one place (article controller) and reuse it for click-to-seek + progress highlighting. Always look up DOM elements by `data-index` attribute, never by ordinal position in `querySelectorAll` results — block merging and filtering mean ordinal ≠ TTS index.
 
 **[2026-02-22]** Never use ordinal DOM position for TTS paragraph lookup — When short blocks are merged into one TTS paragraph, multiple DOM elements share the same `data-index`. Using `querySelectorAll('.paragraph')[i]` to find TTS paragraph `i` is wrong; always use `querySelector('.paragraph[data-index="N"]')` or compare `element.dataset.index`. This applies to highlighting, scrolling, and any future feature that maps between TTS position and DOM. (Promoted from iteration log: 2nd occurrence of TTS-DOM index mismatch.)
-
-**[2026-02-23]** Content filtering must cover both TTS and visual rendering paths — The TTS path (`stripNonTextContent` + `isSpeakableText` in `extractor.ts`) and the visual rendering path (`sanitizeRenderedHtml` in `article-controller.ts`) are independent pipelines. Fixing content issues (e.g., `<img>` tags, data URIs, code blocks) in one path does NOT fix the other. Always check and fix both when addressing content-leak bugs. (Promoted from iteration log: 2nd occurrence of same content issue needing fixes in both paths.)
 
 ---
 
