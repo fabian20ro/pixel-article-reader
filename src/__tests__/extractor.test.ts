@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { extractArticle, extractArticleWithJina, createArticleFromText } from '../lib/extractor.js';
+import {
+  extractArticle,
+  extractArticleWithJina,
+  createArticleFromText,
+  createArticleFromTextFile,
+  createArticleFromPdf,
+  splitTextBySentences,
+  extractParagraphsFromTextItems,
+} from '../lib/extractor.js';
 
 // ── Mock Readability globally ─────────────────────────────────────
 
@@ -265,12 +273,9 @@ describe('extractArticle', () => {
 
   it('falls back to single-newline splitting if double-newline yields nothing', async () => {
     // textContent has NO double-newlines, so the \n\s*\n split produces a single
-    // long chunk. But since we need the fallback path to trigger, the double-newline
-    // split must yield zero paragraphs >= 20 chars. To achieve that, the text must
-    // have no double-newlines but individual \n-separated lines that are each >= 20 chars.
-    // The trick: the whole text has no \n\n at all, so split(/\n\s*\n/) yields one entry
-    // which IS long enough and won't trigger the fallback. So we test the actual behavior:
-    // with only single newlines, we get 1 paragraph from the double-newline split.
+    // long chunk. With the sentence fallback, when double-newline split yields only 1
+    // paragraph, it falls through to single-newline splitting, which splits the text
+    // into 2 paragraphs (one per line).
     mockFetch(SAMPLE_HTML);
     mockParse.mockReturnValue({
       title: 'Title',
@@ -282,9 +287,10 @@ describe('extractArticle', () => {
     });
 
     const article = await extractArticle(ARTICLE_URL, PROXY);
-    // Double-newline split treats the whole text as one paragraph
-    expect(article.paragraphs.length).toBe(1);
+    // Single-newline split yields 2 paragraphs
+    expect(article.paragraphs.length).toBe(2);
     expect(article.paragraphs[0]).toContain('single newlines');
+    expect(article.paragraphs[1]).toContain('Another paragraph');
   });
 
   it('calculates estimated listening time', async () => {
@@ -638,5 +644,275 @@ describe('createArticleFromText', () => {
     const text = 'Title\n\nThis paragraph has enough text to pass the minimum length filter.';
     const article = createArticleFromText(text);
     expect(article.htmlLang).toBe('');
+  });
+});
+
+// ── splitTextBySentences ──────────────────────────────────────────────
+
+describe('splitTextBySentences', () => {
+  it('splits text without paragraph breaks into 3-sentence paragraphs', () => {
+    const text = 'First sentence is here. Second sentence follows along. Third sentence ends now. Fourth sentence begins. Fifth sentence is short. Sixth sentence wraps up the text.';
+    const paragraphs = splitTextBySentences(text);
+    expect(paragraphs.length).toBe(2);
+  });
+
+  it('returns single paragraph for text with 3 or fewer sentences', () => {
+    const text = 'First sentence here. Second sentence follows. Third sentence ends.';
+    const paragraphs = splitTextBySentences(text);
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0]).toBe(text);
+  });
+
+  it('handles abbreviations without false splitting', () => {
+    const text = 'Dr. Smith went to St. Louis last week on business. He met with Mrs. Johnson about the important project they discussed. They discussed the new comprehensive plan together. It was a very productive meeting indeed. The results were all extremely positive. Everyone involved was very satisfied.';
+    const paragraphs = splitTextBySentences(text);
+    // Should be 2 paragraphs of 3 sentences each
+    expect(paragraphs.length).toBe(2);
+  });
+
+  it('handles text ending without period', () => {
+    const text = 'First sentence is written. Second sentence follows. Third sentence comes next. Fourth sentence is the last one';
+    const paragraphs = splitTextBySentences(text);
+    expect(paragraphs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('handles exclamation and question marks as sentence boundaries', () => {
+    const text = 'What a great day! How are you doing? I am doing well. This is sentence four. Here is sentence five. And here is sentence six.';
+    const paragraphs = splitTextBySentences(text);
+    expect(paragraphs.length).toBe(2);
+  });
+
+  it('uses custom sentences per paragraph', () => {
+    const text = 'One sentence here. Two sentence here. Three sentence here. Four sentence here. Five sentence here. Six sentence here.';
+    const paragraphs = splitTextBySentences(text, 2);
+    expect(paragraphs.length).toBe(3);
+  });
+
+  it('returns empty array for text too short to be speakable', () => {
+    const text = 'Too short.';
+    const paragraphs = splitTextBySentences(text);
+    expect(paragraphs.length).toBe(0);
+  });
+});
+
+// ── 3-sentence fallback in createArticleFromText ───────────────────────
+
+describe('createArticleFromText 3-sentence fallback', () => {
+  it('uses 3-sentence fallback when pasted text has no newlines', () => {
+    const text = 'First sentence of the article is right here. Second sentence follows immediately after. Third sentence ends the first paragraph. Fourth sentence starts the second paragraph. Fifth sentence continues nicely. Sixth sentence wraps up the whole text.';
+    const article = createArticleFromText(text);
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('preserves real paragraph breaks when present', () => {
+    const text = 'Title\n\nFirst paragraph has enough text to pass the minimum length filter.\n\nSecond paragraph also has enough text to pass the minimum length filter.';
+    const article = createArticleFromText(text);
+    expect(article.paragraphs.length).toBe(2);
+    expect(article.paragraphs[0]).toContain('First paragraph');
+    expect(article.paragraphs[1]).toContain('Second paragraph');
+  });
+
+  it('handles single long sentence as one paragraph', () => {
+    const text = 'This is a single very long sentence that contains many words and is definitely long enough to be a valid paragraph by itself for the text to speech engine.';
+    const article = createArticleFromText(text);
+    expect(article.paragraphs.length).toBe(1);
+  });
+});
+
+// ── createArticleFromTextFile ────────────────────────────────────────────
+
+describe('createArticleFromTextFile', () => {
+  it('creates article from a .txt file with paragraph breaks', async () => {
+    const content = 'First paragraph has enough text to pass the minimum length.\n\nSecond paragraph also has enough text to pass the minimum length filter.';
+    const file = new File([content], 'test-article.txt', { type: 'text/plain' });
+    const article = await createArticleFromTextFile(file);
+    expect(article.title).toBe('test-article');
+    expect(article.siteName).toBe('Text File');
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('throws on empty file', async () => {
+    const file = new File([''], 'empty.txt', { type: 'text/plain' });
+    await expect(createArticleFromTextFile(file)).rejects.toThrow(/empty/i);
+  });
+
+  it('applies 3-sentence fallback for text without paragraph breaks', async () => {
+    const content = 'First sentence of the document here. Second sentence follows immediately. Third sentence ends a group. Fourth sentence starts another group. Fifth sentence continues the text. Sixth sentence completes it all.';
+    const file = new File([content], 'no-breaks.txt', { type: 'text/plain' });
+    const article = await createArticleFromTextFile(file);
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('strips .text extension from filename for title', async () => {
+    const content = 'Long enough paragraph content that passes the minimum length filter for article paragraphs.';
+    const file = new File([content], 'my-doc.text', { type: 'text/plain' });
+    const article = await createArticleFromTextFile(file);
+    expect(article.title).toBe('my-doc');
+  });
+});
+
+// ── extractParagraphsFromTextItems ──────────────────────────────────────
+
+describe('extractParagraphsFromTextItems', () => {
+  it('detects paragraph breaks from vertical position gaps', () => {
+    const items = [
+      { str: 'First paragraph text here.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+      { str: 'More text in same paragraph.', transform: [1, 0, 0, 1, 72, 686], height: 12 },
+      // Large gap (700-686=14 vs next gap of 640-686=46, much larger than lineSpacing*1.8=32.4)
+      { str: 'Second paragraph after gap.', transform: [1, 0, 0, 1, 72, 640], height: 12 },
+    ];
+    const paragraphs = extractParagraphsFromTextItems(items);
+    expect(paragraphs.length).toBe(2);
+    expect(paragraphs[0]).toContain('First paragraph');
+    expect(paragraphs[1]).toContain('Second paragraph');
+  });
+
+  it('joins text items on same line', () => {
+    const items = [
+      { str: 'Hello', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+      { str: 'World', transform: [1, 0, 0, 1, 120, 700], height: 12 },
+    ];
+    const paragraphs = extractParagraphsFromTextItems(items);
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0]).toBe('Hello World');
+  });
+
+  it('handles empty items array', () => {
+    expect(extractParagraphsFromTextItems([])).toEqual([]);
+  });
+
+  it('skips whitespace-only items', () => {
+    const items = [
+      { str: 'Text here for first paragraph.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+      { str: '   ', transform: [1, 0, 0, 1, 72, 688], height: 12 },
+      { str: 'More text in the same spot.', transform: [1, 0, 0, 1, 72, 676], height: 12 },
+    ];
+    const paragraphs = extractParagraphsFromTextItems(items);
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0]).toContain('Text here');
+    expect(paragraphs[0]).toContain('More text');
+  });
+
+  it('handles hyphenation at line ends', () => {
+    const items = [
+      { str: 'A very long hyphen-', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+      { str: 'ated word here.', transform: [1, 0, 0, 1, 72, 686], height: 12 },
+    ];
+    const paragraphs = extractParagraphsFromTextItems(items);
+    expect(paragraphs.length).toBe(1);
+    expect(paragraphs[0]).toContain('hyphenated');
+  });
+});
+
+// ── createArticleFromPdf ────────────────────────────────────────────────
+
+describe('createArticleFromPdf', () => {
+  beforeEach(() => {
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: vi.fn().mockResolvedValue({
+            getTextContent: vi.fn().mockResolvedValue({
+              items: [
+                { str: 'First paragraph has enough text content to pass the minimum length filter.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+                { str: 'More text in the same paragraph section for the reader.', transform: [1, 0, 0, 1, 72, 686], height: 12 },
+                { str: 'Second paragraph after a large vertical gap in the document.', transform: [1, 0, 0, 1, 72, 640], height: 12 },
+                { str: 'Additional text in the second paragraph section right here.', transform: [1, 0, 0, 1, 72, 626], height: 12 },
+              ],
+            }),
+          }),
+        }),
+      }),
+    };
+  });
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).pdfjsLib;
+  });
+
+  it('extracts paragraphs from PDF text items', async () => {
+    const file = new File([new ArrayBuffer(10)], 'test.pdf', { type: 'application/pdf' });
+    const article = await createArticleFromPdf(file);
+    expect(article.title).toBe('test');
+    expect(article.siteName).toBe('PDF');
+    expect(article.paragraphs.length).toBe(2);
+    expect(article.resolvedUrl).toBe('');
+  });
+
+  it('throws when pdfjsLib is not loaded', async () => {
+    delete (globalThis as Record<string, unknown>).pdfjsLib;
+    // Mock loadPdfJs to fail by ensuring pdfjsLib is undefined and dynamic import fails
+    const file = new File([new ArrayBuffer(10)], 'test.pdf', { type: 'application/pdf' });
+    await expect(createArticleFromPdf(file)).rejects.toThrow();
+  });
+
+  it('falls back to sentence splitting when PDF yields single paragraph', async () => {
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: vi.fn().mockResolvedValue({
+            getTextContent: vi.fn().mockResolvedValue({
+              items: [
+                { str: 'First sentence of the PDF document. Second sentence follows along. Third sentence ends here. Fourth sentence begins now. Fifth sentence is quite short. Sixth sentence wraps up.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+              ],
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const file = new File([new ArrayBuffer(10)], 'single-block.pdf', { type: 'application/pdf' });
+    const article = await createArticleFromPdf(file);
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('handles multi-page PDFs', async () => {
+    const getPage = vi.fn()
+      .mockResolvedValueOnce({
+        getTextContent: vi.fn().mockResolvedValue({
+          items: [
+            { str: 'Page one content has enough text to be a valid paragraph for reading.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        getTextContent: vi.fn().mockResolvedValue({
+          items: [
+            { str: 'Page two content also has enough text to be its own paragraph for reading.', transform: [1, 0, 0, 1, 72, 700], height: 12 },
+          ],
+        }),
+      });
+
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({ numPages: 2, getPage }),
+      }),
+    };
+
+    const file = new File([new ArrayBuffer(10)], 'multi-page.pdf', { type: 'application/pdf' });
+    const article = await createArticleFromPdf(file);
+    expect(article.paragraphs.length).toBe(2);
+  });
+
+  it('throws when PDF has no readable text', async () => {
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: vi.fn().mockResolvedValue({
+            getTextContent: vi.fn().mockResolvedValue({ items: [] }),
+          }),
+        }),
+      }),
+    };
+
+    const file = new File([new ArrayBuffer(10)], 'empty.pdf', { type: 'application/pdf' });
+    await expect(createArticleFromPdf(file)).rejects.toThrow(/Could not extract/);
   });
 });

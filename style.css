@@ -348,8 +348,15 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 16px;
+  font-family: inherit;
+  line-height: 1.4;
   outline: none;
   min-height: 48px;
+  max-height: 200px;
+  resize: none;
+  overflow: hidden;
+  overflow-y: auto;
+  field-sizing: content;
 }
 
 .url-input:focus {
@@ -366,6 +373,20 @@ body {
   font-weight: 700;
   border-radius: var(--radius);
   flex-shrink: 0;
+}
+
+/* === File Input === */
+.file-input-group {
+  margin-bottom: 16px;
+}
+
+.file-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
 }
 
 .divider {

@@ -3,6 +3,8 @@ import {
   extractArticle,
   extractArticleWithJina,
   createArticleFromText,
+  createArticleFromTextFile,
+  createArticleFromPdf,
   type Article,
 } from './extractor.js';
 import { needsTranslation, getSourceLang, type Language } from './lang-detect.js';
@@ -60,7 +62,25 @@ export class ArticleController {
 
     refs.goBtn.addEventListener('click', () => this.handleUrlSubmit());
     refs.urlInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.handleUrlSubmit();
+      if (e.key !== 'Enter') return;
+      // Ctrl/Cmd+Enter always submits
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        this.handleUrlSubmit();
+        return;
+      }
+      // Plain Enter submits only when content has no newlines (URL-like input)
+      if (!refs.urlInput.value.includes('\n')) {
+        e.preventDefault();
+        this.handleUrlSubmit();
+      }
+      // Otherwise let Enter insert a newline (default textarea behavior)
+    });
+
+    // Auto-resize textarea to fit content (JS fallback for browsers without field-sizing: content)
+    refs.urlInput.addEventListener('input', () => {
+      refs.urlInput.style.height = 'auto';
+      refs.urlInput.style.height = refs.urlInput.scrollHeight + 'px';
     });
 
     refs.translateBtn.addEventListener('click', () => {
@@ -78,6 +98,19 @@ export class ArticleController {
     refs.errorRetry.addEventListener('click', () => {
       this.showView('input');
       refs.urlInput.focus();
+    });
+
+    // File upload
+    refs.fileBtn.addEventListener('click', () => {
+      refs.fileInput.click();
+    });
+
+    refs.fileInput.addEventListener('change', () => {
+      const file = refs.fileInput.files?.[0];
+      if (file) {
+        void this.handleFileUpload(file);
+        refs.fileInput.value = ''; // reset so same file can be re-selected
+      }
     });
 
     this.syncLanguageControls();
@@ -125,6 +158,34 @@ export class ArticleController {
       this.displayArticle(article);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Could not parse the pasted text.';
+      this.showError(msg);
+    }
+  }
+
+  private async handleFileUpload(file: File): Promise<void> {
+    this.showView('loading');
+    this.options.tts.stop();
+
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+
+    try {
+      let article: Article;
+
+      if (ext === 'pdf') {
+        this.options.refs.loadingMessage.textContent = 'Processing PDF...';
+        article = await createArticleFromPdf(file);
+      } else if (ext === 'txt' || ext === 'text') {
+        this.options.refs.loadingMessage.textContent = 'Processing text file...';
+        article = await createArticleFromTextFile(file);
+      } else {
+        throw new Error(`Unsupported file type: .${ext}. Use PDF or TXT files.`);
+      }
+
+      this.currentArticle = article;
+      this.currentArticleUrl = '';
+      this.displayArticle(article);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Could not process the file.';
       this.showError(msg);
     }
   }

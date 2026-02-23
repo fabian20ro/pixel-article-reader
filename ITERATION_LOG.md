@@ -539,4 +539,28 @@ Each entry should follow this structure:
 
 ---
 
+### 2026-02-23 — Add document support: pasted text, PDF, TXT files
+
+**Task:** Add support for pasted multi-paragraph text (via textarea), local PDF documents, local TXT files, and 3-sentence paragraph fallback when paragraph boundaries are undetectable.
+
+**Changes:**
+- **Sentence-based paragraph splitting** (`extractor.ts`): Added `splitTextBySentences()` and `splitSentences()` functions. Modified `splitPlainTextParagraphs()` to fall back to 3-sentence grouping when newline-based splitting yields ≤1 paragraph. Handles abbreviations (Mr., Dr., St., etc.), decimal numbers, and question/exclamation marks.
+- **Textarea replacement** (`index.html`, `style.css`, `dom-refs.ts`): Replaced `<input type="text">` with `<textarea>` for URL/text input. Added auto-grow CSS (`field-sizing: content`, `max-height: 200px`). Updated `urlInput` type from `HTMLInputElement` to `HTMLTextAreaElement`. Updated Enter key handling in `article-controller.ts`: plain Enter submits for single-line input (URLs), Ctrl/Cmd+Enter always submits, bare Enter in multi-line content inserts newline.
+- **File upload UI** (`index.html`, `style.css`, `dom-refs.ts`): Added hidden `<input type="file" accept=".pdf,.txt,.text">` and styled "Open PDF or Text File" button with document icon SVG. Added `fileInput` and `fileBtn` to `AppDomRefs`.
+- **Text file support** (`extractor.ts`): Added `createArticleFromTextFile(file: File)` — reads via `file.text()`, uses `splitPlainTextParagraphs()` (with 3-sentence fallback), title from filename sans extension.
+- **PDF support** (`extractor.ts`): Added `createArticleFromPdf(file: File)` with lazy loading of pdf.js from CDN via dynamic `import()`. Added `extractParagraphsFromTextItems()` for paragraph detection from vertical position gaps in PDF text items. Falls back to sentence splitting when structural detection yields ≤1 paragraph.
+- **Controller wiring** (`article-controller.ts`): Added `handleFileUpload()` method, wired file button/input events in `init()`.
+- **Tests**: Added 24 new tests covering sentence splitting, 3-sentence fallback, text file extraction, PDF text item parsing, and PDF article creation (with mocked pdfjsLib).
+
+**Key decisions:**
+1. pdf.js loaded via dynamic `import()` from jsDelivr CDN (lazy, no page-load cost). Falls back to global `pdfjsLib` if available (for tests/manual loading).
+2. Changed `splitPlainTextParagraphs` threshold from `> 0` to `> 1` — single-paragraph results now trigger further splitting attempts. Updated one existing test accordingly.
+3. `createArticleFromTextFile` does NOT delegate to `createArticleFromText` (which strips first line as title). Instead builds Article directly with filename as title and all content as body.
+
+**Outcome:** All 213 tests pass (189 existing + 24 new), build clean.
+
+**Insight:** When composing functions (`createArticleFromTextFile` → `createArticleFromText`), the inner function's assumptions (first line = title) may not match the outer context (title = filename). Direct construction is safer than post-hoc overriding when the inner function mutates the input.
+
+---
+
 <!-- New entries go above this line, most recent first -->
