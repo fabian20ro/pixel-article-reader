@@ -514,26 +514,28 @@ Each entry should follow this structure:
 
 ---
 
-### [2026-02-23] Fix img tags appearing as text in rendered article paragraphs
+### [2026-02-23] Fix image links appearing in rendered article view (root cause)
 
-**Context:** User reported `<img>` tags still appearing in text paragraphs despite the earlier TTS-level fix (commit 74ea693).
+**Context:** User reported that image links (e.g., `[Image: ...]`) still appear in the rendered article view despite multiple previous fix attempts. The issue had been reported and "fixed" multiple times, but the root cause was never addressed. Supersedes the earlier partial fix (PR #20) which only stripped raw `<img>` tags and added `img` to the sanitizer selector.
 
 **What happened:**
-- Traced the full rendering pipeline: HTML → Readability → Turndown (HTML→markdown) → marked.parse (markdown→HTML) → sanitizeRenderedHtml → innerHTML.
-- Identified two distinct leak paths for `<img>` in the visual rendering:
-  1. **Raw HTML `<img>` tags in markdown** (especially from Jina Reader): `marked.js`'s `parseInline()` calls `escapeHtml()` first, converting `<img src="...">` to literal `&lt;img src=&quot;...&quot;&gt;` text visible in paragraphs.
-  2. **Markdown image syntax `![alt](src)`** from Turndown: `marked.parse()` converts these back to actual `<img>` HTML elements, and `sanitizeRenderedHtml()` did not remove `<img>` — only `script, style, iframe, object, embed`.
-- The previous fix (commit 74ea693) added `stripNonTextContent()` and `isSpeakableText()` in `extractor.ts`, but that only addressed the TTS paragraph extraction path. The visual rendering path (`renderMarkdownHtml → sanitizeRenderedHtml → innerHTML`) was untouched.
-- Applied two-layer fix:
-  1. Strip raw HTML `<img>` tags from markdown before `marked.parse()` in `renderMarkdownHtml()`.
-  2. Added `img` to the removal selector in `sanitizeRenderedHtml()`.
-- All 185 tests pass, build clean.
+- Root cause analysis revealed two independent layers of the problem:
+  1. **Visual rendering layer**: `sanitizeRenderedHtml()` removed scripts/styles/iframes but never removed `<img>`, `<picture>`, `<svg>` elements. Markdown image syntax (`![alt](url)`) rendered by `marked.parse()` produced `<img>` tags that survived sanitization. Image-format links (`[Image: desc](url)`) rendered as clickable `<a>` tags. Raw HTML `<img>` tags in markdown were escaped by marked to literal `&lt;img&gt;` text.
+  2. **TTS extraction layer**: `stripMarkdownSyntax()` converted `![alt](url)` → `alt` (kept alt text), so image descriptions became speakable text. `stripNonTextContent()` lacked patterns for image markdown, image URLs with common extensions, and `[Image: ...]` references.
+- Previous fixes only patched individual symptoms at the TTS layer but never touched the rendering layer.
+- Applied defense-in-depth fix across both layers:
+  - `renderMarkdownHtml()`: Strip raw `<img>` HTML tags, image markdown (`![...](...)`) and `[Image...](...)` before passing to `marked.parse()`.
+  - `sanitizeRenderedHtml()`: Remove `<img>`, `<picture>`, `<source>`, `<svg>` elements. Remove empty or image-text-only `<a>` tags.
+  - `stripMarkdownSyntax()`: Remove `![...](...)` entirely (not keep alt text). Add `[Image...](...)` pattern before general link extraction.
+  - `stripNonTextContent()`: Add `![...](...)`, `[Image...](...)`, standalone `[Image...]`, and image URL extension (`.jpg`, `.png`, etc.) patterns.
+- Added 4 new tests: `[Image: ...](url)` link removal, short image URL removal, image-alt-text removal, false-positive preservation.
+- All 189 tests pass, build clean.
 
-**Outcome:** Success. Both literal `<img>` text and rendered `<img>` elements are now removed from the visual article display.
+**Outcome:** Success. Image content is now filtered at both the visual rendering and TTS extraction layers.
 
-**Insight:** Content filtering must be applied in BOTH the TTS extraction path AND the visual rendering path. The TTS path uses `stripNonTextContent()` + `isSpeakableText()` in `extractor.ts`. The visual path uses `sanitizeRenderedHtml()` in `article-controller.ts`. Fixing one doesn't fix the other — they are independent pipelines operating on different representations (plain text vs. HTML DOM). This is the 2nd occurrence of needing to fix both paths for the same content issue.
+**Insight:** Content filtering bugs recur when fixes only address one layer of a multi-layer pipeline. The markdown rendering path (markdown → marked.parse → HTML → DOM) and the TTS extraction path (markdown → stripMarkdownSyntax → stripNonTextContent → isSpeakableText) are independent — fixing one doesn't fix the other. Image filtering must be applied at: (1) the markdown source before rendering, (2) the HTML sanitizer as safety net, and (3) the text extraction functions.
 
-**Promoted to Lessons Learned:** Yes — content filtering must cover both TTS and visual rendering paths.
+**Promoted to Lessons Learned:** Yes — multi-layer content filtering insight (3rd occurrence of image filtering issue).
 
 ---
 

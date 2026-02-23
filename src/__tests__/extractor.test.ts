@@ -389,6 +389,61 @@ describe('extractArticle', () => {
     expect(article.paragraphs[1]).toContain('Second paragraph');
   });
 
+  it('strips [Image: ...](url) link-format references from paragraphs', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'First paragraph with enough words to satisfy the speakable text filter.\n\n[Image: original 1080x2424, displayed at 891x2000](https://cdn.example.com/photo.jpg)\n\nSecond paragraph also has enough words to be considered real content.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    expect(article.paragraphs.length).toBe(2);
+    for (const p of article.paragraphs) {
+      expect(p).not.toMatch(/Image/i);
+    }
+  });
+
+  it('strips short image URLs with common extensions', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'First paragraph with enough words to pass the filter easily.\n\nhttps://cdn.example.com/pic.jpg Some text with enough words around it.\n\nAnother paragraph with plenty of readable text content here.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    for (const p of article.paragraphs) {
+      expect(p).not.toContain('.jpg');
+    }
+  });
+
+  it('strips image markdown with alt text instead of keeping alt', async () => {
+    mockFetch(SAMPLE_HTML);
+    mockParse.mockReturnValue({
+      title: 'Title',
+      content: '<p>Content</p>',
+      textContent:
+        'First paragraph with enough words to satisfy the speakable text filter.\n\n![A beautiful sunset over the ocean](https://example.com/sunset.jpg)\n\nSecond paragraph also has enough words to be considered real content.',
+      siteName: '',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(ARTICLE_URL, PROXY);
+
+    for (const p of article.paragraphs) {
+      expect(p).not.toContain('sunset');
+    }
+  });
+
   it('keeps paragraphs with Romanian diacritics', async () => {
     mockFetch(SAMPLE_HTML);
     mockParse.mockReturnValue({

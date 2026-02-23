@@ -315,12 +315,16 @@ function splitPlainTextParagraphs(text: string): string[] {
     .filter((p) => isSpeakableText(p));
 }
 
-/** Strip content that shouldn't be read aloud: HTML tags, data URIs, long URLs. */
+/** Strip content that shouldn't be read aloud: HTML tags, data URIs, image refs, image URLs. */
 function stripNonTextContent(text: string): string {
   return text
     .replace(/<[^>]+>/g, ' ')
     .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')                // image markdown ![alt](url)
+    .replace(/\[Image[^\]]*\]\([^)]*\)/gi, '')           // [Image: ...](url) links
+    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?/gi, '') // image URLs
     .replace(/https?:\/\/\S{80,}/g, '')
+    .replace(/\[Image[^\]]*\]/gi, '')                    // standalone [Image: ...] references
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -333,7 +337,8 @@ function stripMarkdownSyntax(block: string): string {
     .replace(/^\s*>\s?/gm, '')
     .replace(/^\s*[-*+]\s+/gm, '')
     .replace(/^\s*\d+\.\s+/gm, '')
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')               // Remove image markdown entirely
+    .replace(/\[Image[^\]]*\]\([^)]*\)/gi, '')           // Remove [Image: ...](url) links
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_~]/g, '');
   return stripNonTextContent(stripped);
