@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TTSEngine, selectVoice, splitSentences, type TTSCallbacks } from '../lib/tts-engine.js';
+import { TTSEngine, selectVoice, splitSentences, computeTimeline, type TTSCallbacks } from '../lib/tts-engine.js';
 
 // ── SpeechSynthesis mock ────────────────────────────────────────────
 
@@ -597,5 +597,66 @@ describe('TTSEngine', () => {
 
     const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
     expect(utter.voice?.name).toBe('Ioana');
+  });
+
+  it('seekToTime jumps to the correct paragraph/sentence', () => {
+    const onParagraphChange = vi.fn();
+    const engine = createEngine({ onParagraphChange });
+
+    // 3 paragraphs with known lengths
+    engine.loadArticle([
+      'Short first paragraph here.',       // 27 chars
+      'Medium second paragraph with more.', // 34 chars
+      'Third paragraph is also present.',   // 32 chars
+    ], 'en');
+    engine.play();
+
+    // At rate=1, chars per sec = 14.  27 chars ≈ 1.93s, so seeking to 2.5s
+    // should land in the second paragraph (char offset 2.5 * 14 = 35 chars,
+    // past the 27-char first paragraph).
+    engine.seekToTime(2.5);
+    expect(engine.state.currentParagraph).toBe(1);
+  });
+});
+
+// ── computeTimeline ─────────────────────────────────────────────────
+
+describe('computeTimeline', () => {
+  it('returns zero position at the start', () => {
+    const paragraphs = [['Hello world.'], ['Second sentence.']];
+    const { duration, position } = computeTimeline(paragraphs, 0, 0, 1.0);
+
+    expect(position).toBe(0);
+    expect(duration).toBeGreaterThan(0);
+  });
+
+  it('position increases as sentences advance', () => {
+    const paragraphs = [['First sentence.', 'Second sentence.'], ['Third sentence.']];
+    const t0 = computeTimeline(paragraphs, 0, 0, 1.0);
+    const t1 = computeTimeline(paragraphs, 0, 1, 1.0);
+    const t2 = computeTimeline(paragraphs, 1, 0, 1.0);
+
+    expect(t1.position).toBeGreaterThan(t0.position);
+    expect(t2.position).toBeGreaterThan(t1.position);
+    // Duration stays the same
+    expect(t0.duration).toBe(t1.duration);
+    expect(t1.duration).toBe(t2.duration);
+  });
+
+  it('higher rate means shorter duration', () => {
+    const paragraphs = [['A long sentence that takes time to read aloud.']];
+    const slow = computeTimeline(paragraphs, 0, 0, 1.0);
+    const fast = computeTimeline(paragraphs, 0, 0, 2.0);
+
+    expect(fast.duration).toBeLessThan(slow.duration);
+    expect(fast.duration).toBeCloseTo(slow.duration / 2, 5);
+  });
+
+  it('position at end equals duration', () => {
+    const paragraphs = [['First.'], ['Second.']];
+    // Past the last sentence — paraIdx=2 is past the end, but sentIdx=0
+    // Since paraIdx >= paragraphs.length, all chars are "before"
+    const t = computeTimeline(paragraphs, 2, 0, 1.0);
+    expect(t.position).toBeCloseTo(t.duration, 5);
   });
 });

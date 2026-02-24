@@ -6,7 +6,7 @@
 // - Proxy/API requests: network-only.
 //
 // Bump SW_VERSION on releases that change cache behavior or app-shell wiring.
-const SW_VERSION = '2026.02.24.1';
+const SW_VERSION = '2026.02.24.2';
 const CACHE_NAME = `article-voice-${SW_VERSION}`;
 
 const PRECACHE = [
