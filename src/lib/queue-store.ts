@@ -20,9 +20,9 @@ export interface QueueItem {
 const STORAGE_KEY = 'article-reader-queue';
 const MAX_QUEUE_SIZE = 50;
 
-/** Strip HTML tags and cap string length — used for titles and site names. */
+/** Strip angle brackets and cap string length — used for titles and site names. */
 function sanitizeMetadata(value: string, maxLength: number): string {
-  return value.replace(/<[^>]+>/g, '').trim().slice(0, maxLength);
+  return value.replace(/[<>]/g, '').trim().slice(0, maxLength);
 }
 
 /** Type guard: validates every field of a QueueItem read from storage. */

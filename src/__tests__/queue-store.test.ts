@@ -178,7 +178,7 @@ describe('queue-store', () => {
     it('sanitizes HTML in title', () => {
       const article = makeArticle({ title: 'Title <script>alert(1)</script> End' });
       const item = createQueueItem(article);
-      expect(item.title).toBe('Title alert(1) End');
+      expect(item.title).toBe('Title scriptalert(1)/script End');
     });
 
     it('truncates long titles to 300 chars', () => {
@@ -190,7 +190,7 @@ describe('queue-store', () => {
     it('sanitizes HTML in siteName', () => {
       const article = makeArticle({ siteName: '<img onerror="x" src="y">Site' });
       const item = createQueueItem(article);
-      expect(item.siteName).toBe('Site');
+      expect(item.siteName).toBe('img onerror="x" src="y"Site');
     });
   });
 });
