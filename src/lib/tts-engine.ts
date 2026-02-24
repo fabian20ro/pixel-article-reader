@@ -138,6 +138,42 @@ export function selectVoice(
   return null;
 }
 
+// ── Timeline estimation ───────────────────────────────────────────────
+
+/**
+ * Approximate characters-per-second at 1× speech rate.
+ * ~150 wpm × 5 chars/word ÷ 60 s ≈ 12.5.  We use 14 to account for
+ * pauses between utterances being shorter than natural speech pauses.
+ */
+const CHARS_PER_SEC_AT_1X = 14;
+
+/** Compute estimated duration and current position for setPositionState. */
+export function computeTimeline(
+  paragraphs: string[][],
+  paraIdx: number,
+  sentIdx: number,
+  rate: number,
+): { duration: number; position: number } {
+  const charsPerSec = CHARS_PER_SEC_AT_1X * rate;
+  let totalChars = 0;
+  let currentChars = 0;
+
+  for (let p = 0; p < paragraphs.length; p++) {
+    for (let s = 0; s < paragraphs[p].length; s++) {
+      const len = paragraphs[p][s].length;
+      totalChars += len;
+      if (p < paraIdx || (p === paraIdx && s < sentIdx)) {
+        currentChars += len;
+      }
+    }
+  }
+
+  return {
+    duration: totalChars / charsPerSec,
+    position: currentChars / charsPerSec,
+  };
+}
+
 // ── TTSEngine ─────────────────────────────────────────────────────────
 
 export class TTSEngine {
@@ -177,6 +213,11 @@ export class TTSEngine {
   // Resume watchdog
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Background TTS watchdog — periodically restarts speechSynthesis if it
+  // stalled while the page was hidden (Chrome Android may silently drop
+  // speak() calls made from a backgrounded page).
+  private ttsWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(callbacks?: TTSCallbacks) {
     if (callbacks) this.cb = callbacks;
 
@@ -186,6 +227,9 @@ export class TTSEngine {
       stop: () => this.stop(),
       nexttrack: () => this.skipForward(),
       previoustrack: () => this.skipBackward(),
+      seekforward: () => this.skipSentenceForward(),
+      seekbackward: () => this.skipSentenceBackward(),
+      seekto: (seconds) => this.seekToTime(seconds),
     });
 
     // Handle visibility change — re-acquire wake lock (released automatically
@@ -238,6 +282,7 @@ export class TTSEngine {
     this._stopped = false;
     this.acquireWakeLock();
     this.mediaSession.activate(this.articleTitle);
+    this.startTtsWatchdog();
     this.speakCurrent();
     this.emitState();
   }
@@ -245,6 +290,7 @@ export class TTSEngine {
   pause(): void {
     if (!this._isPlaying) return;
     this._isPaused = true;
+    this.stopTtsWatchdog();
     speechSynthesis.pause();
     this.mediaSession.notifyPause();
     this.emitState();
@@ -253,6 +299,7 @@ export class TTSEngine {
   resume(): void {
     if (!this._isPaused) return;
     this._isPaused = false;
+    this.startTtsWatchdog();
 
     // Try native resume
     speechSynthesis.resume();
@@ -275,6 +322,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = true;
     this.clearResumeTimer();
+    this.stopTtsWatchdog();
     this._speakGen++;
     speechSynthesis.cancel();
     this.releaseWakeLock();
@@ -355,6 +403,37 @@ export class TTSEngine {
       this.speakCurrent();
     }
     this.emitState();
+  }
+
+  /**
+   * Seek to an estimated time position (in seconds).  Reverse-maps the
+   * character-count timeline to find the paragraph/sentence closest to
+   * the requested time, then jumps there.
+   */
+  seekToTime(seconds: number): void {
+    if (this.paragraphs.length === 0) return;
+    const targetChars = seconds * CHARS_PER_SEC_AT_1X * this.rate;
+    let accumulated = 0;
+
+    for (let p = 0; p < this.paragraphs.length; p++) {
+      for (let s = 0; s < this.paragraphs[p].length; s++) {
+        accumulated += this.paragraphs[p][s].length;
+        if (accumulated >= targetChars) {
+          this._speakGen++;
+          speechSynthesis.cancel();
+          this.paraIdx = p;
+          this.sentIdx = s;
+          this.emitParagraphChange();
+          if (this._isPlaying && !this._isPaused) {
+            this.speakCurrent();
+          }
+          this.emitState();
+          return;
+        }
+      }
+    }
+    // Past the end — jump to last paragraph
+    this.jumpToParagraph(this.paragraphs.length - 1);
   }
 
   jumpToParagraph(index: number): void {
@@ -458,6 +537,7 @@ export class TTSEngine {
     this._isPlaying = false;
     this._isPaused = false;
     this._stopped = true;
+    this.stopTtsWatchdog();
     this.releaseWakeLock();
     this.mediaSession.deactivate();
     this.emitState();
@@ -470,6 +550,19 @@ export class TTSEngine {
 
   private emitProgress(): void {
     this.cb.onProgress?.(this.paraIdx, this.paragraphs.length);
+    this.updateMediaPositionState();
+  }
+
+  /** Push the estimated timeline position to the OS notification seekbar. */
+  private updateMediaPositionState(): void {
+    if (this.paragraphs.length === 0) return;
+    const { duration, position } = computeTimeline(
+      this.paragraphs,
+      this.paraIdx,
+      this.sentIdx,
+      this.rate,
+    );
+    this.mediaSession.updatePositionState(duration, position, this.rate);
   }
 
   private emitParagraphChange(): void {
@@ -482,6 +575,30 @@ export class TTSEngine {
     if (this.resumeTimer !== null) {
       clearTimeout(this.resumeTimer);
       this.resumeTimer = null;
+    }
+  }
+
+  /**
+   * Start a periodic watchdog (every 3 s) that restarts the utterance chain
+   * if speechSynthesis has silently stalled.  Chrome on Android may drop
+   * speak() calls made while the page is hidden; this detects the stall and
+   * re-invokes speakCurrent() from the same position.
+   */
+  private startTtsWatchdog(): void {
+    this.stopTtsWatchdog();
+    this.ttsWatchdogTimer = setInterval(() => {
+      if (this._isPlaying && !this._isPaused && !this._stopped) {
+        if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+          this.speakCurrent();
+        }
+      }
+    }, 3000);
+  }
+
+  private stopTtsWatchdog(): void {
+    if (this.ttsWatchdogTimer !== null) {
+      clearInterval(this.ttsWatchdogTimer);
+      this.ttsWatchdogTimer = null;
     }
   }
 

@@ -19,6 +19,9 @@ export interface MediaSessionActions {
   stop: () => void;
   nexttrack: () => void;
   previoustrack: () => void;
+  seekforward?: () => void;
+  seekbackward?: () => void;
+  seekto?: (positionSeconds: number) => void;
 }
 
 /**
@@ -137,12 +140,35 @@ export class MediaSessionController {
     this.setPlaybackState('none');
   }
 
-  updateMetadata(title?: string): void {
+  updateMetadata(title?: string, subtitle?: string): void {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: title || 'ArticleVoice',
-      artist: 'ArticleVoice',
+      artist: subtitle || 'ArticleVoice',
+      artwork: [
+        { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      ],
     });
+  }
+
+  /**
+   * Update the OS notification seekbar with the current position.
+   * Requires duration (total estimated seconds), position (current seconds),
+   * and playbackRate.  Wraps in try/catch because setPositionState throws
+   * if values are out of range.
+   */
+  updatePositionState(duration: number, position: number, playbackRate: number): void {
+    if (!('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: Math.max(0, duration),
+        position: Math.max(0, Math.min(position, duration)),
+        playbackRate: Math.max(0.1, playbackRate),
+      });
+    } catch {
+      // setPositionState can throw if values are invalid or unsupported
+    }
   }
 
   dispose(): void {
@@ -197,6 +223,13 @@ export class MediaSessionController {
     ms.setActionHandler('stop', () => this.actions?.stop());
     ms.setActionHandler('nexttrack', () => this.actions?.nexttrack());
     ms.setActionHandler('previoustrack', () => this.actions?.previoustrack());
+    ms.setActionHandler('seekforward', () => this.actions?.seekforward?.());
+    ms.setActionHandler('seekbackward', () => this.actions?.seekbackward?.());
+    ms.setActionHandler('seekto', (details) => {
+      if (details.seekTime != null) {
+        this.actions?.seekto?.(details.seekTime);
+      }
+    });
   }
 
   private setPlaybackState(state: MediaSessionPlaybackState): void {

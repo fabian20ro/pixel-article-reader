@@ -609,4 +609,25 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-24] YouTube Music-style media notification playbar + background TTS watchdog
+
+**Context:** User reported that audio stops after the current sentence when minimizing (only works the first time). Requested YouTube Music-style notification playbar with artwork, progress bar, and seek controls.
+
+**What happened:**
+- **Bug fix — TTS watchdog timer:** Added a 3-second interval watchdog in `tts-engine.ts` that detects when `speechSynthesis` has silently stalled (Chrome Android may drop `speak()` calls from backgrounded pages) and restarts the utterance chain from the current position. Wired into play/pause/resume/stop lifecycle. This complements the existing `visibilitychange` handler (which only fires on return to foreground) by providing continuous background recovery.
+- **Artwork in notification:** Added `artwork` field to `MediaMetadata` in `media-session.ts` using the existing app icons (`icon-192.png`, `icon-512.png`). Static icons chosen over dynamic canvas/og:image for simplicity and offline reliability.
+- **Notification seekbar via `setPositionState()`:** Added character-count-based timeline estimation (`computeTimeline()` pure function) that maps discrete paragraph/sentence positions to continuous seconds. Called on every sentence completion via `emitProgress()`. Enables the OS to show a progress bar with estimated time in the notification.
+- **Seek action handlers:** Added `seekforward` (maps to `skipSentenceForward`), `seekbackward` (maps to `skipSentenceBackward`), and `seekto` (reverse-maps time position to paragraph/sentence via character count) action handlers. Extends `MediaSessionActions` interface with optional seek methods.
+- **`seekToTime()` method on TTSEngine:** Reverse-maps seconds to paragraph/sentence position using the same character-count model, enabling notification seekbar dragging.
+- Added 4 new tests: `seekToTime` paragraph jump, `computeTimeline` at start/advancing/rate scaling/end.
+- All 219 tests pass, build clean.
+
+**Outcome:** Success. Full media notification with artwork, title, progress bar, and all playback + seek controls. Background TTS stalling fixed by watchdog.
+
+**Insight:** `navigator.mediaSession.setPositionState()` is what unlocks the progress bar and time display in Android's media notification. Without it, you get buttons only. The character-count estimation (~14 chars/sec at 1x rate) is a good-enough approximation for TTS timeline; exact accuracy is impossible since TTS rate varies per word. A TTS-specific watchdog (separate from the audio keep-alive) is needed because `speechSynthesis.speak()` can silently fail in background even when the page stays alive via silent audio.
+
+**Promoted to Lessons Learned:** Yes — TTS background watchdog pattern and setPositionState for notification seekbar.
+
+---
+
 <!-- New entries go above this line, most recent first -->
