@@ -25,7 +25,7 @@ const ALLOWED_LANG_PREFIXES = ['en', 'ro'];
 function detectVoiceGender(name: string): 'male' | 'female' | null {
   const lower = name.toLowerCase();
   if (/\bfemale\b/.test(lower) || /\bwoman\b/.test(lower)) return 'female';
-  if (/\bmale\b/.test(lower) || /\bman\b/.test(lower)) return 'male';
+  if (/\bmale\b/.test(lower)) return 'male';
   // Known voice names by gender (cross-platform)
   const knownFemale = [
     'samantha', 'victoria', 'karen', 'moira', 'tessa', 'fiona', 'veena',
@@ -108,9 +108,9 @@ async function main(): Promise<void> {
       updateProgress(0, totalParagraphs);
       highlightParagraph(0);
 
-      // Auto-add to queue when article loads
+      // Auto-add to queue when article loads (skip if queue-driven load)
       const article = articleController.getCurrentArticle();
-      if (article && queueController) {
+      if (article && queueController && !queueController.isLoadingItem()) {
         const items = queueController.getItems();
         const alreadyQueued = article.resolvedUrl &&
           items.some((i) => i.url === article.resolvedUrl);
@@ -758,10 +758,9 @@ async function main(): Promise<void> {
 
   function applyVoiceGender(gender: 'auto' | 'male' | 'female'): void {
     if (gender === 'auto') {
-      // Reset to auto or saved voice name
-      if (settings.voiceName) {
-        tts.setVoice(settings.voiceName);
-      }
+      // Reset voice name and sync dropdown
+      settings.voiceName = '';
+      refs.settingsVoice.value = '';
       return;
     }
 

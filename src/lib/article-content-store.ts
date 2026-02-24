@@ -24,7 +24,10 @@ const DB_NAME = 'article-reader-content';
 const DB_VERSION = 1;
 const STORE_NAME = 'articles';
 
+let _db: IDBDatabase | null = null;
+
 function openDB(): Promise<IDBDatabase> {
+  if (_db) return Promise.resolve(_db);
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
@@ -33,7 +36,14 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME, { keyPath: 'id' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      _db = request.result;
+      _db.onversionchange = () => {
+        _db?.close();
+        _db = null;
+      };
+      resolve(_db);
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -48,7 +58,6 @@ export async function saveArticleContent(content: StoredArticleContent): Promise
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-    db.close();
   } catch {
     // IndexedDB unavailable or quota exceeded — content just won't persist
   }
@@ -60,12 +69,10 @@ export async function loadArticleContent(id: string): Promise<StoredArticleConte
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readonly');
     const request = tx.objectStore(STORE_NAME).get(id);
-    const result = await new Promise<StoredArticleContent | null>((resolve, reject) => {
+    return await new Promise<StoredArticleContent | null>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error);
     });
-    db.close();
-    return result;
   } catch {
     return null;
   }
@@ -81,7 +88,6 @@ export async function deleteArticleContent(id: string): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-    db.close();
   } catch {
     // Ignore — content is already gone or DB unavailable
   }
@@ -97,7 +103,6 @@ export async function clearArticleContent(): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-    db.close();
   } catch {
     // Ignore
   }

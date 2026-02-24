@@ -43,6 +43,7 @@ export class QueueController {
   private items: QueueItem[];
   private currentIndex = -1;
   private autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _isLoadingItem = false;
   private readonly ac: ArticleController;
   private readonly tts: TTSEngine;
   private readonly cb: QueueCallbacks;
@@ -62,6 +63,11 @@ export class QueueController {
 
   getCurrentIndex(): number {
     return this.currentIndex;
+  }
+
+  /** True while a queue-driven article load is in progress. */
+  isLoadingItem(): boolean {
+    return this._isLoadingItem;
   }
 
   getCurrentItem(): QueueItem | null {
@@ -185,11 +191,16 @@ export class QueueController {
     const item = this.items[idx];
     this.notify();
 
-    if (item.url && isValidArticleUrl(item.url)) {
-      await this.ac.loadArticleFromUrl(item.url);
-    } else {
-      // Local file — load from IndexedDB stored content
-      await this.loadFromStoredContent(item);
+    this._isLoadingItem = true;
+    try {
+      if (item.url && isValidArticleUrl(item.url)) {
+        await this.ac.loadArticleFromUrl(item.url);
+      } else {
+        // Local file — load from IndexedDB stored content
+        await this.loadFromStoredContent(item);
+      }
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
@@ -199,6 +210,7 @@ export class QueueController {
     const nextIndex = this.currentIndex + 1;
     const item = this.items[nextIndex];
 
+    this._isLoadingItem = true;
     try {
       if (item.url && isValidArticleUrl(item.url)) {
         await this.ac.loadArticleFromUrl(item.url);
@@ -210,6 +222,8 @@ export class QueueController {
       this.tts.play();
     } catch {
       this.cb.onError(`Failed to load: ${item.title}`);
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
@@ -219,6 +233,7 @@ export class QueueController {
     const prevIndex = this.currentIndex - 1;
     const item = this.items[prevIndex];
 
+    this._isLoadingItem = true;
     try {
       if (item.url && isValidArticleUrl(item.url)) {
         await this.ac.loadArticleFromUrl(item.url);
@@ -230,6 +245,8 @@ export class QueueController {
       this.tts.play();
     } catch {
       this.cb.onError(`Failed to load: ${item.title}`);
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
