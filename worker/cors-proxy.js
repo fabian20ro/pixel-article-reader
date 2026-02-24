@@ -1,5 +1,5 @@
 /**
- * ArticleVoice CORS Proxy — Cloudflare Worker
+ * Article Local Reader CORS Proxy — Cloudflare Worker
  *
  * Deployed automatically via Cloudflare Git integration when worker/ changes.
  * Can also be deployed manually with Wrangler.

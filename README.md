@@ -1,4 +1,4 @@
-# ArticleVoice
+# Article Local Reader
 
 **Live app: https://fabian20ro.github.io/pixel-article-reader/**
 
@@ -7,7 +7,7 @@ PWA that turns any article into audio using on-device TTS. It now renders extrac
 ## How It Works
 
 1. **Share or paste** an article URL
-2. ArticleVoice fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
+2. Article Local Reader fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
 3. Press **Play** — the Web Speech API reads the article aloud using your device's built-in voices
 4. Optionally retry parsing with **Jina Reader** and copy the article as markdown
 
@@ -89,17 +89,17 @@ npx wrangler secret put JINA_KEY   # optional
 
 ### 4. Install the PWA
 
-Open the live app on your phone (Chrome or Brave). Tap the install banner or use the browser menu to **Add to Home Screen**. Once installed, you can share articles directly from your browser to ArticleVoice.
+Open the live app on your phone (Chrome or Brave). Tap the install banner or use the browser menu to **Add to Home Screen**. Once installed, you can share articles directly from your browser to Article Local Reader.
 
 ## Usage
 
 ### Share Target (primary flow)
 
-After installing the PWA, use your browser's **Share** menu on any article. Select **ArticleVoice** — the app opens, extracts the article, and is ready to play.
+After installing the PWA, use your browser's **Share** menu on any article. Select **Article Local Reader** — the app opens, extracts the article, and is ready to play.
 
 ### Paste URL or Article Text
 
-Open ArticleVoice directly and paste an article URL **or full article text** into the input field. Press **GO** or hit Enter. If no URL is detected at the end of the text, it will be treated as pasted article content and displayed directly.
+Open Article Local Reader directly and paste an article URL **or full article text** into the input field. Press **GO** or hit Enter. If no URL is detected at the end of the text, it will be treated as pasted article content and displayed directly.
 
 ### Player Controls
 

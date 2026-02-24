@@ -42,6 +42,26 @@ export interface AppDomRefs {
   speedBtns: NodeListOf<HTMLButtonElement>;
   themeBtns: NodeListOf<HTMLButtonElement>;
   settingsLangBtns: NodeListOf<HTMLButtonElement>;
+  // Queue
+  queueBtn: HTMLElement;
+  queueBadge: HTMLElement;
+  queueSheet: HTMLElement;
+  queueSheetHandle: HTMLElement;
+  queueOverlay: HTMLElement;
+  queueList: HTMLElement;
+  queueEmpty: HTMLElement;
+  queueCount: HTMLElement;
+  queueClearBtn: HTMLElement;
+  nextArticleRow: HTMLElement;
+  nextArticleTitle: HTMLElement;
+  addQueueSnackbar: HTMLElement;
+  snackbarTitle: HTMLElement;
+  playNowBtn: HTMLElement;
+  addQueueBtn: HTMLElement;
+  autoAdvanceToast: HTMLElement;
+  advanceText: HTMLElement;
+  advanceSkipBtn: HTMLElement;
+  advanceCancelBtn: HTMLElement;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -97,5 +117,25 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     speedBtns: root.querySelectorAll<HTMLButtonElement>('#speed-selector .segment-btn'),
     themeBtns: root.querySelectorAll<HTMLButtonElement>('#theme-selector .segment-btn'),
     settingsLangBtns: root.querySelectorAll<HTMLButtonElement>('#settings-lang-selector .segment-btn'),
+    // Queue
+    queueBtn: requireElement('queue-btn', root),
+    queueBadge: requireElement('queue-badge', root),
+    queueSheet: requireElement('queue-sheet', root),
+    queueSheetHandle: requireElement('queue-sheet-handle', root),
+    queueOverlay: requireElement('queue-overlay', root),
+    queueList: requireElement('queue-list', root),
+    queueEmpty: requireElement('queue-empty', root),
+    queueCount: requireElement('queue-count', root),
+    queueClearBtn: requireElement('queue-clear-btn', root),
+    nextArticleRow: requireElement('next-article-row', root),
+    nextArticleTitle: requireElement('next-article-title', root),
+    addQueueSnackbar: requireElement('add-queue-snackbar', root),
+    snackbarTitle: requireElement('snackbar-title', root),
+    playNowBtn: requireElement('play-now-btn', root),
+    addQueueBtn: requireElement('add-queue-btn', root),
+    autoAdvanceToast: requireElement('auto-advance-toast', root),
+    advanceText: requireElement('advance-text', root),
+    advanceSkipBtn: requireElement('advance-skip-btn', root),
+    advanceCancelBtn: requireElement('advance-cancel-btn', root),
   };
 }

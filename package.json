@@ -1,16 +1,18 @@
 {
-  "name": "article-voice",
+  "name": "article-local-reader",
   "version": "1.0.0",
-  "description": "PWA that turns any article into audio using on-device TTS",
+  "description": "PWA that reads any article aloud using on-device TTS",
   "private": true,
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate-icons": "node scripts/generate-icons.mjs"
   },
   "devDependencies": {
     "jsdom": "^28.1.0",
+    "sharp": "^0.34.5",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }

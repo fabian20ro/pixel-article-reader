@@ -1,7 +1,7 @@
 {
-  "name": "ArticleVoice",
-  "short_name": "ArticleVoice",
-  "description": "Listen to any article",
+  "name": "Article Local Reader",
+  "short_name": "Article Reader",
+  "description": "Read any article aloud",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

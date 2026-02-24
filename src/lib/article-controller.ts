@@ -140,6 +140,11 @@ export class ArticleController {
     return this.currentArticle;
   }
 
+  /** Public entry point for queue-driven article loading. */
+  async loadArticleFromUrl(url: string): Promise<void> {
+    await this.loadArticle(url);
+  }
+
   private handleUrlSubmit(): void {
     const raw = this.options.refs.urlInput.value.trim();
     if (!raw) return;

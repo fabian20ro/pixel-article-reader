@@ -1,5 +1,5 @@
 /*
- * Minimal marked-compatible adapter used by ArticleVoice.
+ * Minimal marked-compatible adapter used by Article Local Reader.
  * Exposes `window.marked.parse(markdown)`.
  */
 (function (global) {
