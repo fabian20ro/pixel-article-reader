@@ -630,4 +630,31 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-24] Audio-based TTS for background playback + resource leak fixes
+
+**Context:** Audio stopped when the installed PWA went to background (lock screen, switch apps). User saw the media notification with progress bar but heard nothing. Previous watchdog-based fixes (retrying `speechSynthesis.speak()` every 3s) created an infinite battery-draining loop without producing any audio.
+
+**What happened:**
+- **Root cause identified:** `speechSynthesis` is fundamentally blocked by Chrome on Android when the renderer is hidden. The silent `<audio>` track keeps the page alive (JS runs), but Chrome's speech synthesis bridge is suspended. No amount of retrying fixes this — it's a platform limitation.
+- **Solution: Audio-based TTS.** Added `?action=tts&text=...&lang=...` endpoint to the Cloudflare Worker, proxying to Google Translate TTS (`translate.googleapis.com/translate_tts?client=gtx`). Returns MP3 audio. Client fetches per-sentence audio and plays through an `<audio>` element — which is proven to work in background.
+- **New module `src/lib/tts-audio-fetcher.ts`:** Stateless fetcher: `fetchTtsAudio(text, lang, config) → blobUrl | null`. 10s timeout, includes proxy secret.
+- **Rewrote `src/lib/tts-engine.ts`:** Primary path fetches audio via worker and plays through `<audio>` element. Falls back to `speechSynthesis` when audio fetch fails (offline, rate limited). Pre-fetches next 2 sentences while current plays. Uses `audio.playbackRate` for speed control.
+- **Removed infinite TTS watchdog loop** — the main battery drain culprit. Replaced with dead-man's switch: auto-stops after 30s of no audible progress.
+- **Resource leak fixes (from security audit):**
+  - Named `visibilitychange` listeners in both `TTSEngine` and `MediaSessionController` for proper removal in `dispose()`.
+  - Added `TTSEngine.dispose()` method: removes listeners, clears audio cache, removes audio element.
+  - Blob URL cleanup: revoked on audio end, cache cleared on stop/loadArticle.
+  - Wake lock race condition fix: releases sentinel if stopped while awaiting request.
+  - Added `clearResumeTimer()` call in `handleEnd()`.
+  - Added `pagehide` cleanup in `app.ts` calling `tts.dispose()` and `updateManager.dispose()`.
+- Updated test helper to pass new `TTSConfig` constructor shape. All 219 tests pass.
+
+**Outcome:** Success. Audio-based TTS uses the `<audio>` element which survives Android backgrounding. Dead-man's switch prevents battery drain. Resource leaks fixed.
+
+**Insight:** On Android Chrome, `speechSynthesis` will NEVER work in background — the browser explicitly suspends the speech synthesis bridge for backgrounded pages, regardless of silent audio tricks or watchdog retries. The only path to background TTS is to play actual audio data through an `<audio>` element. Google Translate's undocumented TTS endpoint (`translate.googleapis.com/translate_tts?client=gtx`) works well for this: returns MP3, supports ~200 char text, works through a Cloudflare Worker proxy.
+
+**Promoted to Lessons Learned:** Yes — audio-based TTS as the only viable approach for background speech on Android Chrome.
+
+---
+
 <!-- New entries go above this line, most recent first -->

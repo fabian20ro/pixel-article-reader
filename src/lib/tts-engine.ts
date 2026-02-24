@@ -1,16 +1,19 @@
 /**
- * TTS Engine — Web Speech API wrapper with robust Android chunking.
+ * TTS Engine — audio-based TTS via Cloudflare Worker, speechSynthesis fallback.
  *
  * Key design decisions:
- *  - Each *sentence* becomes one SpeechSynthesisUtterance to avoid the
- *    15-second cutoff bug on Chrome/Android.
- *  - Sentences are enqueued one at a time via the `onend` callback chain.
- *  - Pause/resume has a fallback: if resume fails, we cancel and re-create
- *    from the same position.
+ *  - Primary: fetch MP3 audio per sentence from Worker (?action=tts) and play
+ *    through an <audio> element.  Audio elements survive Android backgrounding.
+ *  - Fallback: Web Speech API speechSynthesis (foreground-only, used when
+ *    audio fetch fails).
+ *  - Each sentence becomes one audio fetch / utterance to keep chunks short.
+ *  - Pre-fetches next 2 sentences while current one plays.
+ *  - Dead-man's switch auto-stops after 30 s of no audible progress.
  */
 
 import type { Language } from './lang-detect.js';
 import { MediaSessionController } from './media-session.js';
+import { fetchTtsAudio, type TtsAudioFetcherConfig } from './tts-audio-fetcher.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -30,24 +33,17 @@ export interface TTSCallbacks {
   onError?: (error: string) => void;
 }
 
+export interface TTSConfig {
+  proxyBase: string;
+  proxySecret: string;
+  callbacks?: TTSCallbacks;
+}
+
 // ── Sentence splitting ────────────────────────────────────────────────
 
-/**
- * Minimum character length for a sentence to stand alone as its own
- * utterance.  Fragments shorter than this (e.g. "Ilene S.", "Ph.", "D.")
- * are merged with the next fragment so that names and abbreviations don't
- * produce tiny utterances with unnatural pauses between them.
- */
 const MIN_SENTENCE_LENGTH = 40;
-
-/**
- * After merging short fragments we still want to stay well under the
- * ~15-second Android cutoff.  At normal speaking rate (~150 wpm) 15 s ≈
- * 37 words ≈ 200 chars.  This cap prevents over-merging.
- */
 const MAX_UTTERANCE_LENGTH = 200;
 
-/** Merge short fragments so abbreviations / names aren't separate utterances. */
 function mergeShortSentences(sentences: string[]): string[] {
   if (sentences.length <= 1) return sentences;
 
@@ -71,28 +67,23 @@ function mergeShortSentences(sentences: string[]): string[] {
   return merged;
 }
 
-/** Split text into sentences, then merge short fragments back together. */
 export function splitSentences(text: string): string[] {
-  // Split on sentence-ending punctuation followed by whitespace or end-of-string.
-  // Keep the punctuation with the sentence.
   const raw = text.match(/[^.!?]*[.!?]+[\s]?|[^.!?]+$/g);
   if (!raw) return [text];
   const pieces = raw.map((s) => s.trim()).filter((s) => s.length > 0);
   return mergeShortSentences(pieces);
 }
 
-// ── Voice helpers ─────────────────────────────────────────────────────
+// ── Voice helpers (kept for speechSynthesis fallback + voice UI) ──────
 
 function langToCode(lang: Language): string {
   return lang === 'ro' ? 'ro' : 'en';
 }
 
-/** BCP 47 prefix match: 'en' matches 'en', 'en-US', 'en-GB' but not 'enx'. */
 function langMatches(voiceLang: string, prefix: string): boolean {
   return voiceLang === prefix || voiceLang.startsWith(prefix + '-');
 }
 
-/** Wait for voices to be loaded (handles the async voiceschanged event). */
 export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     const voices = speechSynthesis.getVoices();
@@ -105,7 +96,6 @@ export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
       resolve(speechSynthesis.getVoices());
     };
     speechSynthesis.addEventListener('voiceschanged', onVoices);
-    // Timeout fallback
     setTimeout(() => {
       speechSynthesis.removeEventListener('voiceschanged', onVoices);
       resolve(speechSynthesis.getVoices());
@@ -113,7 +103,6 @@ export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
   });
 }
 
-/** Pick the best voice for a language, preferring enhanced/premium voices. */
 export function selectVoice(
   voices: SpeechSynthesisVoice[],
   lang: Language,
@@ -126,28 +115,16 @@ export function selectVoice(
     if (match) return match;
   }
   const matching = voices.filter((v) => langMatches(v.lang, code));
-
-  // Prefer enhanced/premium voices (Google on Android, "Enhanced"/"Premium" on iOS/Samsung)
   const enhanced = matching.filter((v) => /google|enhanced|premium/i.test(v.name));
   if (enhanced.length > 0) return enhanced[0];
-
-  // Any voice for the language
   if (matching.length > 0) return matching[0];
-
-  // Absolute fallback
   return null;
 }
 
 // ── Timeline estimation ───────────────────────────────────────────────
 
-/**
- * Approximate characters-per-second at 1× speech rate.
- * ~150 wpm × 5 chars/word ÷ 60 s ≈ 12.5.  We use 14 to account for
- * pauses between utterances being shorter than natural speech pauses.
- */
 const CHARS_PER_SEC_AT_1X = 14;
 
-/** Compute estimated duration and current position for setPositionState. */
 export function computeTimeline(
   paragraphs: string[][],
   paraIdx: number,
@@ -174,10 +151,16 @@ export function computeTimeline(
   };
 }
 
+// ── Dead-man's switch ─────────────────────────────────────────────────
+
+/** Auto-stop if no audible progress for this many milliseconds. */
+const DEAD_MAN_TIMEOUT_MS = 30_000;
+const DEAD_MAN_CHECK_MS = 5_000;
+
 // ── TTSEngine ─────────────────────────────────────────────────────────
 
 export class TTSEngine {
-  private paragraphs: string[][] = []; // paragraphs → sentences
+  private paragraphs: string[][] = [];
   private rawParagraphs: string[] = [];
   private lang: Language = 'en';
   private rate = 1.0;
@@ -206,20 +189,33 @@ export class TTSEngine {
   // Callbacks
   private cb: TTSCallbacks = {};
 
-  // Generation counter — incremented before every cancel() to invalidate
-  // stale onend callbacks (prevents double-advancement on skip).
+  // Generation counter — incremented before every cancel to invalidate stale callbacks.
   private _speakGen = 0;
 
-  // Resume watchdog
+  // Audio-based TTS
+  private audioConfig: TtsAudioFetcherConfig | null = null;
+  private ttsAudio: HTMLAudioElement | null = null;
+  private audioCache = new Map<string, Promise<string | null>>();
+
+  // Dead-man's switch: auto-stop if no progress for 30 s
+  private _lastProgressTime = 0;
+  private _deadManTimer: ReturnType<typeof setInterval> | null = null;
+
+  // speechSynthesis fallback resume watchdog
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Background TTS watchdog — periodically restarts speechSynthesis if it
-  // stalled while the page was hidden (Chrome Android may silently drop
-  // speak() calls made from a backgrounded page).
-  private ttsWatchdogTimer: ReturnType<typeof setInterval> | null = null;
+  // Named handler for cleanup
+  private readonly _onVisibilityChange: () => void;
 
-  constructor(callbacks?: TTSCallbacks) {
-    if (callbacks) this.cb = callbacks;
+  constructor(config: TTSConfig) {
+    if (config.callbacks) this.cb = config.callbacks;
+
+    if (config.proxyBase) {
+      this.audioConfig = {
+        proxyBase: config.proxyBase,
+        proxySecret: config.proxySecret,
+      };
+    }
 
     this.mediaSession.setActions({
       play: () => this.play(),
@@ -232,19 +228,13 @@ export class TTSEngine {
       seekto: (seconds) => this.seekToTime(seconds),
     });
 
-    // Handle visibility change — re-acquire wake lock (released automatically
-    // when page becomes hidden per W3C spec) and resume TTS if it was killed.
-    document.addEventListener('visibilitychange', () => {
+    this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
         this.acquireWakeLock();
-        // Re-ensure silent audio is still playing (Android may have paused it)
         this.mediaSession.notifyResume();
-        // If synth stopped while we were in background, restart from current pos
-        if (!speechSynthesis.speaking && !speechSynthesis.pending) {
-          this.speakCurrent();
-        }
       }
-    });
+    };
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   // ── Public API ────────────────────────────────────────────────────
@@ -259,6 +249,7 @@ export class TTSEngine {
 
   loadArticle(paragraphs: string[], lang: Language, title?: string): void {
     this.stop();
+    this.clearAudioCache();
     this.rawParagraphs = paragraphs;
     this.paragraphs = paragraphs.map((p) => splitSentences(p));
     this.lang = lang;
@@ -280,9 +271,11 @@ export class TTSEngine {
     this._isPlaying = true;
     this._isPaused = false;
     this._stopped = false;
+    this._lastProgressTime = Date.now();
     this.acquireWakeLock();
     this.mediaSession.activate(this.articleTitle);
-    this.startTtsWatchdog();
+    this.ensureTtsAudio();
+    this.startDeadManSwitch();
     this.speakCurrent();
     this.emitState();
   }
@@ -290,8 +283,13 @@ export class TTSEngine {
   pause(): void {
     if (!this._isPlaying) return;
     this._isPaused = true;
-    this.stopTtsWatchdog();
-    speechSynthesis.pause();
+    this.stopDeadManSwitch();
+
+    if (this.ttsAudio && !this.ttsAudio.paused && this.ttsAudio.src) {
+      this.ttsAudio.pause();
+    } else {
+      speechSynthesis.pause();
+    }
     this.mediaSession.notifyPause();
     this.emitState();
   }
@@ -299,21 +297,24 @@ export class TTSEngine {
   resume(): void {
     if (!this._isPaused) return;
     this._isPaused = false;
-    this.startTtsWatchdog();
+    this._lastProgressTime = Date.now();
+    this.startDeadManSwitch();
 
-    // Try native resume
-    speechSynthesis.resume();
-    this.mediaSession.notifyResume();
-
-    // Watchdog: if still paused after 500 ms, cancel and re-speak
-    this.clearResumeTimer();
-    this.resumeTimer = setTimeout(() => {
-      if (speechSynthesis.paused || (!speechSynthesis.speaking && !speechSynthesis.pending)) {
-        speechSynthesis.cancel();
-        this.speakCurrent();
-      }
-    }, 500);
-
+    if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused && this.ttsAudio.currentTime > 0) {
+      Promise.resolve(this.ttsAudio.play()).catch(() => {});
+      this.mediaSession.notifyResume();
+    } else {
+      // speechSynthesis fallback resume
+      speechSynthesis.resume();
+      this.mediaSession.notifyResume();
+      this.clearResumeTimer();
+      this.resumeTimer = setTimeout(() => {
+        if (speechSynthesis.paused || (!speechSynthesis.speaking && !speechSynthesis.pending)) {
+          speechSynthesis.cancel();
+          this.speakCurrent();
+        }
+      }, 500);
+    }
     this.emitState();
   }
 
@@ -322,8 +323,9 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = true;
     this.clearResumeTimer();
-    this.stopTtsWatchdog();
+    this.stopDeadManSwitch();
     this._speakGen++;
+    this.cancelCurrentAudio();
     speechSynthesis.cancel();
     this.releaseWakeLock();
     this.mediaSession.deactivate();
@@ -335,6 +337,7 @@ export class TTSEngine {
   skipForward(): void {
     if (this.paraIdx >= this.paragraphs.length - 1) return;
     this._speakGen++;
+    this.cancelCurrentAudio();
     speechSynthesis.cancel();
     this.paraIdx++;
     this.sentIdx = 0;
@@ -348,6 +351,7 @@ export class TTSEngine {
   skipBackward(): void {
     if (this.paraIdx <= 0) return;
     this._speakGen++;
+    this.cancelCurrentAudio();
     speechSynthesis.cancel();
     this.paraIdx--;
     this.sentIdx = 0;
@@ -362,19 +366,19 @@ export class TTSEngine {
     if (this.paragraphs.length === 0) return;
     const sentences = this.paragraphs[this.paraIdx];
     if (this.sentIdx < sentences.length - 1) {
-      // Move to next sentence within current paragraph
       this._speakGen++;
+      this.cancelCurrentAudio();
       speechSynthesis.cancel();
       this.sentIdx++;
     } else if (this.paraIdx < this.paragraphs.length - 1) {
-      // Move to first sentence of next paragraph
       this._speakGen++;
+      this.cancelCurrentAudio();
       speechSynthesis.cancel();
       this.paraIdx++;
       this.sentIdx = 0;
       this.emitParagraphChange();
     } else {
-      return; // Already at last sentence of last paragraph
+      return;
     }
     if (this._isPlaying && !this._isPaused) {
       this.speakCurrent();
@@ -385,19 +389,19 @@ export class TTSEngine {
   skipSentenceBackward(): void {
     if (this.paragraphs.length === 0) return;
     if (this.sentIdx > 0) {
-      // Move to previous sentence within current paragraph
       this._speakGen++;
+      this.cancelCurrentAudio();
       speechSynthesis.cancel();
       this.sentIdx--;
     } else if (this.paraIdx > 0) {
-      // Move to last sentence of previous paragraph
       this._speakGen++;
+      this.cancelCurrentAudio();
       speechSynthesis.cancel();
       this.paraIdx--;
       this.sentIdx = this.paragraphs[this.paraIdx].length - 1;
       this.emitParagraphChange();
     } else {
-      return; // Already at first sentence of first paragraph
+      return;
     }
     if (this._isPlaying && !this._isPaused) {
       this.speakCurrent();
@@ -405,11 +409,6 @@ export class TTSEngine {
     this.emitState();
   }
 
-  /**
-   * Seek to an estimated time position (in seconds).  Reverse-maps the
-   * character-count timeline to find the paragraph/sentence closest to
-   * the requested time, then jumps there.
-   */
   seekToTime(seconds: number): void {
     if (this.paragraphs.length === 0) return;
     const targetChars = seconds * CHARS_PER_SEC_AT_1X * this.rate;
@@ -420,6 +419,7 @@ export class TTSEngine {
         accumulated += this.paragraphs[p][s].length;
         if (accumulated >= targetChars) {
           this._speakGen++;
+          this.cancelCurrentAudio();
           speechSynthesis.cancel();
           this.paraIdx = p;
           this.sentIdx = s;
@@ -432,13 +432,13 @@ export class TTSEngine {
         }
       }
     }
-    // Past the end — jump to last paragraph
     this.jumpToParagraph(this.paragraphs.length - 1);
   }
 
   jumpToParagraph(index: number): void {
     if (index < 0 || index >= this.paragraphs.length) return;
     this._speakGen++;
+    this.cancelCurrentAudio();
     speechSynthesis.cancel();
     this.paraIdx = index;
     this.sentIdx = 0;
@@ -451,6 +451,9 @@ export class TTSEngine {
 
   setRate(rate: number): void {
     this.rate = Math.max(0.5, Math.min(3.0, rate));
+    if (this.ttsAudio) {
+      this.ttsAudio.playbackRate = this.rate;
+    }
   }
 
   setVoice(name: string): void {
@@ -480,7 +483,76 @@ export class TTSEngine {
     };
   }
 
-  // ── Internal ──────────────────────────────────────────────────────
+  /** Clean up all resources. Call on page unload. */
+  dispose(): void {
+    this.stop();
+    this.clearAudioCache();
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+    if (this.ttsAudio) {
+      this.ttsAudio.remove();
+      this.ttsAudio = null;
+    }
+    this.mediaSession.dispose();
+  }
+
+  // ── Internal: Audio-based TTS ───────────────────────────────────
+
+  private ensureTtsAudio(): void {
+    if (this.ttsAudio) return;
+    this.ttsAudio = document.createElement('audio');
+    this.ttsAudio.setAttribute('playsinline', '');
+    document.body.appendChild(this.ttsAudio);
+  }
+
+  private cancelCurrentAudio(): void {
+    if (this.ttsAudio) {
+      this.ttsAudio.onended = null;
+      this.ttsAudio.onerror = null;
+      this.ttsAudio.pause();
+      this.ttsAudio.removeAttribute('src');
+      this.ttsAudio.load();
+    }
+  }
+
+  private fetchSentenceAudio(text: string): Promise<string | null> {
+    if (!this.audioConfig) return Promise.resolve(null);
+    const key = `${this.lang}:${text}`;
+    const cached = this.audioCache.get(key);
+    if (cached) return cached;
+    const promise = fetchTtsAudio(text, langToCode(this.lang), this.audioConfig);
+    this.audioCache.set(key, promise);
+    return promise;
+  }
+
+  private prefetchUpcoming(): void {
+    if (!this.audioConfig) return;
+    let p = this.paraIdx;
+    let s = this.sentIdx + 1;
+    let count = 0;
+
+    while (count < 2 && p < this.paragraphs.length) {
+      if (s >= this.paragraphs[p].length) {
+        p++;
+        s = 0;
+        continue;
+      }
+      const text = this.paragraphs[p][s];
+      this.fetchSentenceAudio(text); // fire-and-forget, caches the promise
+      s++;
+      count++;
+    }
+  }
+
+  private clearAudioCache(): void {
+    for (const p of this.audioCache.values()) {
+      p.then((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+    }
+    this.audioCache.clear();
+  }
+
+  // ── Internal: speak orchestrator ────────────────────────────────
 
   private speakCurrent(): void {
     if (this._stopped) return;
@@ -491,7 +563,6 @@ export class TTSEngine {
 
     const sentences = this.paragraphs[this.paraIdx];
     if (this.sentIdx >= sentences.length) {
-      // Move to next paragraph
       this.paraIdx++;
       this.sentIdx = 0;
       if (this.paraIdx >= this.paragraphs.length) {
@@ -504,40 +575,102 @@ export class TTSEngine {
     }
 
     const text = sentences[this.sentIdx];
+
+    if (this.sentIdx === 0) {
+      this.emitParagraphChange();
+    }
+
+    // Pre-fetch upcoming sentences
+    this.prefetchUpcoming();
+
+    // Try audio-based TTS first (works in background)
+    if (this.audioConfig) {
+      const gen = this._speakGen;
+      this.fetchSentenceAudio(text).then((audioUrl) => {
+        if (gen !== this._speakGen || this._stopped) {
+          if (audioUrl) URL.revokeObjectURL(audioUrl);
+          return;
+        }
+        if (audioUrl) {
+          this.playTtsAudio(audioUrl, gen);
+        } else {
+          // Audio fetch failed — fall back to speechSynthesis
+          this.speakViaSpeechSynthesis(text, gen);
+        }
+      });
+      this.emitProgress();
+      return;
+    }
+
+    // No audio config — use speechSynthesis directly
+    const gen = this._speakGen;
+    this.speakViaSpeechSynthesis(text, gen);
+    this.emitProgress();
+  }
+
+  private playTtsAudio(url: string, gen: number): void {
+    this.ensureTtsAudio();
+    if (!this.ttsAudio) return;
+
+    this.ttsAudio.src = url;
+    this.ttsAudio.playbackRate = this.rate;
+
+    this.ttsAudio.onended = () => {
+      URL.revokeObjectURL(url);
+      if (this._stopped || gen !== this._speakGen) return;
+      this._lastProgressTime = Date.now();
+      this.sentIdx++;
+      this.emitProgress();
+      this.speakCurrent();
+    };
+
+    this.ttsAudio.onerror = () => {
+      URL.revokeObjectURL(url);
+      if (this._stopped || gen !== this._speakGen) return;
+      // Fall back to speechSynthesis for this sentence
+      const text = this.paragraphs[this.paraIdx]?.[this.sentIdx];
+      if (text) this.speakViaSpeechSynthesis(text, gen);
+    };
+
+    Promise.resolve(this.ttsAudio.play()).catch(() => {
+      URL.revokeObjectURL(url);
+      if (this._stopped || gen !== this._speakGen) return;
+      const text = this.paragraphs[this.paraIdx]?.[this.sentIdx];
+      if (text) this.speakViaSpeechSynthesis(text, gen);
+    });
+  }
+
+  private speakViaSpeechSynthesis(text: string, gen: number): void {
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = this.rate;
     utter.pitch = this.pitch;
     utter.lang = langToCode(this.lang);
     if (this.voice) utter.voice = this.voice;
 
-    const gen = this._speakGen;
     utter.onend = () => {
       if (this._stopped || gen !== this._speakGen) return;
+      this._lastProgressTime = Date.now();
       this.sentIdx++;
       this.emitProgress();
       this.speakCurrent();
     };
 
     utter.onerror = (ev) => {
-      // 'interrupted' and 'canceled' are normal during skip/stop
       if (ev.error === 'interrupted' || ev.error === 'canceled') return;
       this.cb.onError?.(`TTS error: ${ev.error}`);
     };
 
-    // Emit paragraph change on first sentence of each paragraph
-    if (this.sentIdx === 0) {
-      this.emitParagraphChange();
-    }
-
     speechSynthesis.speak(utter);
-    this.emitProgress();
   }
+
+  // ── Internal: lifecycle ─────────────────────────────────────────
 
   private handleEnd(): void {
     this._isPlaying = false;
     this._isPaused = false;
     this._stopped = true;
-    this.stopTtsWatchdog();
+    this.clearResumeTimer();
+    this.stopDeadManSwitch();
     this.releaseWakeLock();
     this.mediaSession.deactivate();
     this.emitState();
@@ -553,7 +686,6 @@ export class TTSEngine {
     this.updateMediaPositionState();
   }
 
-  /** Push the estimated timeline position to the OS notification seekbar. */
   private updateMediaPositionState(): void {
     if (this.paragraphs.length === 0) return;
     const { duration, position } = computeTimeline(
@@ -578,27 +710,24 @@ export class TTSEngine {
     }
   }
 
-  /**
-   * Start a periodic watchdog (every 3 s) that restarts the utterance chain
-   * if speechSynthesis has silently stalled.  Chrome on Android may drop
-   * speak() calls made while the page is hidden; this detects the stall and
-   * re-invokes speakCurrent() from the same position.
-   */
-  private startTtsWatchdog(): void {
-    this.stopTtsWatchdog();
-    this.ttsWatchdogTimer = setInterval(() => {
-      if (this._isPlaying && !this._isPaused && !this._stopped) {
-        if (!speechSynthesis.speaking && !speechSynthesis.pending) {
-          this.speakCurrent();
-        }
+  // ── Dead-man's switch ───────────────────────────────────────────
+
+  private startDeadManSwitch(): void {
+    this.stopDeadManSwitch();
+    this._lastProgressTime = Date.now();
+    this._deadManTimer = setInterval(() => {
+      if (!this._isPlaying || this._isPaused || this._stopped) return;
+      if (Date.now() - this._lastProgressTime > DEAD_MAN_TIMEOUT_MS) {
+        this.cb.onError?.('Playback stalled — auto-stopping to save battery.');
+        this.stop();
       }
-    }, 3000);
+    }, DEAD_MAN_CHECK_MS);
   }
 
-  private stopTtsWatchdog(): void {
-    if (this.ttsWatchdogTimer !== null) {
-      clearInterval(this.ttsWatchdogTimer);
-      this.ttsWatchdogTimer = null;
+  private stopDeadManSwitch(): void {
+    if (this._deadManTimer !== null) {
+      clearInterval(this._deadManTimer);
+      this._deadManTimer = null;
     }
   }
 
@@ -608,7 +737,13 @@ export class TTSEngine {
     if (!this.useWakeLock) return;
     if (!('wakeLock' in navigator)) return;
     try {
-      this.wakeLock = await navigator.wakeLock.request('screen');
+      const sentinel = await navigator.wakeLock.request('screen');
+      // Guard: if stopped while awaiting, release immediately
+      if (this._stopped) {
+        sentinel.release().catch(() => {});
+      } else {
+        this.wakeLock = sentinel;
+      }
     } catch {
       // Wake Lock request can fail (e.g., low battery mode)
     }

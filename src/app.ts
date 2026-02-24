@@ -30,26 +30,30 @@ async function main(): Promise<void> {
   let updateManager: PwaUpdateManager | null = null;
 
   const tts = new TTSEngine({
-    onStateChange(state) {
-      updatePlayButton(state.isPlaying, state.isPaused);
-      if (updateManager && (!state.isPlaying || state.isPaused)) {
-        updateManager.applyDeferredReloadIfIdle();
-      }
-    },
-    onProgress(current, total) {
-      updateProgress(current, total);
-    },
-    onParagraphChange(index) {
-      highlightParagraph(index);
-    },
-    onEnd() {
-      updatePlayButton(false, false);
-      highlightParagraph(-1);
-      updateManager?.applyDeferredReloadIfIdle();
-    },
-    onError(msg) {
-      refs.errorMessage.textContent = msg;
-      refs.errorSection.classList.remove('hidden');
+    proxyBase: CONFIG.PROXY_BASE,
+    proxySecret: CONFIG.PROXY_SECRET,
+    callbacks: {
+      onStateChange(state) {
+        updatePlayButton(state.isPlaying, state.isPaused);
+        if (updateManager && (!state.isPlaying || state.isPaused)) {
+          updateManager.applyDeferredReloadIfIdle();
+        }
+      },
+      onProgress(current, total) {
+        updateProgress(current, total);
+      },
+      onParagraphChange(index) {
+        highlightParagraph(index);
+      },
+      onEnd() {
+        updatePlayButton(false, false);
+        highlightParagraph(-1);
+        updateManager?.applyDeferredReloadIfIdle();
+      },
+      onError(msg) {
+        refs.errorMessage.textContent = msg;
+        refs.errorSection.classList.remove('hidden');
+      },
     },
   });
 
@@ -234,6 +238,12 @@ async function main(): Promise<void> {
     const ratio = (e.clientX - rect.left) / rect.width;
     const idx = Math.max(0, Math.min(total - 1, Math.floor(ratio * total)));
     tts.jumpToParagraph(idx);
+  });
+
+  // Clean up resources on page teardown (prevents battery drain on Android)
+  window.addEventListener('pagehide', () => {
+    tts.dispose();
+    updateManager?.dispose();
   });
 
   await articleController.handleInitialSharedUrl();

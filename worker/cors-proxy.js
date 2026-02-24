@@ -12,6 +12,7 @@
  *        Body: { text: string, from: string, to: string }
  *   GET  /?action=translate&text=...&from=...&to=...
  *                                           — Translate fallback for GET-only clients/proxies
+ *   GET  /?action=tts&text=...&lang=en      — Fetch TTS audio via Google Translate TTS
  *
  * Environment bindings (set in wrangler.toml or via `wrangler secret put`):
  *   ALLOWED_ORIGIN  — GitHub Pages origin (e.g. "https://user.github.io")
@@ -21,6 +22,7 @@
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 const MAX_TRANSLATE_CHARS = 5000;
+const MAX_TTS_CHARS = 200;
 const FETCH_TIMEOUT_MS = 10_000;
 
 // Rate limiting: 20 requests per 60-second sliding window per IP
@@ -82,8 +84,12 @@ export default {
     context.rateCheck = rateCheck;
 
     const requestUrl = new URL(request.url);
-    if (requestUrl.searchParams.get('action') === 'translate') {
+    const action = requestUrl.searchParams.get('action');
+    if (action === 'translate') {
       return routeTranslate(request, requestUrl, context);
+    }
+    if (action === 'tts') {
+      return routeTts(requestUrl, context);
     }
 
     if (request.method !== 'GET') {
@@ -142,6 +148,50 @@ async function routeTranslate(request, requestUrl, context) {
   }
 
   return errorResponse(405, 'Translate endpoint supports GET or POST only.', context.allowedOrigin);
+}
+
+async function routeTts(requestUrl, context) {
+  const text = requestUrl.searchParams.get('text');
+  const lang = requestUrl.searchParams.get('lang') || 'en';
+
+  if (!text || typeof text !== 'string') {
+    return errorResponse(400, 'Missing "text" parameter.', context.allowedOrigin);
+  }
+  if (text.length > MAX_TTS_CHARS) {
+    return errorResponse(400, `Text too long (${text.length} chars, max ${MAX_TTS_CHARS}).`, context.allowedOrigin);
+  }
+  if (!LANG_CODE_RE.test(lang)) {
+    return errorResponse(400, `Invalid language code: "${lang}".`, context.allowedOrigin);
+  }
+
+  const ttsUrl =
+    `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8` +
+    `&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+
+  let resp;
+  try {
+    resp = await fetchWithTimeout(ttsUrl, {
+      headers: { 'User-Agent': USER_AGENT },
+    });
+  } catch (err) {
+    if (isAbortError(err)) {
+      return errorResponse(504, 'TTS request timed out.', context.allowedOrigin);
+    }
+    return errorResponse(502, `TTS fetch failed: ${getErrorMessage(err)}`, context.allowedOrigin);
+  }
+
+  if (!resp.ok) {
+    return errorResponse(502, `TTS API returned ${resp.status}.`, context.allowedOrigin);
+  }
+
+  const audioBody = resp.body;
+  return new Response(audioBody, {
+    status: 200,
+    headers: successHeaders(context, {
+      'Content-Type': resp.headers.get('content-type') || 'audio/mpeg',
+      'Cache-Control': 'public, max-age=86400',
+    }),
+  });
 }
 
 async function routeArticleFetch(requestUrl, context) {
