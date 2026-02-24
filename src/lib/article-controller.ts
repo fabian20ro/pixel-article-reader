@@ -5,6 +5,8 @@ import {
   createArticleFromText,
   createArticleFromTextFile,
   createArticleFromPdf,
+  createArticleFromMarkdownFile,
+  createArticleFromEpub,
   type Article,
 } from './extractor.js';
 import { needsTranslation, getSourceLang, type Language } from './lang-detect.js';
@@ -179,12 +181,24 @@ export class ArticleController {
 
       if (ext === 'pdf') {
         this.options.refs.loadingMessage.textContent = 'Processing PDF...';
-        article = await createArticleFromPdf(file);
+        article = await createArticleFromPdf(
+          file,
+          (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+        );
       } else if (ext === 'txt' || ext === 'text') {
         this.options.refs.loadingMessage.textContent = 'Processing text file...';
         article = await createArticleFromTextFile(file);
+      } else if (ext === 'md' || ext === 'markdown') {
+        this.options.refs.loadingMessage.textContent = 'Processing markdown...';
+        article = await createArticleFromMarkdownFile(file);
+      } else if (ext === 'epub') {
+        this.options.refs.loadingMessage.textContent = 'Processing EPUB...';
+        article = await createArticleFromEpub(
+          file,
+          (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+        );
       } else {
-        throw new Error(`Unsupported file type: .${ext}. Use PDF or TXT files.`);
+        throw new Error(`Unsupported file type: .${ext}. Supported: PDF, TXT, Markdown, EPUB.`);
       }
 
       this.currentArticle = article;
@@ -202,7 +216,12 @@ export class ArticleController {
     this.options.tts.stop();
 
     try {
-      const article = await extractArticle(url, this.options.proxyBase, this.options.proxySecret);
+      const article = await extractArticle(
+        url,
+        this.options.proxyBase,
+        this.options.proxySecret,
+        (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+      );
       this.currentArticle = article;
       this.currentArticleUrl = article.resolvedUrl;
       this.displayArticle(article);

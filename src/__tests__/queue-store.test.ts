@@ -4,6 +4,7 @@ import {
   saveQueue,
   addToQueue,
   removeFromQueue,
+  reorderQueue,
   clearQueue,
   createQueueItem,
   type QueueItem,
@@ -191,6 +192,29 @@ describe('queue-store', () => {
       const article = makeArticle({ siteName: '<img onerror="x" src="y">Site' });
       const item = createQueueItem(article);
       expect(item.siteName).toBe('img onerror="x" src="y"Site');
+    });
+  });
+
+  describe('reorderQueue', () => {
+    it('persists the new order to localStorage', () => {
+      const a = makeItem({ id: 'a', url: 'https://a.com/1' });
+      const b = makeItem({ id: 'b', url: 'https://b.com/2' });
+      const c = makeItem({ id: 'c', url: 'https://c.com/3' });
+
+      // Save initial order
+      saveQueue([a, b, c]);
+
+      // Reorder: c, a, b
+      const result = reorderQueue([c, a, b]);
+      expect(result[0].id).toBe('c');
+      expect(result[1].id).toBe('a');
+      expect(result[2].id).toBe('b');
+
+      // Verify persisted
+      const loaded = loadQueue();
+      expect(loaded[0].id).toBe('c');
+      expect(loaded[1].id).toBe('a');
+      expect(loaded[2].id).toBe('b');
     });
   });
 });

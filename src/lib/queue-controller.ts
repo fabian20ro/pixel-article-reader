@@ -111,6 +111,24 @@ export class QueueController {
     this.notify();
   }
 
+  /** Move an item up (toward index 0) in the queue. */
+  moveUp(id: string): void {
+    const idx = this.items.findIndex((i) => i.id === id);
+    if (idx <= 0) return;
+    const newOrder = [...this.items];
+    [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+    this.reorder(newOrder);
+  }
+
+  /** Move an item down (toward end) in the queue. */
+  moveDown(id: string): void {
+    const idx = this.items.findIndex((i) => i.id === id);
+    if (idx === -1 || idx >= this.items.length - 1) return;
+    const newOrder = [...this.items];
+    [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+    this.reorder(newOrder);
+  }
+
   /** Clear the entire queue. Stops playback. */
   clearAll(): void {
     this.tts.stop();

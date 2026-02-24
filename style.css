@@ -894,6 +894,47 @@ body {
   height: 36px;
 }
 
+/* Drag handle for queue reordering */
+.queue-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.queue-drag-handle:hover,
+.queue-drag-handle:active {
+  opacity: 0.8;
+}
+
+.queue-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Dragging state */
+.queue-item-dragging {
+  opacity: 0.9;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.queue-item-placeholder {
+  opacity: 0.3;
+}
+
+.queue-list.reordering {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* === Equalizer Bars (Now Playing) === */
 .eq-bars {
   display: flex;
