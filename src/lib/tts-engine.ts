@@ -84,7 +84,7 @@ function langMatches(voiceLang: string, prefix: string): boolean {
   return voiceLang === prefix || voiceLang.startsWith(prefix + '-');
 }
 
-export function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
+function waitForVoices(timeout = 3000): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     const voices = speechSynthesis.getVoices();
     if (voices.length > 0) {

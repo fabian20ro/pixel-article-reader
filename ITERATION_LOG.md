@@ -657,4 +657,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-24] Fix 6 logic bugs in queue system (PR review feedback)
+
+**Context:** devloai bot code review identified 6 logic bugs in the queue system (queue-controller, queue-store, app.ts).
+
+**What happened:**
+- **Fix 1 — Inverted dedup predicate** (`queue-store.ts:83`): `i.url !== item.url || !item.url` kept all items when URL was empty. Fixed to `!item.url || i.url !== item.url` — skip dedup for empty URLs.
+- **Fix 2 — Dead secondsLeft** (`queue-controller.ts:187-200`): `secondsLeft` computed once, never decremented. Since `AUTO_ADVANCE_DELAY_MS` is only 2s, removed the parameter entirely from the callback signature.
+- **Fix 3 — UUID-as-URL fallback** (`app.ts:91`): `syncCurrentByUrl(article.resolvedUrl || item.id)` passed UUID when URL absent. Added `syncCurrentById(id)` method and used it as fallback.
+- **Fix 4 — Accumulating transitionend listeners** (`app.ts:199-206, 129-137`): `hideSnackbar` and `closeQueueSheet` registered new listeners on every call. Added early return guards when already hiding/hidden.
+- **Fix 5 — Optimistic index mutation** (`queue-controller.ts:144-167`): `playNext`/`playPrevious` incremented index before async load. Refactored to commit index only on success, with error callback on failure.
+- **Fix 6 — File/paste articles dropped on reload** (`queue-store.ts:34`): `isValidQueueItem` required `isValidArticleUrl(url)`, rejecting empty URLs. Changed to `i.url === '' || isValidArticleUrl(i.url)`.
+
+**Outcome:** Success. All 235 tests pass, build clean.
+
+**Insight:** When persisting items that may or may not have a URL (file/paste vs fetched articles), URL validation must explicitly allow the empty case. Similarly, async operations that mutate shared state (like `currentIndex`) should follow a "compute → attempt → commit" pattern, not "commit → attempt → hope".
+
+**Promoted to Lessons Learned:** No — first occurrence.
+
+---
+
 <!-- New entries go above this line, most recent first -->

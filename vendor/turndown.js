@@ -1,5 +1,5 @@
 /*
- * Minimal Turndown-compatible adapter used by ArticleVoice.
+ * Minimal Turndown-compatible adapter used by Article Local Reader.
  * Exposes `window.TurndownService` with a `turndown(html)` method.
  */
 (function (global) {

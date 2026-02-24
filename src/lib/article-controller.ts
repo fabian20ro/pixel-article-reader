@@ -140,6 +140,11 @@ export class ArticleController {
     return this.currentArticle;
   }
 
+  /** Public entry point for queue-driven article loading. */
+  async loadArticleFromUrl(url: string): Promise<void> {
+    await this.loadArticle(url);
+  }
+
   private handleUrlSubmit(): void {
     const raw = this.options.refs.urlInput.value.trim();
     if (!raw) return;
@@ -332,8 +337,8 @@ export class ArticleController {
       // not an image viewer, so images add no value and produce visual noise.
       const cleaned = markdown
         .replace(/<img[^>]*\/?>/gi, '')                                        // raw HTML <img> tags (escapeHtml makes them literal text)
-        .replace(/!\[[^\]]*\]\((?:[^()]+|\([^()]*\))*\)/g, '')                 // ![alt](url) → remove (handles parens in URLs)
-        .replace(/\[Image\s*[:\d][^\]]*\]\((?:[^()]+|\([^()]*\))*\)/gi, '');  // [Image: ...](url) Jina format → remove
+        .replace(/!\[[^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/g, '')                 // ![alt](url) → remove (handles parens in URLs)
+        .replace(/\[Image\s*[:\d][^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/gi, '');  // [Image: ...](url) Jina format → remove
       const html = marked.parse(cleaned);
       return sanitizeRenderedHtml(String(html));
     } catch {

@@ -7,7 +7,7 @@
   <meta name="description" content="Listen to any article — paste a URL or share from your browser">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ArticleVoice</title>
+  <title>Article Local Reader</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -17,7 +17,7 @@
   <!-- Install Banner -->
   <div id="install-banner" class="install-banner hidden">
     <div class="install-banner-content">
-      <p>Install ArticleVoice to share articles directly from your browser.</p>
+      <p>Install Article Local Reader to share articles directly from your browser.</p>
       <div class="install-banner-actions">
         <button id="install-btn" class="btn btn-accent">Install</button>
         <button id="install-dismiss" class="btn btn-ghost">Maybe Later</button>
@@ -34,7 +34,18 @@
         <line x1="3" y1="18" x2="21" y2="18"></line>
       </svg>
     </button>
-    <h1 class="header-title">ArticleVoice</h1>
+    <h1 class="header-title">Article Local Reader</h1>
+    <button id="queue-btn" class="icon-btn queue-btn-wrap" aria-label="Queue">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6"></line>
+        <line x1="8" y1="12" x2="21" y2="12"></line>
+        <line x1="8" y1="18" x2="21" y2="18"></line>
+        <polygon points="3,6 5,7.5 3,9" fill="currentColor" stroke="none"></polygon>
+        <line x1="3" y1="12" x2="5" y2="12"></line>
+        <line x1="3" y1="18" x2="5" y2="18"></line>
+      </svg>
+      <span id="queue-badge" class="badge hidden">0</span>
+    </button>
   </header>
 
   <!-- Settings Drawer -->
@@ -191,7 +202,51 @@
         <button class="segment-btn" data-rate="2">2x</button>
       </div>
     </div>
+
+    <!-- Next article in queue -->
+    <div id="next-article-row" class="next-article-row hidden">
+      Next: <span id="next-article-title"></span>
+    </div>
   </footer>
+
+  <!-- Queue Bottom Sheet -->
+  <div id="queue-overlay" class="drawer-overlay hidden"></div>
+  <div id="queue-sheet" class="queue-sheet" role="dialog" aria-label="Article Queue" aria-modal="true">
+    <div class="queue-sheet-handle" id="queue-sheet-handle">
+      <div class="handle-bar"></div>
+      <span class="queue-sheet-title">Queue (<span id="queue-count">0</span>)</span>
+      <button id="queue-clear-btn" class="icon-btn" aria-label="Clear queue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14H6L5 6"></path>
+          <path d="M10 11v6"></path>
+          <path d="M14 11v6"></path>
+          <path d="M9 6V4h6v2"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="queue-sheet-content">
+      <div id="queue-empty" class="queue-empty">
+        <p>Your queue is empty</p>
+        <p class="text-secondary">Paste a URL or share from your browser to start listening.</p>
+      </div>
+      <ul id="queue-list" class="queue-list" role="list"></ul>
+    </div>
+  </div>
+
+  <!-- Snackbar: Play Now / Add to Queue -->
+  <div id="add-queue-snackbar" class="snackbar hidden">
+    <span id="snackbar-title" class="snackbar-title"></span>
+    <button id="play-now-btn" class="btn-text">Play Now</button>
+    <button id="add-queue-btn" class="btn-text">Add to Queue</button>
+  </div>
+
+  <!-- Auto-advance toast -->
+  <div id="auto-advance-toast" class="snackbar hidden">
+    <span id="advance-text" class="snackbar-title"></span>
+    <button id="advance-skip-btn" class="btn-text">Skip</button>
+    <button id="advance-cancel-btn" class="btn-text">Cancel</button>
+  </div>
 
   <script src="vendor/Readability.js"></script>
   <script src="vendor/turndown.js"></script>

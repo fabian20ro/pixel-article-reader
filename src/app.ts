@@ -1,5 +1,5 @@
 /**
- * ArticleVoice — thin app bootstrap/orchestrator.
+ * Article Local Reader — thin app bootstrap/orchestrator.
  */
 
 import { TTSEngine } from './lib/tts-engine.js';
@@ -8,6 +8,9 @@ import { loadSettings, saveSettings, type AppSettings, type Theme } from './lib/
 import { PwaUpdateManager } from './lib/pwa-update-manager.js';
 import { ArticleController } from './lib/article-controller.js';
 import { APP_RELEASE, shortRelease } from './lib/release.js';
+import { QueueController } from './lib/queue-controller.js';
+import { isValidArticleUrl } from './lib/url-utils.js';
+import type { QueueItem } from './lib/queue-store.js';
 import type { Language } from './lib/lang-detect.js';
 
 const CONFIG = {
@@ -28,6 +31,7 @@ async function main(): Promise<void> {
   });
 
   let updateManager: PwaUpdateManager | null = null;
+  let queueController: QueueController | null = null;
 
   const tts = new TTSEngine({
     proxyBase: CONFIG.PROXY_BASE,
@@ -48,6 +52,10 @@ async function main(): Promise<void> {
       onEnd() {
         updatePlayButton(false, false);
         highlightParagraph(-1);
+        // Delegate to queue controller for auto-advance
+        if (queueController) {
+          queueController.handleArticleEnd();
+        }
         updateManager?.applyDeferredReloadIfIdle();
       },
       onError(msg) {
@@ -71,9 +79,234 @@ async function main(): Promise<void> {
     onArticleRendered(totalParagraphs) {
       updateProgress(0, totalParagraphs);
       highlightParagraph(0);
+
+      // Auto-add to queue when article loads
+      const article = articleController.getCurrentArticle();
+      if (article && queueController) {
+        const items = queueController.getItems();
+        const alreadyQueued = article.resolvedUrl &&
+          items.some((i) => i.url === article.resolvedUrl);
+        if (!alreadyQueued) {
+          const item = queueController.addArticle(article);
+          if (article.resolvedUrl) {
+            queueController.syncCurrentByUrl(article.resolvedUrl);
+          } else {
+            queueController.syncCurrentById(item.id);
+          }
+        } else {
+          queueController.syncCurrentByUrl(article.resolvedUrl);
+        }
+      }
     },
   });
   articleController.init();
+
+  // ── Queue Controller ──────────────────────────────────────────
+  queueController = new QueueController({
+    articleController,
+    tts,
+    callbacks: {
+      onQueueChange(items, currentIndex) {
+        renderQueueUI(items, currentIndex);
+      },
+      onAutoAdvanceCountdown(nextTitle) {
+        refs.advanceText.textContent = `Up next: ${nextTitle}`;
+        showSnackbar(refs.autoAdvanceToast);
+      },
+      onAutoAdvanceCancelled() {
+        hideSnackbar(refs.autoAdvanceToast);
+      },
+      onError(msg) {
+        refs.errorMessage.textContent = msg;
+        refs.errorSection.classList.remove('hidden');
+      },
+    },
+  });
+
+  // Queue sheet open/close
+  function openQueueSheet(): void {
+    refs.queueSheet.classList.add('open');
+    refs.queueOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => refs.queueOverlay.classList.add('open'));
+  }
+
+  function closeQueueSheet(): void {
+    if (!refs.queueSheet.classList.contains('open')) return;
+    refs.queueSheet.classList.remove('open');
+    refs.queueOverlay.classList.remove('open');
+    refs.queueOverlay.addEventListener('transitionend', () => {
+      if (!refs.queueOverlay.classList.contains('open')) {
+        refs.queueOverlay.classList.add('hidden');
+      }
+    }, { once: true });
+  }
+
+  refs.queueBtn.addEventListener('click', () => {
+    const isOpen = refs.queueSheet.classList.contains('open');
+    if (isOpen) closeQueueSheet(); else openQueueSheet();
+  });
+
+  refs.queueOverlay.addEventListener('click', closeQueueSheet);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && refs.queueSheet.classList.contains('open')) {
+      closeQueueSheet();
+    }
+  });
+
+  refs.queueClearBtn.addEventListener('click', () => {
+    queueController!.clearAll();
+    closeQueueSheet();
+  });
+
+  // Auto-advance toast buttons
+  refs.advanceSkipBtn.addEventListener('click', () => {
+    hideSnackbar(refs.autoAdvanceToast);
+    queueController!.skipToNext();
+  });
+
+  refs.advanceCancelBtn.addEventListener('click', () => {
+    hideSnackbar(refs.autoAdvanceToast);
+    queueController!.cancelAutoAdvance();
+  });
+
+  // "Next:" row click
+  refs.nextArticleRow.addEventListener('click', () => {
+    queueController!.skipToNext();
+  });
+
+  // Snackbar: Play Now / Add to Queue
+  let pendingSnackbarArticle: import('./lib/extractor.js').Article | null = null;
+
+  refs.playNowBtn.addEventListener('click', () => {
+    hideSnackbar(refs.addQueueSnackbar);
+    if (pendingSnackbarArticle && queueController) {
+      const item = queueController.addArticle(pendingSnackbarArticle);
+      void queueController.playItem(item.id).then(() => tts.play());
+    }
+    pendingSnackbarArticle = null;
+  });
+
+  refs.addQueueBtn.addEventListener('click', () => {
+    hideSnackbar(refs.addQueueSnackbar);
+    if (pendingSnackbarArticle && queueController) {
+      queueController.addArticle(pendingSnackbarArticle);
+    }
+    pendingSnackbarArticle = null;
+  });
+
+  function showSnackbar(el: HTMLElement): void {
+    el.classList.remove('hidden');
+    requestAnimationFrame(() => el.classList.add('visible'));
+  }
+
+  function hideSnackbar(el: HTMLElement): void {
+    if (!el.classList.contains('visible')) return;
+    el.classList.remove('visible');
+    el.addEventListener('transitionend', () => {
+      if (!el.classList.contains('visible')) {
+        el.classList.add('hidden');
+      }
+    }, { once: true });
+  }
+
+  function renderQueueUI(items: QueueItem[], currentIndex: number): void {
+    // Badge
+    if (items.length > 0) {
+      refs.queueBadge.textContent = String(Math.min(items.length, 99));
+      refs.queueBadge.classList.remove('hidden');
+    } else {
+      refs.queueBadge.classList.add('hidden');
+    }
+
+    // Count in sheet header
+    refs.queueCount.textContent = String(items.length);
+
+    // Empty state
+    refs.queueEmpty.classList.toggle('hidden', items.length > 0);
+    refs.queueList.classList.toggle('hidden', items.length === 0);
+
+    // "Next:" row in player
+    const nextItem = items[currentIndex + 1];
+    if (nextItem) {
+      refs.nextArticleTitle.textContent = nextItem.title;
+      refs.nextArticleRow.classList.remove('hidden');
+    } else {
+      refs.nextArticleRow.classList.add('hidden');
+    }
+
+    // Render list
+    refs.queueList.innerHTML = '';
+    items.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.className = 'queue-item' + (idx === currentIndex ? ' playing' : '');
+      li.setAttribute('role', 'listitem');
+
+      // Indicator (position number or equalizer bars)
+      const indicator = document.createElement('div');
+      indicator.className = 'queue-item-indicator';
+      if (idx === currentIndex) {
+        indicator.innerHTML = '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>';
+      } else {
+        indicator.textContent = String(idx + 1);
+      }
+
+      // Info
+      const info = document.createElement('div');
+      info.className = 'queue-item-info';
+
+      const title = document.createElement('div');
+      title.className = 'queue-item-title';
+      title.textContent = item.title;
+
+      const meta = document.createElement('div');
+      meta.className = 'queue-item-meta';
+      meta.textContent = [item.siteName, `${item.estimatedMinutes} min`].filter(Boolean).join(' \u00B7 ');
+
+      info.appendChild(title);
+      info.appendChild(meta);
+
+      // Action buttons
+      const actions = document.createElement('div');
+      actions.className = 'queue-item-actions';
+
+      const shareBtn = document.createElement('button');
+      shareBtn.className = 'icon-btn';
+      shareBtn.setAttribute('aria-label', 'Share');
+      shareBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+      shareBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void queueController!.shareItem(item);
+      });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'icon-btn';
+      deleteBtn.setAttribute('aria-label', 'Remove');
+      deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        queueController!.removeItem(item.id);
+      });
+
+      actions.appendChild(shareBtn);
+      actions.appendChild(deleteBtn);
+
+      li.appendChild(indicator);
+      li.appendChild(info);
+      li.appendChild(actions);
+
+      // Click to play
+      li.addEventListener('click', () => {
+        void queueController!.playItem(item.id).then(() => tts.play());
+        closeQueueSheet();
+      });
+
+      refs.queueList.appendChild(li);
+    });
+  }
+
+  // Initial queue render
+  renderQueueUI(queueController.getItems(), queueController.getCurrentIndex());
 
   updateManager = new PwaUpdateManager({
     onStatus(status) {
@@ -336,5 +569,5 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 main().catch((err) => {
-  console.error('ArticleVoice init failed:', err);
+  console.error('Article Local Reader init failed:', err);
 });

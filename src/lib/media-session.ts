@@ -147,8 +147,8 @@ export class MediaSessionController {
   updateMetadata(title?: string, subtitle?: string): void {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: title || 'ArticleVoice',
-      artist: subtitle || 'ArticleVoice',
+      title: title || 'Article Local Reader',
+      artist: subtitle || 'Article Local Reader',
       artwork: [
         { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
