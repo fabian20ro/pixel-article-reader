@@ -27,30 +27,52 @@
 
   <!-- Header -->
   <header class="header">
-    <button id="settings-toggle" class="icon-btn" aria-label="Menu">
+    <button id="menu-toggle" class="icon-btn queue-btn-wrap" aria-label="Queue">
+      <!-- Hamburger icon -->
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="3" y1="6" x2="21" y2="6"></line>
         <line x1="3" y1="12" x2="21" y2="12"></line>
         <line x1="3" y1="18" x2="21" y2="18"></line>
       </svg>
+      <span id="queue-badge" class="badge hidden">0</span>
     </button>
     <h1 class="header-title">Article Local Reader</h1>
-    <button id="queue-btn" class="icon-btn queue-btn-wrap" aria-label="Queue">
+    <button id="settings-toggle" class="icon-btn" aria-label="Settings">
+      <!-- Gear icon -->
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="8" y1="6" x2="21" y2="6"></line>
-        <line x1="8" y1="12" x2="21" y2="12"></line>
-        <line x1="8" y1="18" x2="21" y2="18"></line>
-        <polygon points="3,6 5,7.5 3,9" fill="currentColor" stroke="none"></polygon>
-        <line x1="3" y1="12" x2="5" y2="12"></line>
-        <line x1="3" y1="18" x2="5" y2="18"></line>
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"></path>
       </svg>
-      <span id="queue-badge" class="badge hidden">0</span>
     </button>
   </header>
 
-  <!-- Settings Drawer -->
-  <div id="drawer-overlay" class="drawer-overlay hidden"></div>
-  <nav id="settings-panel" class="settings-drawer" aria-label="Settings">
+  <!-- Queue Drawer (left slide-in) -->
+  <div id="queue-overlay" class="drawer-overlay hidden"></div>
+  <nav id="queue-drawer" class="queue-drawer" aria-label="Queue">
+    <div class="queue-drawer-header">
+      <span class="queue-drawer-title">Queue (<span id="queue-count">0</span>)</span>
+      <button id="queue-clear-btn" class="icon-btn" aria-label="Clear queue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14H6L5 6"></path>
+          <path d="M10 11v6"></path>
+          <path d="M14 11v6"></path>
+          <path d="M9 6V4h6v2"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="queue-drawer-content">
+      <div id="queue-empty" class="queue-empty">
+        <p>Your queue is empty</p>
+        <p class="text-secondary">Paste a URL or share from your browser to start listening.</p>
+      </div>
+      <ul id="queue-list" class="queue-list" role="list"></ul>
+    </div>
+  </nav>
+
+  <!-- Settings Drawer (right slide-in) -->
+  <div id="settings-overlay" class="drawer-overlay hidden"></div>
+  <nav id="settings-panel" class="settings-drawer settings-drawer-right" aria-label="Settings">
     <div class="settings-group">
       <label class="settings-label">
         Default Speed
@@ -69,9 +91,17 @@
     <div class="settings-group">
       <label class="settings-label">Preferred Language</label>
       <div class="segment-control" id="settings-lang-selector">
-        <button class="segment-btn active" data-value="auto">&#x1F310;</button>
+        <button class="segment-btn active" data-value="auto">Auto</button>
         <button class="segment-btn" data-value="en">&#x1F1EC;&#x1F1E7; EN</button>
         <button class="segment-btn" data-value="ro">&#x1F1F7;&#x1F1F4; RO</button>
+      </div>
+    </div>
+    <div class="settings-group hidden" id="voice-gender-group">
+      <label class="settings-label">Voice</label>
+      <div class="segment-control" id="voice-gender-selector">
+        <button class="segment-btn active" data-value="auto">Auto</button>
+        <button class="segment-btn" data-value="female">Woman</button>
+        <button class="segment-btn" data-value="male">Man</button>
       </div>
     </div>
     <div class="settings-group">
@@ -111,7 +141,7 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
           </svg>
-          Open File
+          Open Local File
         </button>
       </div>
       <div class="divider">
@@ -133,6 +163,17 @@
 
     <!-- Article Display -->
     <section id="article-section" class="article-section hidden">
+      <button id="chapters-btn" class="chapters-btn hidden">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <polygon points="3,6 5,7.5 3,9" fill="currentColor" stroke="none"></polygon>
+          <line x1="3" y1="12" x2="5" y2="12"></line>
+          <line x1="3" y1="18" x2="5" y2="18"></line>
+        </svg>
+        <span id="chapters-btn-text">Chapters</span>
+      </button>
       <div class="article-meta">
         <h2 id="article-title" class="article-title"></h2>
         <p id="article-info" class="article-info"></p>
@@ -209,28 +250,15 @@
     </div>
   </footer>
 
-  <!-- Queue Bottom Sheet -->
-  <div id="queue-overlay" class="drawer-overlay hidden"></div>
-  <div id="queue-sheet" class="queue-sheet" role="dialog" aria-label="Article Queue" aria-modal="true">
-    <div class="queue-sheet-handle" id="queue-sheet-handle">
+  <!-- Chapters Bottom Sheet -->
+  <div id="chapters-overlay" class="drawer-overlay hidden"></div>
+  <div id="chapters-sheet" class="chapters-sheet" role="dialog" aria-label="Chapters" aria-modal="true">
+    <div class="chapters-sheet-handle" id="chapters-sheet-handle">
       <div class="handle-bar"></div>
-      <span class="queue-sheet-title">Queue (<span id="queue-count">0</span>)</span>
-      <button id="queue-clear-btn" class="icon-btn" aria-label="Clear queue">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6l-1 14H6L5 6"></path>
-          <path d="M10 11v6"></path>
-          <path d="M14 11v6"></path>
-          <path d="M9 6V4h6v2"></path>
-        </svg>
-      </button>
+      <span class="chapters-sheet-title">Chapters</span>
     </div>
-    <div class="queue-sheet-content">
-      <div id="queue-empty" class="queue-empty">
-        <p>Your queue is empty</p>
-        <p class="text-secondary">Paste a URL or share from your browser to start listening.</p>
-      </div>
-      <ul id="queue-list" class="queue-list" role="list"></ul>
+    <div class="chapters-sheet-content">
+      <ul id="chapters-list" class="chapters-list" role="list"></ul>
     </div>
   </div>
 

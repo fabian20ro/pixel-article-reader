@@ -16,6 +16,13 @@ import {
   createQueueItem,
   type QueueItem,
 } from './queue-store.js';
+import {
+  saveArticleContent,
+  loadArticleContent,
+  deleteArticleContent,
+  clearArticleContent,
+  type StoredArticleContent,
+} from './article-content-store.js';
 
 export interface QueueCallbacks {
   onQueueChange(items: QueueItem[], currentIndex: number): void;
@@ -36,6 +43,7 @@ export class QueueController {
   private items: QueueItem[];
   private currentIndex = -1;
   private autoAdvanceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _isLoadingItem = false;
   private readonly ac: ArticleController;
   private readonly tts: TTSEngine;
   private readonly cb: QueueCallbacks;
@@ -55,6 +63,11 @@ export class QueueController {
 
   getCurrentIndex(): number {
     return this.currentIndex;
+  }
+
+  /** True while a queue-driven article load is in progress. */
+  isLoadingItem(): boolean {
+    return this._isLoadingItem;
   }
 
   getCurrentItem(): QueueItem | null {
@@ -80,6 +93,25 @@ export class QueueController {
     const item = createQueueItem(article);
     this.items = addToQueue(this.items, item);
     this.notify();
+
+    // For local files (no URL), persist article content in IndexedDB
+    if (!item.url || !isValidArticleUrl(item.url)) {
+      const content: StoredArticleContent = {
+        id: item.id,
+        title: article.title,
+        markdown: article.markdown,
+        paragraphs: article.paragraphs,
+        textContent: article.textContent,
+        lang: article.lang,
+        htmlLang: article.htmlLang,
+        siteName: article.siteName,
+        excerpt: article.excerpt,
+        wordCount: article.wordCount,
+        estimatedMinutes: article.estimatedMinutes,
+      };
+      void saveArticleContent(content);
+    }
+
     return item;
   }
 
@@ -87,6 +119,12 @@ export class QueueController {
   removeItem(id: string): void {
     const removedIdx = this.items.findIndex((i) => i.id === id);
     if (removedIdx === -1) return;
+
+    // Clean up stored content for local files
+    const item = this.items[removedIdx];
+    if (!item.url || !isValidArticleUrl(item.url)) {
+      void deleteArticleContent(id);
+    }
 
     this.items = removeFromQueue(this.items, id);
 
@@ -135,6 +173,7 @@ export class QueueController {
     this.items = [];
     this.currentIndex = -1;
     clearQueue();
+    void clearArticleContent();
     this.notify();
   }
 
@@ -152,8 +191,16 @@ export class QueueController {
     const item = this.items[idx];
     this.notify();
 
-    if (item.url && isValidArticleUrl(item.url)) {
-      await this.ac.loadArticleFromUrl(item.url);
+    this._isLoadingItem = true;
+    try {
+      if (item.url && isValidArticleUrl(item.url)) {
+        await this.ac.loadArticleFromUrl(item.url);
+      } else {
+        // Local file — load from IndexedDB stored content
+        await this.loadFromStoredContent(item);
+      }
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
@@ -163,15 +210,20 @@ export class QueueController {
     const nextIndex = this.currentIndex + 1;
     const item = this.items[nextIndex];
 
-    if (item.url && isValidArticleUrl(item.url)) {
-      try {
+    this._isLoadingItem = true;
+    try {
+      if (item.url && isValidArticleUrl(item.url)) {
         await this.ac.loadArticleFromUrl(item.url);
-        this.currentIndex = nextIndex;
-        this.notify();
-        this.tts.play();
-      } catch {
-        this.cb.onError(`Failed to load: ${item.title}`);
+      } else {
+        await this.loadFromStoredContent(item);
       }
+      this.currentIndex = nextIndex;
+      this.notify();
+      this.tts.play();
+    } catch {
+      this.cb.onError(`Failed to load: ${item.title}`);
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
@@ -181,15 +233,20 @@ export class QueueController {
     const prevIndex = this.currentIndex - 1;
     const item = this.items[prevIndex];
 
-    if (item.url && isValidArticleUrl(item.url)) {
-      try {
+    this._isLoadingItem = true;
+    try {
+      if (item.url && isValidArticleUrl(item.url)) {
         await this.ac.loadArticleFromUrl(item.url);
-        this.currentIndex = prevIndex;
-        this.notify();
-        this.tts.play();
-      } catch {
-        this.cb.onError(`Failed to load: ${item.title}`);
+      } else {
+        await this.loadFromStoredContent(item);
       }
+      this.currentIndex = prevIndex;
+      this.notify();
+      this.tts.play();
+    } catch {
+      this.cb.onError(`Failed to load: ${item.title}`);
+    } finally {
+      this._isLoadingItem = false;
     }
   }
 
@@ -266,6 +323,29 @@ export class QueueController {
   }
 
   // ── Private ────────────────────────────────────────────────────
+
+  private async loadFromStoredContent(item: QueueItem): Promise<void> {
+    const stored = await loadArticleContent(item.id);
+    if (!stored) {
+      throw new Error('Content no longer available. Re-open the file to listen again.');
+    }
+
+    // Reconstruct an Article from stored content and display it
+    await this.ac.loadArticleFromStored({
+      title: stored.title,
+      content: '',
+      textContent: stored.textContent,
+      markdown: stored.markdown,
+      paragraphs: stored.paragraphs,
+      lang: stored.lang as import('./lang-detect.js').Language,
+      htmlLang: stored.htmlLang,
+      siteName: stored.siteName,
+      excerpt: stored.excerpt,
+      wordCount: stored.wordCount,
+      estimatedMinutes: stored.estimatedMinutes,
+      resolvedUrl: '',
+    });
+  }
 
   private notify(): void {
     this.cb.onQueueChange(this.items, this.currentIndex);

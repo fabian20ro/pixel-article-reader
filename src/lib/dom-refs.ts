@@ -25,15 +25,18 @@ export interface AppDomRefs {
   progressFill: HTMLElement;
   progressText: HTMLElement;
   progressBar: HTMLElement;
+  // Settings drawer (right)
   settingsToggle: HTMLElement;
   settingsPanel: HTMLElement;
-  drawerOverlay: HTMLElement;
+  settingsOverlay: HTMLElement;
   settingsSpeed: HTMLInputElement;
   speedValue: HTMLElement;
   settingsVoice: HTMLSelectElement;
   settingsWakelock: HTMLInputElement;
   checkUpdateBtn: HTMLElement;
   updateStatus: HTMLElement;
+  voiceGenderGroup: HTMLElement;
+  voiceGenderBtns: NodeListOf<HTMLButtonElement>;
   fileInput: HTMLInputElement;
   fileBtn: HTMLElement;
   installBanner: HTMLElement;
@@ -42,12 +45,11 @@ export interface AppDomRefs {
   speedBtns: NodeListOf<HTMLButtonElement>;
   themeBtns: NodeListOf<HTMLButtonElement>;
   settingsLangBtns: NodeListOf<HTMLButtonElement>;
-  // Queue
-  queueBtn: HTMLElement;
-  queueBadge: HTMLElement;
-  queueSheet: HTMLElement;
-  queueSheetHandle: HTMLElement;
+  // Queue drawer (left)
+  menuToggle: HTMLElement;
+  queueDrawer: HTMLElement;
   queueOverlay: HTMLElement;
+  queueBadge: HTMLElement;
   queueList: HTMLElement;
   queueEmpty: HTMLElement;
   queueCount: HTMLElement;
@@ -62,6 +64,12 @@ export interface AppDomRefs {
   advanceText: HTMLElement;
   advanceSkipBtn: HTMLElement;
   advanceCancelBtn: HTMLElement;
+  // Chapters
+  chaptersBtn: HTMLElement;
+  chaptersBtnText: HTMLElement;
+  chaptersSheet: HTMLElement;
+  chaptersOverlay: HTMLElement;
+  chaptersList: HTMLElement;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -100,15 +108,18 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     progressFill: requireElement('progress-fill', root),
     progressText: requireElement('progress-text', root),
     progressBar: requireElement('progress-bar', root),
+    // Settings drawer (right)
     settingsToggle: requireElement('settings-toggle', root),
     settingsPanel: requireElement('settings-panel', root),
-    drawerOverlay: requireElement('drawer-overlay', root),
+    settingsOverlay: requireElement('settings-overlay', root),
     settingsSpeed: requireElement<HTMLInputElement>('settings-speed', root),
     speedValue: requireElement('speed-value', root),
     settingsVoice: requireElement<HTMLSelectElement>('settings-voice', root),
     settingsWakelock: requireElement<HTMLInputElement>('settings-wakelock', root),
     checkUpdateBtn: requireElement('check-update-btn', root),
     updateStatus: requireElement('update-status', root),
+    voiceGenderGroup: requireElement('voice-gender-group', root),
+    voiceGenderBtns: root.querySelectorAll<HTMLButtonElement>('#voice-gender-selector .segment-btn'),
     fileInput: requireElement<HTMLInputElement>('file-input', root),
     fileBtn: requireElement('file-btn', root),
     installBanner: requireElement('install-banner', root),
@@ -117,12 +128,11 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     speedBtns: root.querySelectorAll<HTMLButtonElement>('#speed-selector .segment-btn'),
     themeBtns: root.querySelectorAll<HTMLButtonElement>('#theme-selector .segment-btn'),
     settingsLangBtns: root.querySelectorAll<HTMLButtonElement>('#settings-lang-selector .segment-btn'),
-    // Queue
-    queueBtn: requireElement('queue-btn', root),
-    queueBadge: requireElement('queue-badge', root),
-    queueSheet: requireElement('queue-sheet', root),
-    queueSheetHandle: requireElement('queue-sheet-handle', root),
+    // Queue drawer (left)
+    menuToggle: requireElement('menu-toggle', root),
+    queueDrawer: requireElement('queue-drawer', root),
     queueOverlay: requireElement('queue-overlay', root),
+    queueBadge: requireElement('queue-badge', root),
     queueList: requireElement('queue-list', root),
     queueEmpty: requireElement('queue-empty', root),
     queueCount: requireElement('queue-count', root),
@@ -137,5 +147,11 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     advanceText: requireElement('advance-text', root),
     advanceSkipBtn: requireElement('advance-skip-btn', root),
     advanceCancelBtn: requireElement('advance-cancel-btn', root),
+    // Chapters
+    chaptersBtn: requireElement('chapters-btn', root),
+    chaptersBtnText: requireElement('chapters-btn-text', root),
+    chaptersSheet: requireElement('chapters-sheet', root),
+    chaptersOverlay: requireElement('chapters-overlay', root),
+    chaptersList: requireElement('chapters-list', root),
   };
 }

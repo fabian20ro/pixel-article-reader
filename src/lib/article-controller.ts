@@ -147,6 +147,14 @@ export class ArticleController {
     await this.loadArticle(url);
   }
 
+  /** Load and display an article from stored content (IndexedDB). Used by queue for local files. */
+  async loadArticleFromStored(article: Article): Promise<void> {
+    this.options.tts.stop();
+    this.currentArticle = article;
+    this.currentArticleUrl = '';
+    this.displayArticle(article);
+  }
+
   private handleUrlSubmit(): void {
     const raw = this.options.refs.urlInput.value.trim();
     if (!raw) return;

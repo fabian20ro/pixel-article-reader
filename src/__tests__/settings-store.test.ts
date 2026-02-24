@@ -70,6 +70,7 @@ describe('settings-store', () => {
       rate: 1.25,
       lang: 'en',
       voiceName: 'Samantha',
+      voiceGender: 'auto',
       wakeLock: false,
       theme: 'dark',
     };
