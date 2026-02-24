@@ -1,7 +1,7 @@
 import type { Language } from './lang-detect.js';
 
 /** Add new themes here — CSS must define matching [data-theme="<name>"] variables */
-export const THEMES = ['dark', 'light', 'khaki'] as const;
+const THEMES = ['dark', 'light', 'khaki'] as const;
 export type Theme = (typeof THEMES)[number];
 
 export interface AppSettings {

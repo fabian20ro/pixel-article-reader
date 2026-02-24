@@ -177,7 +177,6 @@ async function main(): Promise<void> {
 
   // Snackbar: Play Now / Add to Queue
   let pendingSnackbarArticle: import('./lib/extractor.js').Article | null = null;
-  let snackbarDismissTimer: ReturnType<typeof setTimeout> | null = null;
 
   refs.playNowBtn.addEventListener('click', () => {
     hideSnackbar(refs.addQueueSnackbar);

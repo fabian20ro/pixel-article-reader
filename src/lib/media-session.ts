@@ -22,9 +22,6 @@ export interface MediaSessionActions {
   seekforward?: () => void;
   seekbackward?: () => void;
   seekto?: (positionSeconds: number) => void;
-  /** Queue-aware: called by next/prev track when at article boundaries. */
-  nextArticle?: () => void;
-  previousArticle?: () => void;
 }
 
 /**

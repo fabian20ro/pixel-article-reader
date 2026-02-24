@@ -9,7 +9,6 @@ import type { Article } from './extractor.js';
 import { isValidArticleUrl } from './url-utils.js';
 import {
   loadQueue,
-  saveQueue,
   addToQueue,
   removeFromQueue,
   reorderQueue,
