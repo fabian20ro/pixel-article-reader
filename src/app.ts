@@ -241,6 +241,13 @@ async function main(): Promise<void> {
       const li = document.createElement('li');
       li.className = 'queue-item' + (idx === currentIndex ? ' playing' : '');
       li.setAttribute('role', 'listitem');
+      li.dataset.itemId = item.id;
+
+      // Drag handle (three horizontal lines / grip icon)
+      const dragHandle = document.createElement('div');
+      dragHandle.className = 'queue-drag-handle';
+      dragHandle.setAttribute('aria-label', 'Drag to reorder');
+      dragHandle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
 
       // Indicator (position number or equalizer bars)
       const indicator = document.createElement('div');
@@ -291,6 +298,7 @@ async function main(): Promise<void> {
       actions.appendChild(shareBtn);
       actions.appendChild(deleteBtn);
 
+      li.appendChild(dragHandle);
       li.appendChild(indicator);
       li.appendChild(info);
       li.appendChild(actions);
@@ -304,6 +312,132 @@ async function main(): Promise<void> {
       refs.queueList.appendChild(li);
     });
   }
+
+  // ── Queue drag-and-drop reorder ─────────────────────────────
+  let dragState: {
+    itemId: string;
+    startY: number;
+    clone: HTMLElement;
+    placeholder: HTMLElement;
+    originalLi: HTMLElement;
+    listItems: HTMLElement[];
+  } | null = null;
+
+  function getY(e: MouseEvent | TouchEvent): number {
+    if ('touches' in e) return e.touches[0].clientY;
+    return e.clientY;
+  }
+
+  function startDrag(itemId: string, startY: number, originalLi: HTMLElement): void {
+    const listItems = Array.from(refs.queueList.children) as HTMLElement[];
+    const rect = originalLi.getBoundingClientRect();
+
+    // Create a visual clone that follows the pointer
+    const clone = originalLi.cloneNode(true) as HTMLElement;
+    clone.className = 'queue-item queue-item-dragging';
+    clone.style.position = 'fixed';
+    clone.style.left = rect.left + 'px';
+    clone.style.top = rect.top + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.zIndex = '1000';
+    clone.style.pointerEvents = 'none';
+    document.body.appendChild(clone);
+
+    // Mark the original as placeholder
+    originalLi.classList.add('queue-item-placeholder');
+
+    dragState = { itemId, startY, clone, placeholder: originalLi, originalLi, listItems };
+    refs.queueList.classList.add('reordering');
+  }
+
+  function moveDrag(clientY: number): void {
+    if (!dragState) return;
+    const dy = clientY - dragState.startY;
+    const origRect = dragState.originalLi.getBoundingClientRect();
+    dragState.clone.style.top = (origRect.top + dy) + 'px';
+
+    // Check if we should swap with a neighbor
+    const items = Array.from(refs.queueList.children) as HTMLElement[];
+    const currentIdx = items.indexOf(dragState.placeholder);
+
+    for (let i = 0; i < items.length; i++) {
+      if (i === currentIdx) continue;
+      const r = items[i].getBoundingClientRect();
+      const midY = r.top + r.height / 2;
+      if (i < currentIdx && clientY < midY) {
+        refs.queueList.insertBefore(dragState.placeholder, items[i]);
+        break;
+      }
+      if (i > currentIdx && clientY > midY) {
+        refs.queueList.insertBefore(dragState.placeholder, items[i].nextSibling);
+        break;
+      }
+    }
+  }
+
+  function endDrag(): void {
+    if (!dragState) return;
+    dragState.clone.remove();
+    dragState.placeholder.classList.remove('queue-item-placeholder');
+    refs.queueList.classList.remove('reordering');
+
+    // Read the new order from the DOM
+    const reorderedIds = Array.from(refs.queueList.children)
+      .map((li) => (li as HTMLElement).dataset.itemId)
+      .filter(Boolean) as string[];
+
+    const currentItems = queueController!.getItems();
+    const newOrder = reorderedIds
+      .map((id) => currentItems.find((i) => i.id === id))
+      .filter(Boolean) as QueueItem[];
+
+    if (newOrder.length === currentItems.length) {
+      queueController!.reorder(newOrder);
+    }
+
+    dragState = null;
+  }
+
+  // Attach drag handlers to the queue list (delegated)
+  refs.queueList.addEventListener('mousedown', (e) => {
+    const handle = (e.target as HTMLElement).closest('.queue-drag-handle');
+    if (!handle) return;
+    e.preventDefault();
+    const li = handle.closest('.queue-item') as HTMLElement | null;
+    if (!li?.dataset.itemId) return;
+    startDrag(li.dataset.itemId, e.clientY, li);
+
+    const onMove = (ev: MouseEvent) => moveDrag(ev.clientY);
+    const onUp = () => {
+      endDrag();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  refs.queueList.addEventListener('touchstart', (e) => {
+    const handle = (e.target as HTMLElement).closest('.queue-drag-handle');
+    if (!handle) return;
+    const li = handle.closest('.queue-item') as HTMLElement | null;
+    if (!li?.dataset.itemId) return;
+    startDrag(li.dataset.itemId, getY(e), li);
+
+    const onMove = (ev: TouchEvent) => {
+      ev.preventDefault(); // Prevent scroll while dragging
+      moveDrag(getY(ev));
+    };
+    const onEnd = () => {
+      endDrag();
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+    };
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+  }, { passive: false });
 
   // Initial queue render
   renderQueueUI(queueController.getItems(), queueController.getCurrentIndex());

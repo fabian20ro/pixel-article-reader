@@ -951,3 +951,180 @@ describe('createArticleFromPdf', () => {
     await expect(createArticleFromPdf(file)).rejects.toThrow(/Could not extract/);
   });
 });
+
+// ── createArticleFromMarkdownFile ─────────────────────────────────
+
+describe('createArticleFromMarkdownFile', () => {
+  let createArticleFromMarkdownFile: typeof import('../lib/extractor.js').createArticleFromMarkdownFile;
+
+  beforeEach(async () => {
+    const mod = await import('../lib/extractor.js');
+    createArticleFromMarkdownFile = mod.createArticleFromMarkdownFile;
+  });
+
+  it('creates article from a markdown file', async () => {
+    const content = '# My Document\n\nThis is the first paragraph with enough text to pass the filter.\n\nThis is the second paragraph with enough text to pass the filter.';
+    const file = new File([content], 'test-doc.md', { type: 'text/markdown' });
+    const article = await createArticleFromMarkdownFile(file);
+    expect(article.title).toBe('My Document');
+    expect(article.siteName).toBe('Markdown');
+    expect(article.paragraphs.length).toBeGreaterThanOrEqual(2);
+    expect(article.markdown).toContain('# My Document');
+  });
+
+  it('uses first line as title when no heading is present', async () => {
+    const content = 'This is a paragraph with enough words to be considered valid text for the TTS engine to process.\n\nAnother paragraph with additional content for the test.';
+    const file = new File([content], 'notes.md', { type: 'text/markdown' });
+    const article = await createArticleFromMarkdownFile(file);
+    // extractTitleFromMarkdown returns first line when no # heading found
+    expect(article.title).toContain('This is a paragraph');
+  });
+
+  it('throws on empty markdown file', async () => {
+    const file = new File([''], 'empty.md', { type: 'text/markdown' });
+    await expect(createArticleFromMarkdownFile(file)).rejects.toThrow(/empty/i);
+  });
+
+  it('handles .markdown extension and sets resolvedUrl to empty', async () => {
+    const content = '# Readme Title\n\nThis is enough text for a valid paragraph in the TTS extraction pipeline that we are testing.';
+    const file = new File([content], 'readme.markdown', { type: 'text/markdown' });
+    const article = await createArticleFromMarkdownFile(file);
+    expect(article.title).toBe('Readme Title');
+    expect(article.resolvedUrl).toBe('');
+  });
+});
+
+// ── PDF URL detection ─────────────────────────────────────────────
+
+describe('extractArticle PDF URL detection', () => {
+  it('detects PDF URLs by extension and uses PDF fetch path', async () => {
+    const pdfUrl = 'https://example.com/papers/document.pdf';
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'x-final-url') return pdfUrl;
+          if (name.toLowerCase() === 'content-length') return '10';
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    // Mock pdf.js
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: vi.fn().mockResolvedValue({
+            getTextContent: vi.fn().mockResolvedValue({
+              items: [
+                { str: 'This is a paragraph from the PDF with enough words to pass the filter and be considered valid text.', transform: [0, 0, 0, 0, 72, 700], height: 12 },
+              ],
+            }),
+          }),
+        }),
+      }),
+    };
+
+    const article = await extractArticle(pdfUrl, PROXY);
+    expect(article.siteName).toBe('PDF');
+    expect(article.paragraphs.length).toBeGreaterThanOrEqual(1);
+    // Should have called fetch with proxy URL
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('proxy.example.workers.dev'),
+      expect.any(Object),
+    );
+
+    delete (globalThis as Record<string, unknown>).pdfjsLib;
+  });
+
+  it('passes onProgress callback through to extraction', async () => {
+    const pdfUrl = 'https://example.com/paper.pdf';
+    const progressMessages: string[] = [];
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'x-final-url') return pdfUrl;
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    (globalThis as Record<string, unknown>).pdfjsLib = {
+      GlobalWorkerOptions: { workerSrc: '' },
+      getDocument: vi.fn().mockReturnValue({
+        promise: Promise.resolve({
+          numPages: 1,
+          getPage: vi.fn().mockResolvedValue({
+            getTextContent: vi.fn().mockResolvedValue({
+              items: [
+                { str: 'Content from a PDF document with sufficient words for the paragraph filter.', transform: [0, 0, 0, 0, 72, 700], height: 12 },
+              ],
+            }),
+          }),
+        }),
+      }),
+    };
+
+    await extractArticle(pdfUrl, PROXY, undefined, (msg) => progressMessages.push(msg));
+
+    expect(progressMessages).toContain('Downloading PDF...');
+    expect(progressMessages.some((m) => m.includes('Extracting text'))).toBe(true);
+
+    delete (globalThis as Record<string, unknown>).pdfjsLib;
+  });
+});
+
+// ── extractArticleFromPdfUrl ─────────────────────────────────────────
+
+describe('extractArticleFromPdfUrl', () => {
+  let extractArticleFromPdfUrl: typeof import('../lib/extractor.js').extractArticleFromPdfUrl;
+
+  beforeEach(async () => {
+    const mod = await import('../lib/extractor.js');
+    extractArticleFromPdfUrl = mod.extractArticleFromPdfUrl;
+  });
+
+  it('throws on rate limit error from proxy', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: () => Promise.resolve({ error: 'Rate limit exceeded' }),
+      headers: {
+        get: (name: string) => (name === 'Retry-After' ? '30' : null),
+      },
+    } as unknown as Response);
+
+    await expect(extractArticleFromPdfUrl('https://example.com/big.pdf', PROXY))
+      .rejects.toThrow(/Rate limit/i);
+  });
+
+  it('throws on oversized PDF response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'content-length') return '20000000'; // 20 MB
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    await expect(extractArticleFromPdfUrl('https://example.com/huge.pdf', PROXY))
+      .rejects.toThrow(/too large/i);
+  });
+});
