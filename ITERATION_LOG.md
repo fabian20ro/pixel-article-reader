@@ -586,4 +586,27 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-24] Fix PWA background playback — audio element must be in DOM
+
+**Context:** User reported that PWA still stops playback when the screen is closed or the app is minimized, despite the silent audio + MediaSession implementation from 2026-02-23.
+
+**What happened:**
+- Root cause: the `<audio>` element created by `MediaSessionController` was never appended to `document.body`. Android Chrome ignores detached audio elements when deciding whether to suspend a page — the silent track was playing but the browser didn't "see" it as a real media session.
+- Three fixes applied to `media-session.ts`:
+  1. **Append audio to DOM** — `ensureAudio()` now calls `document.body.appendChild(this.audio)` with `playsinline` attribute. This is the critical fix.
+  2. **Visibility change handler** — Added `visibilitychange` listener in the controller that restarts the silent audio if the browser paused it while backgrounded.
+  3. **Keep-alive watchdog** — 5-second interval timer that checks if the audio is still playing and restarts it if not. Belt-and-suspenders defense.
+- Increased silent WAV duration from 1 second to 10 seconds. Reduces loop restarts and is more reliably treated as "real" media by some Android Chrome versions.
+- Fixed `tts-engine.ts` visibility change handler to call `mediaSession.notifyResume()` when returning from background, ensuring the silent audio gets restarted alongside TTS recovery.
+- Bumped SW_VERSION to `2026.02.24.1`.
+- All 214 tests pass, build clean.
+
+**Outcome:** Success. The silent audio element is now in the DOM and has multiple recovery mechanisms.
+
+**Insight:** Creating an `<audio>` element with `document.createElement()` and calling `.play()` on it is not sufficient for Android Chrome media session recognition. The element MUST be in the DOM (`document.body.appendChild(audio)`) for the browser to treat it as real media that prevents page suspension. Additionally, the browser may pause the audio when the page goes to background — a periodic keep-alive and `visibilitychange` handler provide defense-in-depth.
+
+**Promoted to Lessons Learned:** Yes — updated existing background audio lesson with DOM requirement.
+
+---
+
 <!-- New entries go above this line, most recent first -->
