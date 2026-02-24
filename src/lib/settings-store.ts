@@ -4,10 +4,13 @@ import type { Language } from './lang-detect.js';
 const THEMES = ['dark', 'light', 'khaki'] as const;
 export type Theme = (typeof THEMES)[number];
 
+export type VoiceGender = 'auto' | 'male' | 'female';
+
 export interface AppSettings {
   rate: number;
   lang: 'auto' | Language;
   voiceName: string;
+  voiceGender: VoiceGender;
   wakeLock: boolean;
   theme: Theme;
 }
@@ -37,11 +40,16 @@ function toLang(value: unknown, fallback: 'auto' | Language): 'auto' | Language 
   return fallback;
 }
 
+function isVoiceGender(value: unknown): value is VoiceGender {
+  return value === 'auto' || value === 'male' || value === 'female';
+}
+
 export function createDefaultSettings(defaults: SettingsDefaults): AppSettings {
   return {
     rate: defaults.defaultRate,
     lang: defaults.defaultLang,
     voiceName: '',
+    voiceGender: 'auto',
     wakeLock: true,
     theme: 'dark',
   };
@@ -59,6 +67,7 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
       rate: clampRate(parsed.rate, fallback.rate),
       lang: toLang(parsed.lang, fallback.lang),
       voiceName: typeof parsed.voiceName === 'string' ? parsed.voiceName : '',
+      voiceGender: isVoiceGender(parsed.voiceGender) ? parsed.voiceGender : 'auto',
       wakeLock: typeof parsed.wakeLock === 'boolean' ? parsed.wakeLock : true,
       theme: isTheme(parsed.theme) ? parsed.theme : 'dark',
     };

@@ -9,7 +9,6 @@ import { PwaUpdateManager } from './lib/pwa-update-manager.js';
 import { ArticleController } from './lib/article-controller.js';
 import { APP_RELEASE, shortRelease } from './lib/release.js';
 import { QueueController } from './lib/queue-controller.js';
-import { isValidArticleUrl } from './lib/url-utils.js';
 import type { QueueItem } from './lib/queue-store.js';
 import type { Language } from './lib/lang-detect.js';
 
@@ -21,6 +20,35 @@ const CONFIG = {
 };
 
 const ALLOWED_LANG_PREFIXES = ['en', 'ro'];
+
+/** Detect voice gender from name heuristics. Returns null if unknown. */
+function detectVoiceGender(name: string): 'male' | 'female' | null {
+  const lower = name.toLowerCase();
+  if (/\bfemale\b/.test(lower) || /\bwoman\b/.test(lower)) return 'female';
+  if (/\bmale\b/.test(lower) || /\bman\b/.test(lower)) return 'male';
+  // Known voice names by gender (cross-platform)
+  const knownFemale = [
+    'samantha', 'victoria', 'karen', 'moira', 'tessa', 'fiona', 'veena',
+    'ioana', 'sara', 'paulina', 'monica', 'luciana', 'joana', 'carmit',
+    'ellen', 'mariska', 'milena', 'katya', 'yelda', 'lekha', 'damayanti',
+    'alice', 'amelie', 'anna', 'helena', 'nora', 'zosia', 'ting-ting',
+    'sin-ji', 'mei-jia', 'yuna', 'kyoko',
+    'google us english', 'google uk english female',
+  ];
+  const knownMale = [
+    'daniel', 'alex', 'tom', 'thomas', 'oliver', 'james', 'fred', 'ralph',
+    'jorge', 'diego', 'juan', 'luca', 'xander', 'maged', 'tarik', 'rishi',
+    'aaron', 'neel', 'gordon', 'lee',
+    'google uk english male',
+  ];
+  for (const n of knownFemale) {
+    if (lower === n || lower.startsWith(n + ' ')) return 'female';
+  }
+  for (const n of knownMale) {
+    if (lower === n || lower.startsWith(n + ' ')) return 'male';
+  }
+  return null;
+}
 
 async function main(): Promise<void> {
   const refs = getAppDomRefs();
@@ -97,6 +125,9 @@ async function main(): Promise<void> {
           queueController.syncCurrentByUrl(article.resolvedUrl);
         }
       }
+
+      // Extract chapters (headings) from rendered article
+      buildChaptersList();
     },
   });
   articleController.init();
@@ -123,16 +154,16 @@ async function main(): Promise<void> {
     },
   });
 
-  // Queue sheet open/close
-  function openQueueSheet(): void {
-    refs.queueSheet.classList.add('open');
+  // ── Queue Drawer (left slide-in) ──────────────────────────────
+  function openQueueDrawer(): void {
+    refs.queueDrawer.classList.add('open');
     refs.queueOverlay.classList.remove('hidden');
     requestAnimationFrame(() => refs.queueOverlay.classList.add('open'));
   }
 
-  function closeQueueSheet(): void {
-    if (!refs.queueSheet.classList.contains('open')) return;
-    refs.queueSheet.classList.remove('open');
+  function closeQueueDrawer(): void {
+    if (!refs.queueDrawer.classList.contains('open')) return;
+    refs.queueDrawer.classList.remove('open');
     refs.queueOverlay.classList.remove('open');
     refs.queueOverlay.addEventListener('transitionend', () => {
       if (!refs.queueOverlay.classList.contains('open')) {
@@ -141,22 +172,24 @@ async function main(): Promise<void> {
     }, { once: true });
   }
 
-  refs.queueBtn.addEventListener('click', () => {
-    const isOpen = refs.queueSheet.classList.contains('open');
-    if (isOpen) closeQueueSheet(); else openQueueSheet();
+  refs.menuToggle.addEventListener('click', () => {
+    const isOpen = refs.queueDrawer.classList.contains('open');
+    if (isOpen) closeQueueDrawer(); else openQueueDrawer();
   });
 
-  refs.queueOverlay.addEventListener('click', closeQueueSheet);
+  refs.queueOverlay.addEventListener('click', closeQueueDrawer);
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && refs.queueSheet.classList.contains('open')) {
-      closeQueueSheet();
+    if (e.key === 'Escape') {
+      if (refs.queueDrawer.classList.contains('open')) closeQueueDrawer();
+      if (refs.settingsPanel.classList.contains('open')) closeSettingsDrawer();
+      if (refs.chaptersSheet.classList.contains('open')) closeChaptersSheet();
     }
   });
 
   refs.queueClearBtn.addEventListener('click', () => {
     queueController!.clearAll();
-    closeQueueSheet();
+    closeQueueDrawer();
   });
 
   // Auto-advance toast buttons
@@ -211,7 +244,7 @@ async function main(): Promise<void> {
   }
 
   function renderQueueUI(items: QueueItem[], currentIndex: number): void {
-    // Badge
+    // Badge on hamburger icon
     if (items.length > 0) {
       refs.queueBadge.textContent = String(Math.min(items.length, 99));
       refs.queueBadge.classList.remove('hidden');
@@ -219,7 +252,7 @@ async function main(): Promise<void> {
       refs.queueBadge.classList.add('hidden');
     }
 
-    // Count in sheet header
+    // Count in drawer header
     refs.queueCount.textContent = String(items.length);
 
     // Empty state
@@ -243,7 +276,7 @@ async function main(): Promise<void> {
       li.setAttribute('role', 'listitem');
       li.dataset.itemId = item.id;
 
-      // Drag handle (three horizontal lines / grip icon)
+      // Drag handle (grip icon)
       const dragHandle = document.createElement('div');
       dragHandle.className = 'queue-drag-handle';
       dragHandle.setAttribute('aria-label', 'Drag to reorder');
@@ -306,7 +339,7 @@ async function main(): Promise<void> {
       // Click to play
       li.addEventListener('click', () => {
         void queueController!.playItem(item.id).then(() => tts.play());
-        closeQueueSheet();
+        closeQueueDrawer();
       });
 
       refs.queueList.appendChild(li);
@@ -332,7 +365,6 @@ async function main(): Promise<void> {
     const listItems = Array.from(refs.queueList.children) as HTMLElement[];
     const rect = originalLi.getBoundingClientRect();
 
-    // Create a visual clone that follows the pointer
     const clone = originalLi.cloneNode(true) as HTMLElement;
     clone.className = 'queue-item queue-item-dragging';
     clone.style.position = 'fixed';
@@ -343,7 +375,6 @@ async function main(): Promise<void> {
     clone.style.pointerEvents = 'none';
     document.body.appendChild(clone);
 
-    // Mark the original as placeholder
     originalLi.classList.add('queue-item-placeholder');
 
     dragState = { itemId, startY, clone, placeholder: originalLi, originalLi, listItems };
@@ -356,7 +387,6 @@ async function main(): Promise<void> {
     const origRect = dragState.originalLi.getBoundingClientRect();
     dragState.clone.style.top = (origRect.top + dy) + 'px';
 
-    // Check if we should swap with a neighbor
     const items = Array.from(refs.queueList.children) as HTMLElement[];
     const currentIdx = items.indexOf(dragState.placeholder);
 
@@ -381,7 +411,6 @@ async function main(): Promise<void> {
     dragState.placeholder.classList.remove('queue-item-placeholder');
     refs.queueList.classList.remove('reordering');
 
-    // Read the new order from the DOM
     const reorderedIds = Array.from(refs.queueList.children)
       .map((li) => (li as HTMLElement).dataset.itemId)
       .filter(Boolean) as string[];
@@ -398,7 +427,6 @@ async function main(): Promise<void> {
     dragState = null;
   }
 
-  // Attach drag handlers to the queue list (delegated)
   refs.queueList.addEventListener('mousedown', (e) => {
     const handle = (e.target as HTMLElement).closest('.queue-drag-handle');
     if (!handle) return;
@@ -425,7 +453,7 @@ async function main(): Promise<void> {
     startDrag(li.dataset.itemId, getY(e), li);
 
     const onMove = (ev: TouchEvent) => {
-      ev.preventDefault(); // Prevent scroll while dragging
+      ev.preventDefault();
       moveDrag(getY(ev));
     };
     const onEnd = () => {
@@ -442,6 +470,86 @@ async function main(): Promise<void> {
   // Initial queue render
   renderQueueUI(queueController.getItems(), queueController.getCurrentIndex());
 
+  // ── Settings Drawer (right slide-in) ──────────────────────────
+  function openSettingsDrawer(): void {
+    refs.settingsPanel.classList.add('open');
+    refs.settingsOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => refs.settingsOverlay.classList.add('open'));
+  }
+
+  function closeSettingsDrawer(): void {
+    if (!refs.settingsPanel.classList.contains('open')) return;
+    refs.settingsPanel.classList.remove('open');
+    refs.settingsOverlay.classList.remove('open');
+    refs.settingsOverlay.addEventListener('transitionend', () => {
+      if (!refs.settingsOverlay.classList.contains('open')) {
+        refs.settingsOverlay.classList.add('hidden');
+      }
+    }, { once: true });
+  }
+
+  refs.settingsToggle.addEventListener('click', () => {
+    const isOpen = refs.settingsPanel.classList.contains('open');
+    if (isOpen) closeSettingsDrawer(); else openSettingsDrawer();
+  });
+
+  refs.settingsOverlay.addEventListener('click', closeSettingsDrawer);
+
+  // ── Chapters Bottom Sheet ─────────────────────────────────────
+  function openChaptersSheet(): void {
+    refs.chaptersSheet.classList.add('open');
+    refs.chaptersOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => refs.chaptersOverlay.classList.add('open'));
+  }
+
+  function closeChaptersSheet(): void {
+    if (!refs.chaptersSheet.classList.contains('open')) return;
+    refs.chaptersSheet.classList.remove('open');
+    refs.chaptersOverlay.classList.remove('open');
+    refs.chaptersOverlay.addEventListener('transitionend', () => {
+      if (!refs.chaptersOverlay.classList.contains('open')) {
+        refs.chaptersOverlay.classList.add('hidden');
+      }
+    }, { once: true });
+  }
+
+  refs.chaptersBtn.addEventListener('click', () => {
+    const isOpen = refs.chaptersSheet.classList.contains('open');
+    if (isOpen) closeChaptersSheet(); else openChaptersSheet();
+  });
+
+  refs.chaptersOverlay.addEventListener('click', closeChaptersSheet);
+
+  function buildChaptersList(): void {
+    const headings = refs.articleText.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
+
+    if (headings.length === 0) {
+      refs.chaptersBtn.classList.add('hidden');
+      return;
+    }
+
+    refs.chaptersBtn.classList.remove('hidden');
+    refs.chaptersBtnText.textContent = `Chapters (${headings.length})`;
+    refs.chaptersList.innerHTML = '';
+
+    headings.forEach((heading) => {
+      const level = parseInt(heading.tagName.charAt(1), 10);
+      const text = heading.textContent?.trim() ?? '';
+      if (!text) return;
+
+      const li = document.createElement('li');
+      li.className = 'chapter-item';
+      li.dataset.level = String(level);
+      li.textContent = text;
+      li.addEventListener('click', () => {
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        closeChaptersSheet();
+      });
+      refs.chaptersList.appendChild(li);
+    });
+  }
+
+  // ── PWA Update Manager ────────────────────────────────────────
   updateManager = new PwaUpdateManager({
     onStatus(status) {
       refs.updateStatus.textContent = status;
@@ -485,36 +593,6 @@ async function main(): Promise<void> {
     void updateManager?.forceRefresh();
   });
 
-  // Settings drawer
-  function openDrawer(): void {
-    refs.settingsPanel.classList.add('open');
-    refs.drawerOverlay.classList.remove('hidden');
-    requestAnimationFrame(() => refs.drawerOverlay.classList.add('open'));
-  }
-
-  function closeDrawer(): void {
-    refs.settingsPanel.classList.remove('open');
-    refs.drawerOverlay.classList.remove('open');
-    refs.drawerOverlay.addEventListener('transitionend', () => {
-      if (!refs.drawerOverlay.classList.contains('open')) {
-        refs.drawerOverlay.classList.add('hidden');
-      }
-    }, { once: true });
-  }
-
-  refs.settingsToggle.addEventListener('click', () => {
-    const isOpen = refs.settingsPanel.classList.contains('open');
-    if (isOpen) closeDrawer(); else openDrawer();
-  });
-
-  refs.drawerOverlay.addEventListener('click', closeDrawer);
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && refs.settingsPanel.classList.contains('open')) {
-      closeDrawer();
-    }
-  });
-
   // Speed slider
   refs.settingsSpeed.value = String(settings.rate);
   refs.speedValue.textContent = settings.rate + 'x';
@@ -534,6 +612,17 @@ async function main(): Promise<void> {
     if (name) tts.setVoice(name);
     settings.voiceName = name;
     persistSettings(settings);
+  });
+
+  // Voice gender selector
+  refs.voiceGenderBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const gender = btn.dataset.value as 'auto' | 'male' | 'female';
+      settings.voiceGender = gender;
+      persistSettings(settings);
+      updateSegmentButtons(refs.voiceGenderBtns, gender);
+      applyVoiceGender(gender);
+    });
   });
 
   // Theme controls
@@ -641,7 +730,6 @@ async function main(): Promise<void> {
       .getAvailableVoices()
       .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
 
-    // Sort: group by language, then alphabetically by name within each group
     voices.sort((a, b) => {
       const langCmp = a.lang.localeCompare(b.lang);
       if (langCmp !== 0) return langCmp;
@@ -656,6 +744,38 @@ async function main(): Promise<void> {
       if (voice.name === settings.voiceName) opt.selected = true;
       refs.settingsVoice.appendChild(opt);
     });
+
+    // Show/hide gender selector based on whether we can detect genders
+    const hasDetectableGenders = voices.some((v) => detectVoiceGender(v.name) !== null);
+    if (hasDetectableGenders) {
+      refs.voiceGenderGroup.classList.remove('hidden');
+      updateSegmentButtons(refs.voiceGenderBtns, settings.voiceGender || 'auto');
+      applyVoiceGender(settings.voiceGender || 'auto');
+    } else {
+      refs.voiceGenderGroup.classList.add('hidden');
+    }
+  }
+
+  function applyVoiceGender(gender: 'auto' | 'male' | 'female'): void {
+    if (gender === 'auto') {
+      // Reset to auto or saved voice name
+      if (settings.voiceName) {
+        tts.setVoice(settings.voiceName);
+      }
+      return;
+    }
+
+    const voices = tts
+      .getAvailableVoices()
+      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
+
+    const match = voices.find((v) => detectVoiceGender(v.name) === gender);
+    if (match) {
+      tts.setVoice(match.name);
+      settings.voiceName = match.name;
+      // Update the dropdown to show the selected voice
+      refs.settingsVoice.value = match.name;
+    }
   }
 
   function updateSpeedButtons(rate: number): void {
