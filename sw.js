@@ -6,7 +6,7 @@
 // - Proxy/API requests: network-only.
 //
 // Bump SW_VERSION on releases that change cache behavior or app-shell wiring.
-const SW_VERSION = '2026.02.24.2';
+const SW_VERSION = '2026.02.24.3';
 const CACHE_NAME = `article-voice-${SW_VERSION}`;
 
 const PRECACHE = [
@@ -27,6 +27,7 @@ const PRECACHE = [
   './lib/settings-store.js',
   './lib/translator.js',
   './lib/media-session.js',
+  './lib/tts-audio-fetcher.js',
   './lib/tts-engine.js',
   './lib/url-utils.js',
 ];

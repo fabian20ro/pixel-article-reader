@@ -77,16 +77,20 @@ export class MediaSessionController {
   private _active = false;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
+  // Named handler for proper removal in dispose()
+  private readonly _onVisibilityChange: () => void;
+
   constructor() {
     // When page returns from background, re-ensure silent audio is playing.
     // Android Chrome may pause the audio element when the page goes hidden.
-    document.addEventListener('visibilitychange', () => {
+    this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this._active) {
         if (this.audio && this.audio.paused) {
           Promise.resolve(this.audio.play()).catch(() => {});
         }
       }
-    });
+    };
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   setActions(actions: MediaSessionActions): void {
@@ -173,6 +177,7 @@ export class MediaSessionController {
 
   dispose(): void {
     this.deactivate();
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
     if (this.silentUrl) {
       URL.revokeObjectURL(this.silentUrl);
       this.silentUrl = null;

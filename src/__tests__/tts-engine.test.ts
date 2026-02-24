@@ -246,7 +246,11 @@ describe('selectVoice', () => {
 describe('TTSEngine', () => {
   function createEngine(callbacks: TTSCallbacks = {}) {
     mockSynth.getVoices.mockReturnValue([makeVoice('Google US English', 'en-US')]);
-    const engine = new TTSEngine(callbacks);
+    const engine = new TTSEngine({
+      proxyBase: '',
+      proxySecret: '',
+      callbacks,
+    });
     // Manually set voices since we can't await init (voiceschanged event)
     (engine as unknown as Record<string, unknown[]>).allVoices = mockSynth.getVoices();
     return engine;
