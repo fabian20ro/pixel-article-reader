@@ -114,9 +114,34 @@ async function main(): Promise<void> {
     void updateManager?.forceRefresh();
   });
 
-  // Settings panel
+  // Settings drawer
+  function openDrawer(): void {
+    refs.settingsPanel.classList.add('open');
+    refs.drawerOverlay.classList.remove('hidden');
+    requestAnimationFrame(() => refs.drawerOverlay.classList.add('open'));
+  }
+
+  function closeDrawer(): void {
+    refs.settingsPanel.classList.remove('open');
+    refs.drawerOverlay.classList.remove('open');
+    refs.drawerOverlay.addEventListener('transitionend', () => {
+      if (!refs.drawerOverlay.classList.contains('open')) {
+        refs.drawerOverlay.classList.add('hidden');
+      }
+    }, { once: true });
+  }
+
   refs.settingsToggle.addEventListener('click', () => {
-    refs.settingsPanel.classList.toggle('hidden');
+    const isOpen = refs.settingsPanel.classList.contains('open');
+    if (isOpen) closeDrawer(); else openDrawer();
+  });
+
+  refs.drawerOverlay.addEventListener('click', closeDrawer);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && refs.settingsPanel.classList.contains('open')) {
+      closeDrawer();
+    }
   });
 
   // Speed slider
@@ -156,23 +181,12 @@ async function main(): Promise<void> {
 
   // Language controls
   updateSegmentButtons(refs.settingsLangBtns, settings.lang);
-  updateSegmentButtons(refs.playerLangBtns, settings.lang);
 
   refs.settingsLangBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       const lang = btn.dataset.value as 'auto' | Language;
       setLangOverride(lang);
       updateSegmentButtons(refs.settingsLangBtns, lang);
-      updateSegmentButtons(refs.playerLangBtns, lang);
-    });
-  });
-
-  refs.playerLangBtns.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const lang = btn.dataset.value as 'auto' | Language;
-      setLangOverride(lang);
-      updateSegmentButtons(refs.settingsLangBtns, lang);
-      updateSegmentButtons(refs.playerLangBtns, lang);
     });
   });
 

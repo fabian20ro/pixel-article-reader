@@ -27,6 +27,7 @@ export interface AppDomRefs {
   progressBar: HTMLElement;
   settingsToggle: HTMLElement;
   settingsPanel: HTMLElement;
+  drawerOverlay: HTMLElement;
   settingsSpeed: HTMLInputElement;
   speedValue: HTMLElement;
   settingsVoice: HTMLSelectElement;
@@ -41,7 +42,6 @@ export interface AppDomRefs {
   speedBtns: NodeListOf<HTMLButtonElement>;
   themeBtns: NodeListOf<HTMLButtonElement>;
   settingsLangBtns: NodeListOf<HTMLButtonElement>;
-  playerLangBtns: NodeListOf<HTMLButtonElement>;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -82,6 +82,7 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     progressBar: requireElement('progress-bar', root),
     settingsToggle: requireElement('settings-toggle', root),
     settingsPanel: requireElement('settings-panel', root),
+    drawerOverlay: requireElement('drawer-overlay', root),
     settingsSpeed: requireElement<HTMLInputElement>('settings-speed', root),
     speedValue: requireElement('speed-value', root),
     settingsVoice: requireElement<HTMLSelectElement>('settings-voice', root),
@@ -93,9 +94,8 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     installBanner: requireElement('install-banner', root),
     installBtn: requireElement('install-btn', root),
     installDismiss: requireElement('install-dismiss', root),
-    speedBtns: root.querySelectorAll<HTMLButtonElement>('.speed-btn'),
+    speedBtns: root.querySelectorAll<HTMLButtonElement>('#speed-selector .segment-btn'),
     themeBtns: root.querySelectorAll<HTMLButtonElement>('#theme-selector .segment-btn'),
     settingsLangBtns: root.querySelectorAll<HTMLButtonElement>('#settings-lang-selector .segment-btn'),
-    playerLangBtns: root.querySelectorAll<HTMLButtonElement>('#player-lang-selector .segment-btn'),
   };
 }

@@ -111,7 +111,7 @@ body {
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -123,13 +123,40 @@ body {
   color: var(--accent);
 }
 
-/* === Settings Panel === */
-.settings-panel {
+/* === Settings Drawer === */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+}
+
+.settings-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  max-width: 80vw;
   background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   padding: 16px;
-  flex-shrink: 0;
-  animation: slideDown 0.2s ease;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  z-index: 200;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-drawer.open {
+  transform: translateX(0);
 }
 
 .settings-group {
@@ -310,7 +337,7 @@ body {
 }
 
 .segment-control.compact {
-  border-radius: 16px;
+  border-radius: var(--radius-sm);
 }
 
 .segment-control.compact .segment-btn {
@@ -646,52 +673,17 @@ body {
   background: var(--accent-hover) !important;
 }
 
-.control-btn {
-  color: var(--text-secondary);
-}
-
-.sentence-btn {
-  min-width: 40px;
-  min-height: 40px;
-  opacity: 0.7;
-}
-
-.sentence-btn:hover,
-.sentence-btn:active {
-  opacity: 1;
+.nav-segment .segment-btn {
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 /* === Speed Controls === */
 .speed-controls {
   display: flex;
   justify-content: center;
-  gap: 4px;
   margin-bottom: 4px;
-}
-
-.speed-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 12px;
-  cursor: pointer;
-  min-height: 32px;
-  transition: all 0.15s;
-}
-
-.speed-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-/* === Language Controls === */
-.lang-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 /* === Utility === */
