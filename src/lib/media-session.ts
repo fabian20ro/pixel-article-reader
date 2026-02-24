@@ -5,6 +5,12 @@
  * which kills the speechSynthesis callback chain.  Playing an inaudible
  * <audio> track creates a real media session that Android keeps alive.
  * Registering navigator.mediaSession handlers adds lock-screen controls.
+ *
+ * Critical for reliability:
+ *  - The <audio> element MUST be appended to document.body — Android Chrome
+ *    ignores detached audio elements when deciding whether to suspend a page.
+ *  - A periodic keep-alive watchdog restarts audio if the browser pauses it.
+ *  - The visibilitychange handler re-ensures audio on return from background.
  */
 
 export interface MediaSessionActions {
@@ -16,12 +22,15 @@ export interface MediaSessionActions {
 }
 
 /**
- * Build a blob URL for a 1-second silent WAV (8 kHz, 8-bit, mono).
+ * Build a blob URL for a 10-second silent WAV (8 kHz, 8-bit, mono).
  * Sample value 128 = zero crossing in unsigned 8-bit PCM = silence.
+ * 10 seconds (vs 1 second) reduces loop restarts and is more reliably
+ * treated as "real" media by Android Chrome.
  */
 function createSilentWavUrl(): string {
   const sampleRate = 8000;
-  const numSamples = sampleRate; // 1 second
+  const durationSeconds = 10;
+  const numSamples = sampleRate * durationSeconds;
   const headerSize = 44;
   const dataSize = numSamples;
   const fileSize = headerSize + dataSize;
@@ -62,10 +71,29 @@ export class MediaSessionController {
   private audio: HTMLAudioElement | null = null;
   private silentUrl: string | null = null;
   private actions: MediaSessionActions | null = null;
+  private _active = false;
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    // When page returns from background, re-ensure silent audio is playing.
+    // Android Chrome may pause the audio element when the page goes hidden.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this._active) {
+        if (this.audio && this.audio.paused) {
+          Promise.resolve(this.audio.play()).catch(() => {});
+        }
+      }
+    });
+  }
 
   setActions(actions: MediaSessionActions): void {
     this.actions = actions;
     this.registerHandlers();
+  }
+
+  /** Whether the media session is currently active (audio playing). */
+  get active(): boolean {
+    return this._active;
   }
 
   /**
@@ -77,19 +105,22 @@ export class MediaSessionController {
     this.ensureAudio();
     if (!this.audio) return;
 
+    this._active = true;
     Promise.resolve(this.audio.play()).catch(() => {});
     this.updateMetadata(title);
     this.setPlaybackState('playing');
+    this.startKeepAlive();
   }
 
   /** Signal pause to OS lock screen — keeps session alive. */
   notifyPause(): void {
     this.setPlaybackState('paused');
+    // NOTE: do NOT pause the audio element — it keeps the PWA alive in background
   }
 
   /** Signal resume to OS lock screen and ensure audio is still running. */
   notifyResume(): void {
-    if (this.audio?.paused) {
+    if (this._active && this.audio?.paused) {
       Promise.resolve(this.audio.play()).catch(() => {});
     }
     this.setPlaybackState('playing');
@@ -97,6 +128,8 @@ export class MediaSessionController {
 
   /** Stop silent audio and clear media session. */
   deactivate(): void {
+    this._active = false;
+    this.stopKeepAlive();
     if (this.audio) {
       this.audio.pause();
       this.audio.currentTime = 0;
@@ -130,6 +163,30 @@ export class MediaSessionController {
     this.audio = document.createElement('audio');
     this.audio.src = this.silentUrl;
     this.audio.loop = true;
+    this.audio.setAttribute('playsinline', '');
+    // Append to DOM — Android Chrome requires the element to be in the
+    // document for the media session to prevent page suspension.
+    document.body.appendChild(this.audio);
+  }
+
+  /**
+   * Periodic watchdog that restarts the silent audio if the browser paused it.
+   * Runs every 5 seconds while the session is active.
+   */
+  private startKeepAlive(): void {
+    this.stopKeepAlive();
+    this.keepAliveTimer = setInterval(() => {
+      if (this._active && this.audio && this.audio.paused) {
+        Promise.resolve(this.audio.play()).catch(() => {});
+      }
+    }, 5000);
+  }
+
+  private stopKeepAlive(): void {
+    if (this.keepAliveTimer !== null) {
+      clearInterval(this.keepAliveTimer);
+      this.keepAliveTimer = null;
+    }
   }
 
   private registerHandlers(): void {

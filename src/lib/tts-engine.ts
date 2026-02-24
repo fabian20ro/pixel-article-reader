@@ -193,6 +193,8 @@ export class TTSEngine {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
         this.acquireWakeLock();
+        // Re-ensure silent audio is still playing (Android may have paused it)
+        this.mediaSession.notifyResume();
         // If synth stopped while we were in background, restart from current pos
         if (!speechSynthesis.speaking && !speechSynthesis.pending) {
           this.speakCurrent();
