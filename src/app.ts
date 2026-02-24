@@ -88,7 +88,11 @@ async function main(): Promise<void> {
           items.some((i) => i.url === article.resolvedUrl);
         if (!alreadyQueued) {
           const item = queueController.addArticle(article);
-          queueController.syncCurrentByUrl(article.resolvedUrl || item.id);
+          if (article.resolvedUrl) {
+            queueController.syncCurrentByUrl(article.resolvedUrl);
+          } else {
+            queueController.syncCurrentById(item.id);
+          }
         } else {
           queueController.syncCurrentByUrl(article.resolvedUrl);
         }
@@ -105,7 +109,7 @@ async function main(): Promise<void> {
       onQueueChange(items, currentIndex) {
         renderQueueUI(items, currentIndex);
       },
-      onAutoAdvanceCountdown(nextTitle, _secondsLeft) {
+      onAutoAdvanceCountdown(nextTitle) {
         refs.advanceText.textContent = `Up next: ${nextTitle}`;
         showSnackbar(refs.autoAdvanceToast);
       },
@@ -127,6 +131,7 @@ async function main(): Promise<void> {
   }
 
   function closeQueueSheet(): void {
+    if (!refs.queueSheet.classList.contains('open')) return;
     refs.queueSheet.classList.remove('open');
     refs.queueOverlay.classList.remove('open');
     refs.queueOverlay.addEventListener('transitionend', () => {
@@ -197,6 +202,7 @@ async function main(): Promise<void> {
   }
 
   function hideSnackbar(el: HTMLElement): void {
+    if (!el.classList.contains('visible')) return;
     el.classList.remove('visible');
     el.addEventListener('transitionend', () => {
       if (!el.classList.contains('visible')) {

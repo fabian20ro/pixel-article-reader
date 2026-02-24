@@ -31,7 +31,7 @@ function isValidQueueItem(item: unknown): item is QueueItem {
   const i = item as Record<string, unknown>;
   return (
     typeof i.id === 'string' && i.id.length > 0 &&
-    typeof i.url === 'string' && isValidArticleUrl(i.url) &&
+    typeof i.url === 'string' && (i.url === '' || isValidArticleUrl(i.url)) &&
     typeof i.title === 'string' &&
     typeof i.siteName === 'string' &&
     typeof i.wordCount === 'number' && Number.isFinite(i.wordCount) &&
@@ -80,7 +80,7 @@ export function createQueueItem(article: Article): QueueItem {
 /** Add an item to the queue. Enforces max size. Returns the new queue. */
 export function addToQueue(items: QueueItem[], item: QueueItem): QueueItem[] {
   // Prevent duplicates by URL
-  const filtered = items.filter((i) => i.url !== item.url || !item.url);
+  const filtered = items.filter((i) => !item.url || i.url !== item.url);
   const updated = [...filtered, item].slice(-MAX_QUEUE_SIZE);
   saveQueue(updated);
   return updated;

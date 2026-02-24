@@ -20,7 +20,7 @@ import {
 
 export interface QueueCallbacks {
   onQueueChange(items: QueueItem[], currentIndex: number): void;
-  onAutoAdvanceCountdown(nextTitle: string, secondsLeft: number): void;
+  onAutoAdvanceCountdown(nextTitle: string): void;
   onAutoAdvanceCancelled(): void;
   onError(msg: string): void;
 }
@@ -143,26 +143,36 @@ export class QueueController {
   /** Advance to the next queue item and start playing. */
   async playNext(): Promise<void> {
     if (!this.hasNext()) return;
-    this.currentIndex++;
-    const item = this.items[this.currentIndex];
-    this.notify();
+    const nextIndex = this.currentIndex + 1;
+    const item = this.items[nextIndex];
 
     if (item.url && isValidArticleUrl(item.url)) {
-      await this.ac.loadArticleFromUrl(item.url);
-      this.tts.play();
+      try {
+        await this.ac.loadArticleFromUrl(item.url);
+        this.currentIndex = nextIndex;
+        this.notify();
+        this.tts.play();
+      } catch {
+        this.cb.onError(`Failed to load: ${item.title}`);
+      }
     }
   }
 
   /** Go back to the previous queue item and start playing. */
   async playPrevious(): Promise<void> {
     if (!this.hasPrevious()) return;
-    this.currentIndex--;
-    const item = this.items[this.currentIndex];
-    this.notify();
+    const prevIndex = this.currentIndex - 1;
+    const item = this.items[prevIndex];
 
     if (item.url && isValidArticleUrl(item.url)) {
-      await this.ac.loadArticleFromUrl(item.url);
-      this.tts.play();
+      try {
+        await this.ac.loadArticleFromUrl(item.url);
+        this.currentIndex = prevIndex;
+        this.notify();
+        this.tts.play();
+      } catch {
+        this.cb.onError(`Failed to load: ${item.title}`);
+      }
     }
   }
 
@@ -172,6 +182,15 @@ export class QueueController {
    */
   syncCurrentByUrl(url: string): void {
     const idx = this.items.findIndex((i) => i.url === url);
+    if (idx !== -1) {
+      this.currentIndex = idx;
+      this.notify();
+    }
+  }
+
+  /** Mark an item as current by matching the item id. */
+  syncCurrentById(id: string): void {
+    const idx = this.items.findIndex((i) => i.id === id);
     if (idx !== -1) {
       this.currentIndex = idx;
       this.notify();
@@ -190,8 +209,7 @@ export class QueueController {
     const next = this.getNextItem();
     if (!next) return;
 
-    let secondsLeft = AUTO_ADVANCE_DELAY_MS / 1000;
-    this.cb.onAutoAdvanceCountdown(next.title, secondsLeft);
+    this.cb.onAutoAdvanceCountdown(next.title);
 
     this.autoAdvanceTimer = setTimeout(() => {
       this.autoAdvanceTimer = null;
