@@ -456,10 +456,7 @@ export class ArticleController {
 
   private syncLanguageControls(): void {
     const { refs } = this.options;
-    refs.settingsLangBtns.forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.value === this.langOverride);
-    });
-    refs.playerLangBtns.forEach((btn) => {
+    refs.settingsLangBtns.forEach((btn: HTMLButtonElement) => {
       btn.classList.toggle('active', btn.dataset.value === this.langOverride);
     });
   }

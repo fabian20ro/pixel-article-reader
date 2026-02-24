@@ -27,17 +27,19 @@
 
   <!-- Header -->
   <header class="header">
-    <h1 class="header-title">ArticleVoice</h1>
-    <button id="settings-toggle" class="icon-btn" aria-label="Settings">
+    <button id="settings-toggle" class="icon-btn" aria-label="Menu">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.32 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
       </svg>
     </button>
+    <h1 class="header-title">ArticleVoice</h1>
   </header>
 
-  <!-- Settings Panel -->
-  <div id="settings-panel" class="settings-panel hidden">
+  <!-- Settings Drawer -->
+  <div id="drawer-overlay" class="drawer-overlay hidden"></div>
+  <nav id="settings-panel" class="settings-drawer" aria-label="Settings">
     <div class="settings-group">
       <label class="settings-label">
         Default Speed
@@ -81,7 +83,7 @@
         <img src="https://github.com/fabian20ro/pixel-article-reader/actions/workflows/deploy-pages.yml/badge.svg" alt="Deploy to GitHub Pages">
       </a>
     </div>
-  </div>
+  </nav>
 
   <!-- Main Content -->
   <main class="main">
@@ -145,16 +147,18 @@
 
     <!-- Main Playback Controls -->
     <div class="playback-controls">
-      <button id="skip-back" class="icon-btn control-btn" aria-label="Previous paragraph">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
-        </svg>
-      </button>
-      <button id="skip-sentence-back" class="icon-btn control-btn sentence-btn" aria-label="Previous sentence">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M11 18L3 12l8-6v12zm1 0l-8-6 8-6v12z" transform="translate(5,0)"/>
-        </svg>
-      </button>
+      <div class="segment-control compact nav-segment">
+        <button id="skip-back" class="segment-btn" aria-label="Previous paragraph">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+          </svg>
+        </button>
+        <button id="skip-sentence-back" class="segment-btn" aria-label="Previous sentence">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11 18L3 12l8-6v12zm1 0l-8-6 8-6v12z" transform="translate(5,0)"/>
+          </svg>
+        </button>
+      </div>
       <button id="play-pause" class="icon-btn play-btn" aria-label="Play">
         <svg id="play-icon" width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z"/>
@@ -163,33 +167,28 @@
           <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
         </svg>
       </button>
-      <button id="skip-sentence-forward" class="icon-btn control-btn sentence-btn" aria-label="Next sentence">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M13 6l8 6-8 6V6zm-1 0l8 6-8 6V6z" transform="translate(-5,0)"/>
-        </svg>
-      </button>
-      <button id="skip-forward" class="icon-btn control-btn" aria-label="Next paragraph">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-        </svg>
-      </button>
+      <div class="segment-control compact nav-segment">
+        <button id="skip-sentence-forward" class="segment-btn" aria-label="Next sentence">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 6l8 6-8 6V6zm-1 0l8 6-8 6V6z" transform="translate(-5,0)"/>
+          </svg>
+        </button>
+        <button id="skip-forward" class="segment-btn" aria-label="Next paragraph">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Speed Controls -->
     <div class="speed-controls">
-      <button class="speed-btn" data-rate="0.75">0.75x</button>
-      <button class="speed-btn active" data-rate="1">1x</button>
-      <button class="speed-btn" data-rate="1.25">1.25x</button>
-      <button class="speed-btn" data-rate="1.5">1.5x</button>
-      <button class="speed-btn" data-rate="2">2x</button>
-    </div>
-
-    <!-- Language Toggle -->
-    <div class="lang-controls">
-      <div class="segment-control compact" id="player-lang-selector">
-        <button class="segment-btn active" data-value="auto">&#x1F310;</button>
-        <button class="segment-btn" data-value="en">&#x1F1EC;&#x1F1E7;</button>
-        <button class="segment-btn" data-value="ro">&#x1F1F7;&#x1F1F4;</button>
+      <div class="segment-control compact" id="speed-selector">
+        <button class="segment-btn" data-rate="0.75">0.75x</button>
+        <button class="segment-btn active" data-rate="1">1x</button>
+        <button class="segment-btn" data-rate="1.25">1.25x</button>
+        <button class="segment-btn" data-rate="1.5">1.5x</button>
+        <button class="segment-btn" data-rate="2">2x</button>
       </div>
     </div>
   </footer>
