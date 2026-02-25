@@ -725,4 +725,23 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-25] Architecture refactoring — 4 items implemented
+
+**Context:** Prior investigation identified 5 architectural improvements. Validated, prioritized, and implemented 4 of them (deferred DOM decoupling as poor cost/benefit).
+
+**What happened:**
+- Phase 1: Created `src/lib/language-config.ts` as single source of truth for Language type, supported languages, TTS codes, and translation target. Updated 6 consumer files. Zero behavioral change.
+- Phase 2: Split `extractor.ts` (1240 lines) into `src/lib/extractors/` subdirectory with 6 focused modules (types, utils, extract-html, extract-pdf, extract-epub, extract-text). Original file becomes a barrel re-exporting everything — zero consumer changes needed. Moved `sanitizeRenderedHtml` from article-controller to extract-html.
+- Phase 3: Vendored pdf.js (pdfjs-dist@4.9.155) and JSZip (3.10.1) from npm into `vendor/`. Updated extractors to load from local paths instead of CDN URLs. Enables offline PDF/EPUB support.
+- Phase 4: Extracted TTSBackend interface with AudioTTSBackend and SpeechTTSBackend implementations. TTSEngine delegates speak/pause/resume/cancel to backends while keeping all orchestration. Added `activeBackend` tracker for correct pause/resume routing.
+- Deferred item 5 (Decouple ArticleController from DOM): 545-line file is manageable, no component framework, no existing tests, poor cost/benefit.
+
+**Outcome:** Success. All 244 tests pass after each phase. 4 commits, clean build. CDN blocked by proxy so used npm to download vendor files.
+
+**Insight:** The barrel re-export pattern for extractor split was key — zero consumer changes. For TTS strategy: the `activeBackend` tracker was the missing piece that made pause/resume routing clean. The generation counter pattern (stale callback protection) must stay in the engine, not the backends.
+
+**Promoted to Lessons Learned:** No — these are one-time refactoring decisions.
+
+---
+
 <!-- New entries go above this line, most recent first -->
