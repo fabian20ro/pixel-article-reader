@@ -7,6 +7,9 @@ import {
   createArticleFromPdf,
   createArticleFromMarkdownFile,
   createArticleFromEpub,
+  IMAGE_MD_RE,
+  IMAGE_JINA_RE,
+  IMAGE_HTML_RE,
   type Article,
 } from './extractor.js';
 import { needsTranslation, getSourceLang, type Language } from './lang-detect.js';
@@ -53,6 +56,7 @@ export interface ArticleControllerOptions {
 export class ArticleController {
   private currentArticle: Article | null = null;
   private currentArticleUrl = '';
+  private currentTtsParagraphs: string[] = [];
   private langOverride: 'auto' | Language;
 
   constructor(private readonly options: ArticleControllerOptions) {
@@ -259,14 +263,14 @@ export class ArticleController {
     refs.copyMdBtn.disabled = false;
     refs.copyMdBtn.textContent = 'Copy as Markdown';
 
-    const ttsParagraphs = this.renderArticleBody(article);
+    this.currentTtsParagraphs = this.renderArticleBody(article);
 
-    this.options.tts.loadArticle(ttsParagraphs, resolvedLang, article.title);
+    this.options.tts.loadArticle(this.currentTtsParagraphs, resolvedLang, article.title);
     this.syncLanguageControls();
 
     this.showView('article');
     refs.playerControls.classList.remove('hidden');
-    this.options.onArticleRendered?.(ttsParagraphs.length);
+    this.options.onArticleRendered?.(this.currentTtsParagraphs.length);
   }
 
   private renderArticleBody(article: Article): string[] {
@@ -333,8 +337,6 @@ export class ArticleController {
         flush();
 
         if (ttsParagraphs.length > 0) {
-          article.paragraphs = ttsParagraphs;
-          article.textContent = ttsParagraphs.join('\n\n');
           return ttsParagraphs;
         }
       }
@@ -363,9 +365,9 @@ export class ArticleController {
       // Strip image-related content before rendering — this is a text reader,
       // not an image viewer, so images add no value and produce visual noise.
       const cleaned = markdown
-        .replace(/<img[^>]*\/?>/gi, '')                                        // raw HTML <img> tags (escapeHtml makes them literal text)
-        .replace(/!\[[^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/g, '')                 // ![alt](url) → remove (handles parens in URLs)
-        .replace(/\[Image\s*[:\d][^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/gi, '');  // [Image: ...](url) Jina format → remove
+        .replace(IMAGE_HTML_RE, '')     // raw HTML <img> tags
+        .replace(IMAGE_MD_RE, '')       // ![alt](url) → remove
+        .replace(IMAGE_JINA_RE, '');    // [Image: ...](url) Jina format → remove
       const html = marked.parse(cleaned);
       return sanitizeRenderedHtml(String(html));
     } catch {
@@ -437,18 +439,21 @@ export class ArticleController {
     try {
       const sourceLang = getSourceLang(this.currentArticle.htmlLang, this.currentArticleUrl);
       const translated = await translateParagraphs(
-        this.currentArticle.paragraphs,
+        this.currentTtsParagraphs,
         sourceLang,
         'en',
         this.options.proxyBase,
         this.options.proxySecret,
       );
 
-      this.currentArticle.paragraphs = translated;
-      this.currentArticle.textContent = translated.join('\n\n');
-      this.currentArticle.markdown = translated.join('\n\n');
-      this.currentArticle.lang = 'en';
-      this.currentArticle.htmlLang = 'en';
+      this.currentArticle = {
+        ...this.currentArticle,
+        paragraphs: translated,
+        textContent: translated.join('\n\n'),
+        markdown: translated.join('\n\n'),
+        lang: 'en',
+        htmlLang: 'en',
+      };
 
       this.displayArticle(this.currentArticle);
       refs.translateBtn.classList.add('hidden');
@@ -499,8 +504,8 @@ function sanitizeRenderedHtml(html: string): string {
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) return '';
 
-  // Remove dangerous elements and image-related elements (this is a text reader).
-  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg').forEach((el) => el.remove());
+  // Remove dangerous elements, form elements, and image-related elements (this is a text reader).
+  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg, form, meta, link, base').forEach((el) => el.remove());
 
   // Remove links that became empty after image removal (linked images)
   // and links whose text is just an image reference (Jina Reader format).
@@ -522,7 +527,7 @@ function sanitizeRenderedHtml(html: string): string {
         return;
       }
 
-      if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) {
+      if ((name === 'href' || name === 'src') && /^\s*(javascript|data|vbscript):/i.test(value)) {
         el.removeAttribute(attr.name);
       }
     });

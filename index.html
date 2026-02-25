@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#1a1a2e">
   <meta name="description" content="Listen to any article — paste a URL or share from your browser">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.workers.dev https://translate.googleapis.com; media-src blob:; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Article Local Reader</title>
@@ -64,7 +65,7 @@
     <div class="queue-drawer-content">
       <div id="queue-empty" class="queue-empty">
         <p>Your queue is empty</p>
-        <p class="text-secondary">Paste a URL or share from your browser to start listening.</p>
+        <p>Paste a URL or share from your browser to start listening.</p>
       </div>
       <ul id="queue-list" class="queue-list" role="list"></ul>
     </div>
@@ -256,19 +257,11 @@
   <div id="chapters-overlay" class="drawer-overlay hidden"></div>
   <div id="chapters-sheet" class="chapters-sheet" role="dialog" aria-label="Chapters" aria-modal="true">
     <div class="chapters-sheet-handle" id="chapters-sheet-handle">
-      <div class="handle-bar"></div>
       <span class="chapters-sheet-title">Chapters</span>
     </div>
     <div class="chapters-sheet-content">
       <ul id="chapters-list" class="chapters-list" role="list"></ul>
     </div>
-  </div>
-
-  <!-- Snackbar: Play Now / Add to Queue -->
-  <div id="add-queue-snackbar" class="snackbar hidden">
-    <span id="snackbar-title" class="snackbar-title"></span>
-    <button id="play-now-btn" class="btn-text">Play Now</button>
-    <button id="add-queue-btn" class="btn-text">Add to Queue</button>
   </div>
 
   <!-- Auto-advance toast -->

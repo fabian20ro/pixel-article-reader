@@ -164,7 +164,6 @@ export class TTSEngine {
   private rawParagraphs: string[] = [];
   private lang: Language = 'en';
   private rate = 1.0;
-  private pitch = 1.0;
   private voice: SpeechSynthesisVoice | null = null;
   private allVoices: SpeechSynthesisVoice[] = [];
   private preferredVoiceName = '';
@@ -660,7 +659,6 @@ export class TTSEngine {
   private speakViaSpeechSynthesis(text: string, gen: number): void {
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = this.rate;
-    utter.pitch = this.pitch;
     utter.lang = langToCode(this.lang);
     if (this.voice) utter.voice = this.voice;
 

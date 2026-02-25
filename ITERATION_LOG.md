@@ -705,4 +705,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-25] Full codebase structural and maintainability analysis
+
+**Context:** Comprehensive code analysis using four parallel specialized agents (Architect, Security Reviewer, Code Reviewer, Refactor Cleaner) to identify structural, security, quality, and dead code issues across the entire codebase.
+
+**What happened:**
+- Launched all four agents in parallel to analyze the ~7100-line codebase
+- Architect identified: `app.ts` as a 850-line god function, Article object mutation as hidden side effect, near-duplicate `Article`/`StoredArticleContent` types, tight coupling between QueueController and ArticleController
+- Security reviewer found 12 issues: SSRF via redirect-following in worker, XSS sanitizer missing `data:` URI checks, no Content Security Policy, CDN scripts without SRI, CORS wildcard fallback
+- Refactor cleaner found 9 safely removable dead code items (~80 lines), 3 careful items (unused feature scaffolding), and 5 consolidation opportunities (duplicate `splitSentences`, repeated image-stripping regexes, triplicated drawer open/close logic)
+- Code reviewer confirmed architectural issues and added: `parsePdfFromArrayBuffer` as 102-line function, `filterParagraphs` pattern duplicated 4x in extractor.ts, inline import type cast in queue-controller.ts
+- All findings compiled into `docs/code-analysis-2026-02-25.md` with prioritized remediation matrix
+
+**Outcome:** Success. Complete analysis report produced with 18 prioritized improvement items across three tiers (Must Fix, Should Fix, Nice to Have). No critical security issues, but several HIGH-severity items identified.
+
+**Insight:** The codebase has a solid foundation — zero `any` types, clean dependency graph, good error handling, 0 npm vulnerabilities. The main structural risks are: (1) `app.ts` accumulating too much responsibility, (2) shared mutable `Article` objects creating hidden coupling, and (3) the HTML sanitizer having gaps that are unprotected due to missing CSP. The dead code (~80 lines) is modest and safe to remove. The most impactful single refactor would be extracting QueueRenderer from `app.ts`.
+
+**Promoted to Lessons Learned:** No — findings are analysis observations, not reusable patterns. Report is in `docs/code-analysis-2026-02-25.md`.
+
+---
+
 <!-- New entries go above this line, most recent first -->

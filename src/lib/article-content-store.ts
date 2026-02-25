@@ -5,19 +5,47 @@
  * URL-based articles are re-fetched, so they don't need this.
  */
 
-export interface StoredArticleContent {
-  /** Matches QueueItem.id */
-  id: string;
-  title: string;
-  markdown: string;
-  paragraphs: string[];
-  textContent: string;
-  lang: string;
-  htmlLang: string;
-  siteName: string;
-  excerpt: string;
-  wordCount: number;
-  estimatedMinutes: number;
+import type { Article } from './extractor.js';
+
+/** Storable subset of Article: everything except content and resolvedUrl, plus an id. */
+export type StoredArticleContent = Pick<Article,
+  'title' | 'markdown' | 'paragraphs' | 'textContent' | 'lang' |
+  'htmlLang' | 'siteName' | 'excerpt' | 'wordCount' | 'estimatedMinutes'
+> & { id: string };
+
+/** Convert an Article + queue item id into StoredArticleContent. */
+export function toStorable(article: Article, id: string): StoredArticleContent {
+  return {
+    id,
+    title: article.title,
+    markdown: article.markdown,
+    paragraphs: article.paragraphs,
+    textContent: article.textContent,
+    lang: article.lang,
+    htmlLang: article.htmlLang,
+    siteName: article.siteName,
+    excerpt: article.excerpt,
+    wordCount: article.wordCount,
+    estimatedMinutes: article.estimatedMinutes,
+  };
+}
+
+/** Reconstruct an Article from StoredArticleContent. */
+export function fromStorable(stored: StoredArticleContent): Article {
+  return {
+    title: stored.title,
+    content: '',
+    textContent: stored.textContent,
+    markdown: stored.markdown,
+    paragraphs: stored.paragraphs,
+    lang: stored.lang,
+    htmlLang: stored.htmlLang,
+    siteName: stored.siteName,
+    excerpt: stored.excerpt,
+    wordCount: stored.wordCount,
+    estimatedMinutes: stored.estimatedMinutes,
+    resolvedUrl: '',
+  };
 }
 
 const DB_NAME = 'article-reader-content';
