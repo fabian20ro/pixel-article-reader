@@ -282,13 +282,11 @@ async function main(): Promise<void> {
       dragHandle.setAttribute('aria-label', 'Drag to reorder');
       dragHandle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
 
-      // Indicator (position number or equalizer bars)
+      // Indicator (thin bar or equalizer bars for playing item)
       const indicator = document.createElement('div');
       indicator.className = 'queue-item-indicator';
       if (idx === currentIndex) {
         indicator.innerHTML = '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>';
-      } else {
-        indicator.textContent = String(idx + 1);
       }
 
       // Info
@@ -525,12 +523,10 @@ async function main(): Promise<void> {
 
     if (headings.length === 0) {
       (refs.chaptersBtn as HTMLButtonElement).disabled = true;
-      refs.chaptersBtnText.textContent = 'Chapters';
       return;
     }
 
     (refs.chaptersBtn as HTMLButtonElement).disabled = false;
-    refs.chaptersBtnText.textContent = `Chapters (${headings.length})`;
     refs.chaptersList.innerHTML = '';
 
     headings.forEach((heading) => {
