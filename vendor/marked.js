@@ -1,6 +1,12 @@
 /*
  * Minimal marked-compatible adapter used by Article Local Reader.
+ * Derived from marked (https://github.com/markedjs/marked).
  * Exposes `window.marked.parse(markdown)`.
+ *
+ * Original work Copyright (c) 2011-2018 Christopher Jeffrey
+ * Original work Copyright (c) 2018+ MarkedJS contributors
+ * Licensed under the MIT License.
+ * See THIRD-PARTY-LICENSES.md for the full license text.
  */
 (function (global) {
   function escapeHtml(text) {
