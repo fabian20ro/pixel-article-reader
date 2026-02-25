@@ -231,7 +231,7 @@ export class TTSEngine {
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
         this.acquireWakeLock();
-        this.mediaSession.notifyResume();
+        this.mediaSession.activate(this.articleTitle);
       }
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);
