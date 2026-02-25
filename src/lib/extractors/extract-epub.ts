@@ -4,7 +4,7 @@
  */
 
 import { type Article, MAX_PDF_SIZE } from './types.js';
-import { buildArticleFromParagraphs, filterReadableParagraphs } from './utils.js';
+import { buildArticleFromParagraphs, filterReadableParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
 
 // ── JSZip types ───────────────────────────────────────────────────────
 
@@ -112,7 +112,12 @@ export async function createArticleFromEpub(
     allParagraphs.push(...chapterParagraphs);
   }
 
-  const paragraphs = filterReadableParagraphs(allParagraphs);
+  // Headings (## Title) bypass the length and speakability filters —
+  // they may be short but are important for chapter navigation.
+  const isHeading = (p: string) => /^#{2,4}\s/.test(p);
+  const paragraphs = allParagraphs
+    .map((p) => (isHeading(p) ? p : stripNonTextContent(p)))
+    .filter((p) => isHeading(p) || (p.length >= 20 && isSpeakableText(p)));
 
   if (paragraphs.length === 0) {
     throw new Error('Could not extract readable text from this EPUB.');
@@ -192,7 +197,13 @@ function extractTextFromXhtml(html: string): string[] {
   if (blocks.length > 0) {
     blocks.forEach((block) => {
       const text = block.textContent?.trim();
-      if (text && text.length > 0) {
+      if (!text || text.length === 0) return;
+      const tag = block.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) {
+        const level = parseInt(tag[1], 10);
+        const hashes = '#'.repeat(Math.min(Math.max(level, 2), 4));
+        paragraphs.push(`${hashes} ${text}`);
+      } else {
         paragraphs.push(text);
       }
     });

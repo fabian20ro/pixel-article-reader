@@ -6,7 +6,7 @@
  *    Audio elements survive Android backgrounding.
  *  - Fallback: SpeechTTSBackend (browser speechSynthesis, foreground-only).
  *  - Each sentence becomes one audio fetch / utterance to keep chunks short.
- *  - Pre-fetches next 2 sentences while current one plays.
+ *  - Pre-fetches next 20 sentences (sliding window) while current one plays.
  *  - Dead-man's switch auto-stops after 30 s of no audible progress.
  */
 
@@ -189,6 +189,8 @@ export class TTSEngine {
 
   // TTS Backends
   private audioBackend: AudioTTSBackend | null = null;
+  private _savedAudioBackend: AudioTTSBackend | null = null;
+  private _deviceVoiceOnly = false;
   private speechBackend: SpeechTTSBackend;
 
   /** Tracks which backend is currently speaking to route pause/resume correctly. */
@@ -238,6 +240,20 @@ export class TTSEngine {
         this.acquireWakeLock();
         if (!this._isPaused) {
           this.mediaSession.activate(this.articleTitle);
+          // Restart audio if the browser paused it while backgrounded
+          if (this.activeBackend === 'audio' && this.audioBackend?.isPaused()) {
+            this.audioBackend.resume(() => {
+              this._speakGen++;
+              this.cancelAllBackends();
+              this.speakCurrent();
+            });
+          } else if (this.activeBackend === 'speech') {
+            if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+              this._speakGen++;
+              this.cancelAllBackends();
+              this.speakCurrent();
+            }
+          }
         }
       }
     };
@@ -258,7 +274,7 @@ export class TTSEngine {
     this.stop();
     this.audioBackend?.clearCache();
     this.rawParagraphs = paragraphs;
-    this.paragraphs = paragraphs.map((p) => splitSentences(p));
+    this.paragraphs = paragraphs.map((p) => splitSentences(p.replace(/^#{1,6}\s+/, '')));
     this.lang = lang;
     this.articleTitle = title || '';
     this.paraIdx = 0;
@@ -475,6 +491,18 @@ export class TTSEngine {
     else if (this._isPlaying) this.acquireWakeLock();
   }
 
+  setDeviceVoiceOnly(enabled: boolean): void {
+    if (this._deviceVoiceOnly === enabled) return;
+    this._deviceVoiceOnly = enabled;
+    if (enabled) {
+      this._savedAudioBackend = this.audioBackend;
+      this.audioBackend = null;
+    } else {
+      this.audioBackend = this._savedAudioBackend;
+      this._savedAudioBackend = null;
+    }
+  }
+
   get state(): TTSState {
     return {
       isPlaying: this._isPlaying,
@@ -566,6 +594,8 @@ export class TTSEngine {
     this.emitProgress();
   }
 
+  private static readonly PREFETCH_AHEAD = 20;
+
   private prefetchUpcoming(): void {
     if (!this.audioBackend) return;
     let p = this.paraIdx;
@@ -573,7 +603,7 @@ export class TTSEngine {
     let count = 0;
     const texts: string[] = [];
 
-    while (count < 2 && p < this.paragraphs.length) {
+    while (count < TTSEngine.PREFETCH_AHEAD && p < this.paragraphs.length) {
       if (s >= this.paragraphs[p].length) {
         p++;
         s = 0;

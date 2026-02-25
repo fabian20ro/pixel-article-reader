@@ -26,8 +26,9 @@ const MAX_TRANSLATE_CHARS = 5000;
 const MAX_TTS_CHARS = 200;
 const FETCH_TIMEOUT_MS = 10_000;
 
-// Rate limiting: 20 requests per 60-second sliding window per IP
-const RATE_LIMIT_MAX = 20;
+// Rate limiting: 60 requests per 60-second sliding window per IP
+// (raised from 20 to support TTS prefetching ~20 sentences ahead)
+const RATE_LIMIT_MAX = 60;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 const USER_AGENT =
