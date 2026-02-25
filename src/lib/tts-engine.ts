@@ -231,7 +231,7 @@ export class TTSEngine {
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
         this.acquireWakeLock();
-        this.mediaSession.notifyResume();
+        this.mediaSession.activate(this.articleTitle);
       }
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);
@@ -290,7 +290,9 @@ export class TTSEngine {
     } else {
       speechSynthesis.pause();
     }
-    this.mediaSession.notifyPause();
+    // Fully deactivate the media session so other apps (e.g. YouTube Music)
+    // can reclaim audio focus without being interrupted by our silent audio loop.
+    this.mediaSession.deactivate();
     this.emitState();
   }
 
@@ -302,11 +304,11 @@ export class TTSEngine {
 
     if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused && this.ttsAudio.currentTime > 0) {
       Promise.resolve(this.ttsAudio.play()).catch(() => {});
-      this.mediaSession.notifyResume();
+      this.mediaSession.activate(this.articleTitle);
     } else {
       // speechSynthesis fallback resume
       speechSynthesis.resume();
-      this.mediaSession.notifyResume();
+      this.mediaSession.activate(this.articleTitle);
       this.clearResumeTimer();
       this.resumeTimer = setTimeout(() => {
         if (speechSynthesis.paused || (!speechSynthesis.speaking && !speechSynthesis.pending)) {

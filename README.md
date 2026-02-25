@@ -2,16 +2,17 @@
 
 **Live app: https://fabian20ro.github.io/pixel-article-reader/**
 
-PWA that turns any article into audio using on-device TTS. It now renders extracted content as formatted markdown (headings, links, lists, code blocks) and supports markdown export.
+PWA that turns any article into audio using on-device TTS with a queue-based playlist system. Extracts readable content from URLs, renders it as formatted markdown, and reads it aloud with sentence-level controls. Also supports local files (PDF, TXT, Markdown, EPUB) and pasted text.
 
 ## How It Works
 
-1. **Share or paste** an article URL
-2. Article Local Reader fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
-3. Press **Play** — the Web Speech API reads the article aloud using your device's built-in voices
-4. Optionally retry parsing with **Jina Reader** and copy the article as markdown
+1. **Share, paste, or upload** an article URL, text, or file (PDF/TXT/MD/EPUB)
+2. The app fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
+3. Articles are added to a **queue** — play now or add to queue for later
+4. Press **Play** — TTS reads the article aloud using your device's voices (Web Speech API for foreground, Google Translate TTS audio for background playback)
+5. When an article finishes, the next one in the queue auto-advances after a countdown
 
-The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches (and optional Jina markdown fetches) to avoid CORS restrictions.
+The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches, Jina Reader requests, Google Translate TTS audio, and text translation.
 
 ## Quick Start
 
@@ -73,7 +74,7 @@ Cloudflare redeploys the worker automatically from Git when changes land in `wor
 No GitHub Action or GitHub Cloudflare API credentials are required for this path.
 If Worker auth is enabled, keep `PROXY_SECRET` configured for Pages builds so the browser can send `X-Proxy-Key`.
 
-The worker URL will be: `https://article-voice-proxy.fabian20ro.workers.dev`
+The worker URL will be: `https://pixel-article-reader.fabian20ro.workers.dev`
 
 #### Manual first deploy (alternative)
 
@@ -101,18 +102,34 @@ After installing the PWA, use your browser's **Share** menu on any article. Sele
 
 Open Article Local Reader directly and paste an article URL **or full article text** into the input field. Press **GO** or hit Enter. If no URL is detected at the end of the text, it will be treated as pasted article content and displayed directly.
 
+### Local File Upload
+
+Tap the file button to upload a local file. Supported formats: **PDF**, **TXT**, **Markdown (.md)**, and **EPUB**. The file content is parsed, stored locally in IndexedDB, and added to the queue.
+
+### Article Queue
+
+Articles are managed in a playlist-style queue:
+
+- **Play Now / Add to Queue** — when a new article is loaded, a snackbar offers to play immediately or add to the end of the queue
+- **Queue drawer** — tap the menu icon (top-left) to open the queue panel with all articles
+- **Drag to reorder** — use the grip handle on each queue item to rearrange order
+- **Delete** — remove individual articles from the queue (pasted and uploaded content is also cleaned from local storage)
+- **Clear all** — remove all articles at once
+- **Auto-advance** — when an article finishes, a countdown toast offers to play the next article or cancel
+
 ### Player Controls
 
 | Control | Action |
 |---------|--------|
 | Play / Pause | Start or pause reading |
 | Skip forward / back | Jump to next or previous paragraph |
-| Speed buttons | Set reading speed (0.75x to 2x) |
-| Language toggle | Switch between Auto, EN, and RO |
+| Speed buttons | Set reading speed (0.75x to 3x) |
 | Sentence skip | Skip forward / back one sentence within a paragraph |
+| Chapters | Navigate by heading (when the article has headings) |
 | Translate | Translate extracted paragraphs via Worker + Google Translate API |
 | Tap a paragraph | Jump to that paragraph and start reading |
 | Progress bar | Click to seek to a position |
+| Media notification | Lock-screen controls and seekbar on Android |
 
 ### Reading View Actions
 
@@ -121,12 +138,13 @@ Open Article Local Reader directly and paste an article URL **or full article te
 
 ### Settings (gear icon)
 
-- **Default Speed** — slider from 0.5x to 3.0x
+- **Default Speed** — 0.5x to 3.0x
 - **Preferred Language** — Auto (detected), English, or Romanian
-- **Voice** — pick from available system voices
+- **Voice** — pick from available system voices, filtered by gender
+- **Theme** — light or dark mode
 - **Keep screen on** — uses Wake Lock API to prevent screen timeout during playback
 
-Settings are persisted in `localStorage`.
+Settings are persisted in `localStorage`. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
 
 ## PWA Recovery (stale install)
 
@@ -212,6 +230,11 @@ npm test
 │   ├── dom-refs.js
 │   ├── pwa-update-manager.js
 │   ├── article-controller.js
+│   ├── article-content-store.js
+│   ├── queue-store.js
+│   ├── queue-controller.js
+│   ├── media-session.js
+│   ├── tts-audio-fetcher.js
 │   ├── release.js
 │   └── tts-engine.js
 ├── src/                    # TypeScript source
@@ -225,6 +248,11 @@ npm test
 │       ├── dom-refs.ts
 │       ├── pwa-update-manager.ts
 │       ├── article-controller.ts
+│       ├── article-content-store.ts
+│       ├── queue-store.ts
+│       ├── queue-controller.ts
+│       ├── media-session.ts
+│       ├── tts-audio-fetcher.ts
 │       ├── release.ts
 │       └── tts-engine.ts
 ├── vendor/
@@ -245,10 +273,12 @@ npm test
 
 | Decision | Why |
 |---|---|
-| Web Speech API | Free, zero-network, on-device voices. No server needed for audio. |
+| Web Speech API + Google Translate TTS | Web Speech API for free on-device voices (foreground). Google Translate TTS audio via `<audio>` element for background playback on Android (speechSynthesis is suspended when backgrounded). |
 | Sentence-level chunking | Avoids Chrome Android's 15-second TTS cutoff bug. Each sentence is a separate `SpeechSynthesisUtterance`, chained via `onend`. |
 | Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Returns `X-Final-URL` header for redirect resolution. |
 | Markdown intermediate format | Extraction output is normalized to markdown so the app can render rich content, keep TTS chunks deterministic, and support clipboard export. |
+| Queue with IndexedDB | Queue metadata in localStorage, file/pasted content in IndexedDB. URL-based articles are re-fetched from network; local content is preserved because files can't be re-read after the picker closes. |
+| Silent audio media session | A looping silent WAV keeps the PWA alive in background on Android Chrome and enables lock-screen media controls. |
 | Jina fallback mode | On-demand retry path for sites where Readability performs poorly; key is kept server-side in Worker `JINA_KEY`. |
 | Mozilla Readability.js | Battle-tested article extraction — same engine as Firefox Reader View. |
 | No bundler | Vanilla TypeScript compiled with `tsc`. ES modules loaded directly by the browser. Keeps deployment simple — just static files. |

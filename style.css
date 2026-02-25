@@ -801,32 +801,26 @@ body {
   pointer-events: none;
 }
 
-/* === Chapters FAB (floating bottom-right) === */
+/* === Chapters button (inline in playback controls) === */
 .chapters-btn {
-  position: fixed;
-  bottom: calc(140px + var(--safe-bottom));
-  right: 16px;
-  z-index: 49;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
   color: var(--accent);
-  background: var(--bg-card);
-  border: 1px solid var(--accent);
-  border-radius: 20px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .chapters-btn:hover,
 .chapters-btn:active {
-  background: var(--accent);
-  color: #fff;
+  background: var(--hover-overlay);
 }
 
 .chapters-btn:disabled {
@@ -958,13 +952,18 @@ body {
 
 .queue-item-indicator {
   flex-shrink: 0;
-  width: 24px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-dim);
+  width: 2px;
+  min-height: 28px;
+  border-radius: 1px;
+  background: var(--border);
 }
 
 .queue-item.playing .queue-item-indicator {
+  width: 24px;
+  min-height: auto;
+  border-radius: 0;
+  background: none;
+  text-align: center;
   color: var(--accent);
 }
 

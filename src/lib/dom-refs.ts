@@ -66,7 +66,6 @@ export interface AppDomRefs {
   advanceCancelBtn: HTMLElement;
   // Chapters
   chaptersBtn: HTMLElement;
-  chaptersBtnText: HTMLElement;
   chaptersSheet: HTMLElement;
   chaptersOverlay: HTMLElement;
   chaptersList: HTMLElement;
@@ -149,7 +148,6 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     advanceCancelBtn: requireElement('advance-cancel-btn', root),
     // Chapters
     chaptersBtn: requireElement('chapters-btn', root),
-    chaptersBtnText: requireElement('chapters-btn-text', root),
     chaptersSheet: requireElement('chapters-sheet', root),
     chaptersOverlay: requireElement('chapters-overlay', root),
     chaptersList: requireElement('chapters-list', root),
