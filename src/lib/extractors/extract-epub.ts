@@ -17,11 +17,12 @@ interface JSZipConstructor {
   new(): JSZipInstance;
 }
 
-const JSZIP_CDN = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+// Local vendored path (relative to the page URL root).
+const JSZIP_PATH = './vendor/jszip.min.js';
 
 let _JSZip: JSZipConstructor | null = null;
 
-/** Load JSZip lazily from CDN. */
+/** Load JSZip lazily from vendored local file. */
 async function loadJSZip(): Promise<JSZipConstructor> {
   const global = globalThis as Record<string, unknown>;
   if (global.JSZip && typeof global.JSZip === 'function') {
@@ -33,9 +34,7 @@ async function loadJSZip(): Promise<JSZipConstructor> {
     // Load via script tag since JSZip uses UMD (not pure ESM)
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = JSZIP_CDN;
-      script.integrity = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
-      script.crossOrigin = 'anonymous';
+      script.src = JSZIP_PATH;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error('Failed to load JSZip'));
       document.head.appendChild(script);
@@ -46,7 +45,7 @@ async function loadJSZip(): Promise<JSZipConstructor> {
     _JSZip = loaded;
     return loaded;
   } catch {
-    throw new Error('Could not load EPUB support. Check your internet connection and try again.');
+    throw new Error('Could not load EPUB support. The vendor file may be missing.');
   }
 }
 

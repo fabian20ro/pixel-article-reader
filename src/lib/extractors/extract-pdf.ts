@@ -49,12 +49,14 @@ interface PdfJsLib {
   };
 }
 
-export const PDF_JS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs';
-export const PDF_JS_WORKER_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
+// Local vendored paths (relative to the page URL root, not the module).
+// These are lazy-loaded on first PDF open and cached by the service worker.
+const PDF_JS_PATH = './vendor/pdfjs/pdf.min.mjs';
+const PDF_JS_WORKER_PATH = './vendor/pdfjs/pdf.worker.min.mjs';
 
 let _pdfjsLib: PdfJsLib | null = null;
 
-/** Load pdf.js library lazily from CDN on first use. */
+/** Load pdf.js library lazily from vendored local files on first use. */
 async function loadPdfJs(): Promise<PdfJsLib> {
   // Check for globally-available pdfjsLib (e.g. loaded via <script> tag or test mock)
   const global = globalThis as Record<string, unknown>;
@@ -65,15 +67,15 @@ async function loadPdfJs(): Promise<PdfJsLib> {
   if (_pdfjsLib) return _pdfjsLib;
 
   try {
-    // Dynamic import from CDN — browser resolves the URL at runtime.
-    // TypeScript cannot resolve CDN URLs, so we use a variable to suppress static analysis.
-    const url = PDF_JS_CDN;
+    // Dynamic import from local vendor path — browser resolves at runtime.
+    // TypeScript cannot resolve dynamic URLs, so we use a variable to suppress static analysis.
+    const url = PDF_JS_PATH;
     const module = await import(/* webpackIgnore: true */ url) as PdfJsLib;
-    module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_CDN;
+    module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_PATH;
     _pdfjsLib = module;
     return module;
   } catch {
-    throw new Error('Could not load PDF support. Check your internet connection and try again.');
+    throw new Error('Could not load PDF support. The vendor file may be missing.');
   }
 }
 
