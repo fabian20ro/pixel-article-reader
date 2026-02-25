@@ -7,6 +7,7 @@ import {
   createArticleFromPdf,
   createArticleFromMarkdownFile,
   createArticleFromEpub,
+  sanitizeRenderedHtml,
   IMAGE_MD_RE,
   IMAGE_JINA_RE,
   IMAGE_HTML_RE,
@@ -498,49 +499,4 @@ export class ArticleController {
       btn.classList.toggle('active', btn.dataset.value === this.langOverride);
     });
   }
-}
-
-function sanitizeRenderedHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
-  const container = doc.body.firstElementChild as HTMLElement | null;
-  if (!container) return '';
-
-  // Remove dangerous elements, form elements, and image-related elements (this is a text reader).
-  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg, form, meta, link, base').forEach((el) => el.remove());
-
-  // Remove links that became empty after image removal (linked images)
-  // and links whose text is just an image reference (Jina Reader format).
-  container.querySelectorAll('a').forEach((el) => {
-    const text = el.textContent?.trim() ?? '';
-    if (!text || /^Image\s*[:\d]/i.test(text)) {
-      el.remove();
-    }
-  });
-
-  container.querySelectorAll<HTMLElement>('*').forEach((el) => {
-    const attrs = Array.from(el.attributes);
-    attrs.forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim();
-
-      if (name.startsWith('on')) {
-        el.removeAttribute(attr.name);
-        return;
-      }
-
-      if ((name === 'href' || name === 'src') && /^\s*(javascript|data|vbscript):/i.test(value)) {
-        el.removeAttribute(attr.name);
-      }
-    });
-
-    if (el.tagName === 'A') {
-      const href = el.getAttribute('href') ?? '';
-      if (/^https?:\/\//i.test(href)) {
-        el.setAttribute('target', '_blank');
-        el.setAttribute('rel', 'noopener noreferrer');
-      }
-    }
-  });
-
-  return container.innerHTML;
 }

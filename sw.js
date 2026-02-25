@@ -6,7 +6,7 @@
 // - Proxy/API requests: network-only.
 //
 // Bump SW_VERSION on releases that change cache behavior or app-shell wiring.
-const SW_VERSION = '2026.02.25.1';
+const SW_VERSION = '2026.02.25.2';
 const CACHE_NAME = `article-reader-${SW_VERSION}`;
 
 const PRECACHE = [
@@ -21,6 +21,12 @@ const PRECACHE = [
   './lib/article-controller.js',
   './lib/dom-refs.js',
   './lib/extractor.js',
+  './lib/extractors/types.js',
+  './lib/extractors/utils.js',
+  './lib/extractors/extract-html.js',
+  './lib/extractors/extract-pdf.js',
+  './lib/extractors/extract-epub.js',
+  './lib/extractors/extract-text.js',
   './lib/language-config.js',
   './lib/lang-detect.js',
   './lib/pwa-update-manager.js',
