@@ -232,6 +232,19 @@ export class TTSEngine {
       if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
         this.acquireWakeLock();
         this.mediaSession.notifyResume();
+
+        // Restart TTS audio if the browser paused it while backgrounded
+        if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused) {
+          Promise.resolve(this.ttsAudio.play()).catch(() => {
+            // Audio element is broken — re-speak the current sentence
+            this.speakCurrent();
+          });
+        } else if (!this.ttsAudio || !this.ttsAudio.src) {
+          // speechSynthesis path — check if it stalled
+          if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+            this.speakCurrent();
+          }
+        }
       }
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);

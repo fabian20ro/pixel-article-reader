@@ -292,10 +292,11 @@ export async function createArticleFromEpub(
     allParagraphs.push(...chapterParagraphs);
   }
 
+  const isHeading = (p: string) => /^#{2,4}\s/.test(p);
   let paragraphs = allParagraphs
     .map((p) => stripNonTextContent(p))
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
-    .filter((p) => isSpeakableText(p));
+    .filter((p) => isHeading(p) || p.length >= MIN_PARAGRAPH_LENGTH)
+    .filter((p) => isHeading(p) || isSpeakableText(p));
 
   if (paragraphs.length === 0) {
     throw new Error('Could not extract readable text from this EPUB.');
@@ -403,7 +404,15 @@ function extractTextFromXhtml(html: string): string[] {
     blocks.forEach((block) => {
       const text = block.textContent?.trim();
       if (text && text.length > 0) {
-        paragraphs.push(text);
+        const tag = block.tagName.toLowerCase();
+        if (/^h[1-6]$/.test(tag)) {
+          // Preserve heading markup as markdown (clamped to h2-h4, matching PDF pattern)
+          const level = parseInt(tag[1], 10);
+          const prefix = '#'.repeat(Math.min(Math.max(level, 2), 4));
+          paragraphs.push(`${prefix} ${text}`);
+        } else {
+          paragraphs.push(text);
+        }
       }
     });
   } else {
