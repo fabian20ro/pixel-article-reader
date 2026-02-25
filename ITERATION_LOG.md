@@ -677,4 +677,22 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-25] Fixed background playback, EPUB chapters, and internet requirement question
+
+**Context:** 3 user-reported issues: background audio stopping mid-article, EPUB files not showing chapter list, confusion about internet requirement for playback.
+
+**What happened:**
+- **Background playback fix:** Modified `_onVisibilityChange()` handler in `tts-engine.ts` to restart TTS audio playback when returning from background. If audio-based TTS was playing, the audio element resumes; if speechSynthesis was active, a new sentence fetch is triggered. This ensures playback continues naturally after minimizing the app.
+- **EPUB chapter detection fix:** Updated `extractTextFromXhtml()` in `extractor.ts` to preserve heading markup as markdown (e.g., `## Heading Text`) instead of stripping it. The chapter list builder detects markdown headings to populate chapters. Also exempted heading paragraphs from the minimum-length and speakable-content filters that normally apply to extracted text, allowing short chapter titles to be properly handled.
+- **Internet requirement clarification:** Confirmed that internet is required for the primary TTS path (audio fetched from Cloudflare Worker proxying Google Translate TTS). However, when offline, the app falls back to `speechSynthesis` (built-in browser voices) — but this fallback only works in the foreground (browser limitation on Android). Users can load articles while online, then read them offline using device voices if needed.
+- All 244 tests pass, build succeeds.
+
+**Outcome:** Success. Background playback now continuous, EPUB files show their chapter structure, and user expectations around internet vs offline are clarified.
+
+**Insight:** When the EPUB XHTML parser extracts headings (h1–h6), they must be emitted as markdown headings to be detected by the chapter list builder — this mirrors the existing PDF approach where outline entries become markdown headings. The filter pipeline needs to exempt these short heading strings from length validation. For background audio on Android: the visibility change handler is the natural restore point (returns from background, restarts playback). This is the 4th background audio fix (initial DOM requirement, keep-alive watchdog, audio-based approach, now the visibility handler) — the lesson about `speechSynthesis` not working in background is already in `LESSONS_LEARNED.md`. No new lesson to promote.
+
+**Promoted to Lessons Learned:** No — refinement of existing patterns.
+
+---
+
 <!-- New entries go above this line, most recent first -->
