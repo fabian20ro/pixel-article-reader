@@ -69,6 +69,7 @@ export interface AppDomRefs {
   chaptersSheet: HTMLElement;
   chaptersOverlay: HTMLElement;
   chaptersList: HTMLElement;
+  appVersion: HTMLElement;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -151,5 +152,6 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     chaptersSheet: requireElement('chapters-sheet', root),
     chaptersOverlay: requireElement('chapters-overlay', root),
     chaptersList: requireElement('chapters-list', root),
+    appVersion: requireElement('app-version', root),
   };
 }

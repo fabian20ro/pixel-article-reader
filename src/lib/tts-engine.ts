@@ -229,9 +229,18 @@ export class TTSEngine {
     });
 
     this._onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && this._isPlaying && !this._isPaused) {
+      if (document.visibilityState === 'hidden') {
+        // Clear any pending resume watchdog — it shouldn't fire while
+        // the page is backgrounded (speechSynthesis is suspended anyway).
+        this.clearResumeTimer();
+      } else if (document.visibilityState === 'visible' && this._isPlaying) {
+        // Reset dead-man's switch so it doesn't false-trigger after the
+        // browser suspended JS execution while backgrounded.
+        this._lastProgressTime = Date.now();
         this.acquireWakeLock();
-        this.mediaSession.activate(this.articleTitle);
+        if (!this._isPaused) {
+          this.mediaSession.activate(this.articleTitle);
+        }
       }
     };
     document.addEventListener('visibilitychange', this._onVisibilityChange);
@@ -256,6 +265,10 @@ export class TTSEngine {
     this.articleTitle = title || '';
     this.paraIdx = 0;
     this.sentIdx = 0;
+    // Reset _stopped so that a subsequent play() → speakCurrent() is not
+    // short-circuited.  stop() sets _stopped = true, but after loading new
+    // content the engine is in a "ready to play" state, not "stopped".
+    this._stopped = false;
     this.voice = selectVoice(this.allVoices, lang, this.preferredVoiceName);
     this.emitState();
   }
@@ -301,6 +314,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._lastProgressTime = Date.now();
     this.startDeadManSwitch();
+    this.acquireWakeLock();
 
     if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused && this.ttsAudio.currentTime > 0) {
       Promise.resolve(this.ttsAudio.play()).catch(() => {});
@@ -312,6 +326,7 @@ export class TTSEngine {
       this.clearResumeTimer();
       this.resumeTimer = setTimeout(() => {
         if (speechSynthesis.paused || (!speechSynthesis.speaking && !speechSynthesis.pending)) {
+          this._speakGen++;
           speechSynthesis.cancel();
           this.speakCurrent();
         }
@@ -740,8 +755,8 @@ export class TTSEngine {
     if (!('wakeLock' in navigator)) return;
     try {
       const sentinel = await navigator.wakeLock.request('screen');
-      // Guard: if stopped while awaiting, release immediately
-      if (this._stopped) {
+      // Guard: if stopped or paused while awaiting, release immediately
+      if (this._stopped || this._isPaused) {
         sentinel.release().catch(() => {});
       } else {
         this.wakeLock = sentinel;
