@@ -1,19 +1,19 @@
 /**
- * TTS Engine — audio-based TTS via Cloudflare Worker, speechSynthesis fallback.
+ * TTS Engine — orchestrates playback across two TTS backends.
  *
  * Key design decisions:
- *  - Primary: fetch MP3 audio per sentence from Worker (?action=tts) and play
- *    through an <audio> element.  Audio elements survive Android backgrounding.
- *  - Fallback: Web Speech API speechSynthesis (foreground-only, used when
- *    audio fetch fails).
+ *  - Primary: AudioTTSBackend (fetch MP3 from Worker, play via <audio> element).
+ *    Audio elements survive Android backgrounding.
+ *  - Fallback: SpeechTTSBackend (browser speechSynthesis, foreground-only).
  *  - Each sentence becomes one audio fetch / utterance to keep chunks short.
  *  - Pre-fetches next 2 sentences while current one plays.
  *  - Dead-man's switch auto-stops after 30 s of no audible progress.
  */
 
-import type { Language } from './lang-detect.js';
+import { langToCode, type Language } from './language-config.js';
 import { MediaSessionController } from './media-session.js';
-import { fetchTtsAudio, type TtsAudioFetcherConfig } from './tts-audio-fetcher.js';
+import { AudioTTSBackend } from './tts-backend-audio.js';
+import { SpeechTTSBackend } from './tts-backend-speech.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -74,11 +74,7 @@ export function splitSentences(text: string): string[] {
   return mergeShortSentences(pieces);
 }
 
-// ── Voice helpers (kept for speechSynthesis fallback + voice UI) ──────
-
-function langToCode(lang: Language): string {
-  return lang === 'ro' ? 'ro' : 'en';
-}
+// ── Voice helpers ────────────────────────────────────────────────────
 
 function langMatches(voiceLang: string, prefix: string): boolean {
   return voiceLang === prefix || voiceLang.startsWith(prefix + '-');
@@ -191,17 +187,16 @@ export class TTSEngine {
   // Generation counter — incremented before every cancel to invalidate stale callbacks.
   private _speakGen = 0;
 
-  // Audio-based TTS
-  private audioConfig: TtsAudioFetcherConfig | null = null;
-  private ttsAudio: HTMLAudioElement | null = null;
-  private audioCache = new Map<string, Promise<string | null>>();
+  // TTS Backends
+  private audioBackend: AudioTTSBackend | null = null;
+  private speechBackend: SpeechTTSBackend;
+
+  /** Tracks which backend is currently speaking to route pause/resume correctly. */
+  private activeBackend: 'audio' | 'speech' | null = null;
 
   // Dead-man's switch: auto-stop if no progress for 30 s
   private _lastProgressTime = 0;
   private _deadManTimer: ReturnType<typeof setInterval> | null = null;
-
-  // speechSynthesis fallback resume watchdog
-  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Named handler for cleanup
   private readonly _onVisibilityChange: () => void;
@@ -210,11 +205,15 @@ export class TTSEngine {
     if (config.callbacks) this.cb = config.callbacks;
 
     if (config.proxyBase) {
-      this.audioConfig = {
+      this.audioBackend = new AudioTTSBackend({
         proxyBase: config.proxyBase,
         proxySecret: config.proxySecret,
-      };
+      });
     }
+
+    this.speechBackend = new SpeechTTSBackend(
+      (msg: string) => this.cb.onError?.(msg),
+    );
 
     this.mediaSession.setActions({
       play: () => this.play(),
@@ -231,7 +230,7 @@ export class TTSEngine {
       if (document.visibilityState === 'hidden') {
         // Clear any pending resume watchdog — it shouldn't fire while
         // the page is backgrounded (speechSynthesis is suspended anyway).
-        this.clearResumeTimer();
+        this.speechBackend.clearResumeTimer();
       } else if (document.visibilityState === 'visible' && this._isPlaying) {
         // Reset dead-man's switch so it doesn't false-trigger after the
         // browser suspended JS execution while backgrounded.
@@ -257,7 +256,7 @@ export class TTSEngine {
 
   loadArticle(paragraphs: string[], lang: Language, title?: string): void {
     this.stop();
-    this.clearAudioCache();
+    this.audioBackend?.clearCache();
     this.rawParagraphs = paragraphs;
     this.paragraphs = paragraphs.map((p) => splitSentences(p));
     this.lang = lang;
@@ -286,7 +285,7 @@ export class TTSEngine {
     this._lastProgressTime = Date.now();
     this.acquireWakeLock();
     this.mediaSession.activate(this.articleTitle);
-    this.ensureTtsAudio();
+    this.audioBackend?.ensureAudio();
     this.startDeadManSwitch();
     this.speakCurrent();
     this.emitState();
@@ -297,10 +296,10 @@ export class TTSEngine {
     this._isPaused = true;
     this.stopDeadManSwitch();
 
-    if (this.ttsAudio && !this.ttsAudio.paused && this.ttsAudio.src) {
-      this.ttsAudio.pause();
+    if (this.activeBackend === 'audio' && this.audioBackend) {
+      this.audioBackend.pause();
     } else {
-      speechSynthesis.pause();
+      this.speechBackend.pause();
     }
     // Fully deactivate the media session so other apps (e.g. YouTube Music)
     // can reclaim audio focus without being interrupted by our silent audio loop.
@@ -315,21 +314,19 @@ export class TTSEngine {
     this.startDeadManSwitch();
     this.acquireWakeLock();
 
-    if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused && this.ttsAudio.currentTime > 0) {
-      Promise.resolve(this.ttsAudio.play()).catch(() => {});
+    const onNeedsRespeak = () => {
+      this._speakGen++;
+      this.cancelAllBackends();
+      this.speakCurrent();
+    };
+
+    if (this.activeBackend === 'audio' && this.audioBackend?.isPaused()) {
+      this.audioBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
     } else {
       // speechSynthesis fallback resume
-      speechSynthesis.resume();
+      this.speechBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
-      this.clearResumeTimer();
-      this.resumeTimer = setTimeout(() => {
-        if (speechSynthesis.paused || (!speechSynthesis.speaking && !speechSynthesis.pending)) {
-          this._speakGen++;
-          speechSynthesis.cancel();
-          this.speakCurrent();
-        }
-      }, 500);
     }
     this.emitState();
   }
@@ -338,23 +335,21 @@ export class TTSEngine {
     this._isPlaying = false;
     this._isPaused = false;
     this._stopped = true;
-    this.clearResumeTimer();
     this.stopDeadManSwitch();
     this._speakGen++;
-    this.cancelCurrentAudio();
-    speechSynthesis.cancel();
+    this.cancelAllBackends();
     this.releaseWakeLock();
     this.mediaSession.deactivate();
     this.paraIdx = 0;
     this.sentIdx = 0;
+    this.activeBackend = null;
     this.emitState();
   }
 
   skipForward(): void {
     if (this.paraIdx >= this.paragraphs.length - 1) return;
     this._speakGen++;
-    this.cancelCurrentAudio();
-    speechSynthesis.cancel();
+    this.cancelAllBackends();
     this.paraIdx++;
     this.sentIdx = 0;
     this.emitParagraphChange();
@@ -367,8 +362,7 @@ export class TTSEngine {
   skipBackward(): void {
     if (this.paraIdx <= 0) return;
     this._speakGen++;
-    this.cancelCurrentAudio();
-    speechSynthesis.cancel();
+    this.cancelAllBackends();
     this.paraIdx--;
     this.sentIdx = 0;
     this.emitParagraphChange();
@@ -383,13 +377,11 @@ export class TTSEngine {
     const sentences = this.paragraphs[this.paraIdx];
     if (this.sentIdx < sentences.length - 1) {
       this._speakGen++;
-      this.cancelCurrentAudio();
-      speechSynthesis.cancel();
+      this.cancelAllBackends();
       this.sentIdx++;
     } else if (this.paraIdx < this.paragraphs.length - 1) {
       this._speakGen++;
-      this.cancelCurrentAudio();
-      speechSynthesis.cancel();
+      this.cancelAllBackends();
       this.paraIdx++;
       this.sentIdx = 0;
       this.emitParagraphChange();
@@ -406,13 +398,11 @@ export class TTSEngine {
     if (this.paragraphs.length === 0) return;
     if (this.sentIdx > 0) {
       this._speakGen++;
-      this.cancelCurrentAudio();
-      speechSynthesis.cancel();
+      this.cancelAllBackends();
       this.sentIdx--;
     } else if (this.paraIdx > 0) {
       this._speakGen++;
-      this.cancelCurrentAudio();
-      speechSynthesis.cancel();
+      this.cancelAllBackends();
       this.paraIdx--;
       this.sentIdx = this.paragraphs[this.paraIdx].length - 1;
       this.emitParagraphChange();
@@ -435,8 +425,7 @@ export class TTSEngine {
         accumulated += this.paragraphs[p][s].length;
         if (accumulated >= targetChars) {
           this._speakGen++;
-          this.cancelCurrentAudio();
-          speechSynthesis.cancel();
+          this.cancelAllBackends();
           this.paraIdx = p;
           this.sentIdx = s;
           this.emitParagraphChange();
@@ -454,8 +443,7 @@ export class TTSEngine {
   jumpToParagraph(index: number): void {
     if (index < 0 || index >= this.paragraphs.length) return;
     this._speakGen++;
-    this.cancelCurrentAudio();
-    speechSynthesis.cancel();
+    this.cancelAllBackends();
     this.paraIdx = index;
     this.sentIdx = 0;
     this.emitParagraphChange();
@@ -467,9 +455,7 @@ export class TTSEngine {
 
   setRate(rate: number): void {
     this.rate = Math.max(0.5, Math.min(3.0, rate));
-    if (this.ttsAudio) {
-      this.ttsAudio.playbackRate = this.rate;
-    }
+    this.audioBackend?.setRate(this.rate);
   }
 
   setVoice(name: string): void {
@@ -502,70 +488,10 @@ export class TTSEngine {
   /** Clean up all resources. Call on page unload. */
   dispose(): void {
     this.stop();
-    this.clearAudioCache();
+    this.audioBackend?.dispose();
+    this.speechBackend.dispose();
     document.removeEventListener('visibilitychange', this._onVisibilityChange);
-    if (this.ttsAudio) {
-      this.ttsAudio.remove();
-      this.ttsAudio = null;
-    }
     this.mediaSession.dispose();
-  }
-
-  // ── Internal: Audio-based TTS ───────────────────────────────────
-
-  private ensureTtsAudio(): void {
-    if (this.ttsAudio) return;
-    this.ttsAudio = document.createElement('audio');
-    this.ttsAudio.setAttribute('playsinline', '');
-    document.body.appendChild(this.ttsAudio);
-  }
-
-  private cancelCurrentAudio(): void {
-    if (this.ttsAudio) {
-      this.ttsAudio.onended = null;
-      this.ttsAudio.onerror = null;
-      this.ttsAudio.pause();
-      this.ttsAudio.removeAttribute('src');
-      this.ttsAudio.load();
-    }
-  }
-
-  private fetchSentenceAudio(text: string): Promise<string | null> {
-    if (!this.audioConfig) return Promise.resolve(null);
-    const key = `${this.lang}:${text}`;
-    const cached = this.audioCache.get(key);
-    if (cached) return cached;
-    const promise = fetchTtsAudio(text, langToCode(this.lang), this.audioConfig);
-    this.audioCache.set(key, promise);
-    return promise;
-  }
-
-  private prefetchUpcoming(): void {
-    if (!this.audioConfig) return;
-    let p = this.paraIdx;
-    let s = this.sentIdx + 1;
-    let count = 0;
-
-    while (count < 2 && p < this.paragraphs.length) {
-      if (s >= this.paragraphs[p].length) {
-        p++;
-        s = 0;
-        continue;
-      }
-      const text = this.paragraphs[p][s];
-      this.fetchSentenceAudio(text); // fire-and-forget, caches the promise
-      s++;
-      count++;
-    }
-  }
-
-  private clearAudioCache(): void {
-    for (const p of this.audioCache.values()) {
-      p.then((url) => {
-        if (url) URL.revokeObjectURL(url);
-      });
-    }
-    this.audioCache.clear();
   }
 
   // ── Internal: speak orchestrator ────────────────────────────────
@@ -596,86 +522,76 @@ export class TTSEngine {
       this.emitParagraphChange();
     }
 
-    // Pre-fetch upcoming sentences
+    // Pre-fetch upcoming sentences (audio backend only)
     this.prefetchUpcoming();
 
-    // Try audio-based TTS first (works in background)
-    if (this.audioConfig) {
-      const gen = this._speakGen;
-      this.fetchSentenceAudio(text).then((audioUrl) => {
-        if (gen !== this._speakGen || this._stopped) {
-          if (audioUrl) URL.revokeObjectURL(audioUrl);
-          return;
-        }
-        if (audioUrl) {
-          this.playTtsAudio(audioUrl, gen);
-        } else {
-          // Audio fetch failed — fall back to speechSynthesis
-          this.speakViaSpeechSynthesis(text, gen);
-        }
+    const gen = this._speakGen;
+    const lang = langToCode(this.lang);
+
+    const onEnd = () => {
+      if (this._stopped || gen !== this._speakGen) return;
+      this._lastProgressTime = Date.now();
+      this.sentIdx++;
+      this.emitProgress();
+      this.speakCurrent();
+    };
+
+    // Try audio backend first (works in background)
+    if (this.audioBackend) {
+      this.activeBackend = 'audio';
+      this.audioBackend.speak(text, lang, this.rate, this.voice, {
+        onEnd,
+        onError: (shouldFallback) => {
+          if (this._stopped || gen !== this._speakGen) return;
+          if (shouldFallback) {
+            // Fall back to speechSynthesis for this sentence
+            this.activeBackend = 'speech';
+            this.speechBackend.speak(text, lang, this.rate, this.voice, {
+              onEnd,
+              onError: () => {},
+            });
+          }
+        },
       });
       this.emitProgress();
       return;
     }
 
-    // No audio config — use speechSynthesis directly
-    const gen = this._speakGen;
-    this.speakViaSpeechSynthesis(text, gen);
+    // No audio backend — use speechSynthesis directly
+    this.activeBackend = 'speech';
+    this.speechBackend.speak(text, lang, this.rate, this.voice, {
+      onEnd,
+      onError: () => {},
+    });
     this.emitProgress();
   }
 
-  private playTtsAudio(url: string, gen: number): void {
-    this.ensureTtsAudio();
-    if (!this.ttsAudio) return;
+  private prefetchUpcoming(): void {
+    if (!this.audioBackend) return;
+    let p = this.paraIdx;
+    let s = this.sentIdx + 1;
+    let count = 0;
+    const texts: string[] = [];
 
-    this.ttsAudio.src = url;
-    this.ttsAudio.playbackRate = this.rate;
+    while (count < 2 && p < this.paragraphs.length) {
+      if (s >= this.paragraphs[p].length) {
+        p++;
+        s = 0;
+        continue;
+      }
+      texts.push(this.paragraphs[p][s]);
+      s++;
+      count++;
+    }
 
-    this.ttsAudio.onended = () => {
-      URL.revokeObjectURL(url);
-      if (this._stopped || gen !== this._speakGen) return;
-      this._lastProgressTime = Date.now();
-      this.sentIdx++;
-      this.emitProgress();
-      this.speakCurrent();
-    };
-
-    this.ttsAudio.onerror = () => {
-      URL.revokeObjectURL(url);
-      if (this._stopped || gen !== this._speakGen) return;
-      // Fall back to speechSynthesis for this sentence
-      const text = this.paragraphs[this.paraIdx]?.[this.sentIdx];
-      if (text) this.speakViaSpeechSynthesis(text, gen);
-    };
-
-    Promise.resolve(this.ttsAudio.play()).catch(() => {
-      URL.revokeObjectURL(url);
-      if (this._stopped || gen !== this._speakGen) return;
-      const text = this.paragraphs[this.paraIdx]?.[this.sentIdx];
-      if (text) this.speakViaSpeechSynthesis(text, gen);
-    });
+    if (texts.length > 0) {
+      this.audioBackend.prefetch(texts, this.lang);
+    }
   }
 
-  private speakViaSpeechSynthesis(text: string, gen: number): void {
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = this.rate;
-    utter.lang = langToCode(this.lang);
-    if (this.voice) utter.voice = this.voice;
-
-    utter.onend = () => {
-      if (this._stopped || gen !== this._speakGen) return;
-      this._lastProgressTime = Date.now();
-      this.sentIdx++;
-      this.emitProgress();
-      this.speakCurrent();
-    };
-
-    utter.onerror = (ev) => {
-      if (ev.error === 'interrupted' || ev.error === 'canceled') return;
-      this.cb.onError?.(`TTS error: ${ev.error}`);
-    };
-
-    speechSynthesis.speak(utter);
+  private cancelAllBackends(): void {
+    this.audioBackend?.cancel();
+    this.speechBackend.cancel();
   }
 
   // ── Internal: lifecycle ─────────────────────────────────────────
@@ -684,10 +600,10 @@ export class TTSEngine {
     this._isPlaying = false;
     this._isPaused = false;
     this._stopped = true;
-    this.clearResumeTimer();
     this.stopDeadManSwitch();
     this.releaseWakeLock();
     this.mediaSession.deactivate();
+    this.activeBackend = null;
     this.emitState();
     this.cb.onEnd?.();
   }
@@ -715,13 +631,6 @@ export class TTSEngine {
   private emitParagraphChange(): void {
     if (this.paraIdx < this.rawParagraphs.length) {
       this.cb.onParagraphChange?.(this.paraIdx, this.rawParagraphs[this.paraIdx]);
-    }
-  }
-
-  private clearResumeTimer(): void {
-    if (this.resumeTimer !== null) {
-      clearTimeout(this.resumeTimer);
-      this.resumeTimer = null;
     }
   }
 

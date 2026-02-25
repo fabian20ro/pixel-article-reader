@@ -1,4 +1,4 @@
-import type { Language } from './lang-detect.js';
+import { isLanguage, type Language } from './language-config.js';
 
 /** Add new themes here — CSS must define matching [data-theme="<name>"] variables */
 const THEMES = ['dark', 'light', 'khaki'] as const;
@@ -21,10 +21,6 @@ export interface SettingsDefaults {
 }
 
 const STORAGE_KEY = 'articlevoice-settings';
-
-function isLanguage(value: unknown): value is Language {
-  return value === 'en' || value === 'ro';
-}
 
 function isTheme(value: unknown): value is Theme {
   return THEMES.includes(value as Theme);

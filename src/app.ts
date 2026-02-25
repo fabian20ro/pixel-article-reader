@@ -11,7 +11,7 @@ import { APP_RELEASE, shortRelease } from './lib/release.js';
 import { QueueController } from './lib/queue-controller.js';
 import { QueueRenderer } from './lib/queue-renderer.js';
 import type { QueueItem } from './lib/queue-store.js';
-import type { Language } from './lib/lang-detect.js';
+import { SUPPORTED_LANGUAGES, type Language } from './lib/language-config.js';
 
 const CONFIG = {
   PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
@@ -19,8 +19,6 @@ const CONFIG = {
   DEFAULT_RATE: 1.0,
   DEFAULT_LANG: 'auto' as 'auto' | Language,
 };
-
-const ALLOWED_LANG_PREFIXES = ['en', 'ro'];
 
 /** Detect voice gender from name heuristics. Returns null if unknown. */
 function detectVoiceGender(name: string): 'male' | 'female' | null {
@@ -515,7 +513,7 @@ async function main(): Promise<void> {
   function getAllowedVoices(): SpeechSynthesisVoice[] {
     return tts
       .getAvailableVoices()
-      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
+      .filter((v) => SUPPORTED_LANGUAGES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
   }
 
   function populateVoices(): void {
