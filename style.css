@@ -392,7 +392,7 @@ body {
 }
 
 .segment-control.compact .segment-btn {
-  padding: 4px 10px;
+  padding: 4px 8px;
   font-size: 12px;
   min-height: 28px;
 }
@@ -707,7 +707,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 6px;
   margin-bottom: 4px;
 }
 
@@ -801,28 +801,39 @@ body {
   pointer-events: none;
 }
 
-/* === Chapters Button (above article title) === */
+/* === Chapters FAB (floating bottom-right) === */
 .chapters-btn {
+  position: fixed;
+  bottom: calc(140px + var(--safe-bottom));
+  right: 16px;
+  z-index: 49;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  margin-bottom: 12px;
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  background: none;
+  background: var(--bg-card);
   border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
+  border-radius: 20px;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.15s, color 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
 }
 
 .chapters-btn:hover,
 .chapters-btn:active {
   background: var(--accent);
   color: #fff;
+}
+
+.chapters-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  color: var(--text-dim);
+  border-color: var(--border);
 }
 
 /* === Chapters Bottom Sheet === */

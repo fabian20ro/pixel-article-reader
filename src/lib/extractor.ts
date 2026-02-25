@@ -22,17 +22,28 @@ interface PdfJsTextItem {
   height: number;
 }
 
+interface PdfJsOutlineItem {
+  title: string;
+  dest: string | unknown[] | null;
+  items?: PdfJsOutlineItem[];
+}
+
+interface PdfJsDocument {
+  numPages: number;
+  getPage(num: number): Promise<{
+    getTextContent(): Promise<{
+      items: PdfJsTextItem[];
+    }>;
+  }>;
+  getOutline(): Promise<PdfJsOutlineItem[] | null>;
+  getDestination(dest: string): Promise<unknown[] | null>;
+  getPageIndex(ref: unknown): Promise<number>;
+}
+
 interface PdfJsLib {
   GlobalWorkerOptions: { workerSrc: string };
   getDocument(src: { data: ArrayBuffer }): {
-    promise: Promise<{
-      numPages: number;
-      getPage(num: number): Promise<{
-        getTextContent(): Promise<{
-          items: PdfJsTextItem[];
-        }>;
-      }>;
-    }>;
+    promise: Promise<PdfJsDocument>;
   };
 }
 
@@ -506,8 +517,30 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
 }
 
 /**
+ * Handle non-OK proxy responses with detailed error messages.
+ */
+async function handleProxyError(resp: Response): Promise<never> {
+  let detail = '';
+  try {
+    const body = await resp.json();
+    if (body.error) detail = body.error;
+  } catch { /* ignore parse errors */ }
+
+  if (resp.status === 429) {
+    const retryAfter = resp.headers.get('Retry-After');
+    const waitMsg = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Please wait a moment and try again.';
+    throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
+  }
+  if (resp.status === 403) {
+    throw new Error(detail || 'Proxy rejected the request — check that PROXY_SECRET is configured in the app.');
+  }
+  throw new Error(detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
+}
+
+/**
  * Fetch an article URL via the CORS proxy and extract readable content.
- * Automatically detects PDF URLs and uses the PDF extraction path.
+ * Automatically detects PDF by URL extension or response content-type,
+ * applying the correct size limits for each type.
  */
 export async function extractArticle(
   url: string,
@@ -515,25 +548,78 @@ export async function extractArticle(
   proxySecret?: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  // Detect PDF by URL extension (before fetching)
+  // Fast path: URL clearly ends in .pdf
   if (isPdfUrl(url)) {
     return extractArticleFromPdfUrl(url, proxyBase, proxySecret, onProgress);
   }
 
-  onProgress?.('Extracting article...');
-  const { body, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret, 'html');
+  onProgress?.('Fetching article...');
 
-  // Detect PDF by response content (proxy returned PDF content-type)
-  if (body.startsWith('%PDF-')) {
-    onProgress?.('Extracting text from PDF...');
-    return parsePdfFromArrayBuffer(
-      new TextEncoder().encode(body).buffer as ArrayBuffer,
-      finalUrl,
-      onProgress,
-    );
+  const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}`;
+  const headers: Record<string, string> = {};
+  if (proxySecret) {
+    headers['X-Proxy-Key'] = proxySecret;
   }
 
-  return parseArticleFromHtml(body, finalUrl);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
+
+  try {
+    const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
+    if (!resp.ok) {
+      await handleProxyError(resp);
+    }
+
+    const ct = resp.headers.get('content-type') || '';
+
+    // PDF detected by content-type — use PDF size limit and binary reading
+    if (ct.includes('application/pdf')) {
+      const contentLength = resp.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_PDF_SIZE) {
+        throw new Error('PDF is too large (>10 MB).');
+      }
+      const buffer = await resp.arrayBuffer();
+      if (buffer.byteLength > MAX_PDF_SIZE) {
+        throw new Error('PDF is too large (>10 MB).');
+      }
+      const finalUrl = resp.headers.get('X-Final-URL') || url;
+      onProgress?.('Extracting text from PDF...');
+      return parsePdfFromArrayBuffer(buffer, finalUrl, onProgress);
+    }
+
+    // HTML path — article size limit
+    const contentLength = resp.headers.get('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_ARTICLE_SIZE) {
+      throw new Error('Article is too large (>2 MB).');
+    }
+    const body = await resp.text();
+    if (body.length > MAX_ARTICLE_SIZE) {
+      throw new Error('Article is too large (>2 MB).');
+    }
+
+    // Fallback: detect PDF by magic bytes when content-type was wrong
+    if (body.startsWith('%PDF-')) {
+      onProgress?.('Extracting text from PDF...');
+      return parsePdfFromArrayBuffer(
+        new TextEncoder().encode(body).buffer as ArrayBuffer,
+        resp.headers.get('X-Final-URL') || url,
+        onProgress,
+      );
+    }
+
+    const finalUrl = resp.headers.get('X-Final-URL') || url;
+    return parseArticleFromHtml(body, finalUrl);
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Timed out fetching the article. Try again later.');
+    }
+    if (err instanceof TypeError) {
+      throw new Error('Could not reach the article proxy. Check your internet connection or try again later.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Check if a URL likely points to a PDF based on its path. */
@@ -570,21 +656,7 @@ export async function extractArticleFromPdfUrl(
   try {
     const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
     if (!resp.ok) {
-      let detail = '';
-      try {
-        const body = await resp.json();
-        if (body.error) detail = body.error;
-      } catch { /* ignore parse errors */ }
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get('Retry-After');
-        const waitMsg = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Please wait a moment and try again.';
-        throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
-      }
-      if (resp.status === 403) {
-        throw new Error(detail || 'Proxy rejected the request — check that PROXY_SECRET is configured in the app.');
-      }
-      throw new Error(detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
+      await handleProxyError(resp);
     }
 
     const contentLength = resp.headers.get('content-length');
@@ -627,7 +699,10 @@ async function parsePdfFromArrayBuffer(
 
   onProgress?.(`Extracting text from ${pdf.numPages} pages...`);
 
+  // Track which page each raw paragraph came from
   const allParagraphs: string[] = [];
+  const paraPageMap: number[] = [];
+
   for (let i = 1; i <= pdf.numPages; i++) {
     if (pdf.numPages > 10 && i % 5 === 0) {
       onProgress?.(`Extracting text... page ${i} of ${pdf.numPages}`);
@@ -635,23 +710,54 @@ async function parsePdfFromArrayBuffer(
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const pageParagraphs = extractParagraphsFromTextItems(content.items);
-    allParagraphs.push(...pageParagraphs);
+    for (const p of pageParagraphs) {
+      paraPageMap.push(i);
+      allParagraphs.push(p);
+    }
   }
 
-  let paragraphs = allParagraphs
-    .map((p) => stripNonTextContent(p))
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
-    .filter((p) => isSpeakableText(p));
+  // Filter paragraphs while preserving page mapping
+  const filtered: Array<{ text: string; page: number }> = [];
+  for (let i = 0; i < allParagraphs.length; i++) {
+    const stripped = stripNonTextContent(allParagraphs[i]);
+    if (stripped.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(stripped)) {
+      filtered.push({ text: stripped, page: paraPageMap[i] });
+    }
+  }
 
-  if (paragraphs.length <= 1) {
-    const saved = paragraphs[0];
+  let paragraphs: string[];
+  let paragraphPages: number[];
+
+  if (filtered.length <= 1) {
+    const saved = filtered[0]?.text;
     const fullText = allParagraphs.join(' ');
     const fromSentences = splitPlainTextParagraphs(fullText);
     paragraphs = fromSentences.length > 0 ? fromSentences : (saved ? [saved] : []);
+    paragraphPages = [];
+  } else {
+    paragraphs = filtered.map((f) => f.text);
+    paragraphPages = filtered.map((f) => f.page);
   }
 
   if (paragraphs.length === 0) {
     throw new Error('Could not extract readable text from this PDF.');
+  }
+
+  // Extract PDF outline for chapter support
+  try {
+    if (paragraphPages.length > 0) {
+      const chapters = await extractPdfChapters(pdf, paragraphPages);
+      if (chapters.length > 0) {
+        // Insert headings in reverse order to preserve indices
+        for (let i = chapters.length - 1; i >= 0; i--) {
+          const ch = chapters[i];
+          const prefix = '#'.repeat(Math.min(Math.max(ch.level + 1, 2), 4));
+          paragraphs.splice(ch.paragraphIndex, 0, `${prefix} ${ch.title}`);
+        }
+      }
+    }
+  } catch {
+    // Outline extraction failed — proceed without chapters
   }
 
   // Try to extract a meaningful title from the first paragraph or URL
@@ -665,6 +771,7 @@ async function parsePdfFromArrayBuffer(
   }
 
   const textContent = paragraphs.join('\n\n');
+  const markdown = textContent;
   const wordCount = countWords(textContent);
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);
@@ -673,7 +780,7 @@ async function parsePdfFromArrayBuffer(
     title,
     content: '',
     textContent,
-    markdown: textContent,
+    markdown,
     paragraphs,
     lang,
     htmlLang: '',
@@ -683,6 +790,54 @@ async function parsePdfFromArrayBuffer(
     estimatedMinutes,
     resolvedUrl: sourceUrl,
   };
+}
+
+/**
+ * Extract chapter entries from PDF outline (bookmarks) and map them to paragraph indices.
+ */
+async function extractPdfChapters(
+  pdf: PdfJsDocument,
+  paragraphPages: number[],
+): Promise<Array<{ paragraphIndex: number; title: string; level: number }>> {
+  const outline = await pdf.getOutline();
+  if (!outline || outline.length === 0) return [];
+
+  const results: Array<{ paragraphIndex: number; title: string; level: number }> = [];
+
+  async function processItems(items: PdfJsOutlineItem[], level: number): Promise<void> {
+    for (const item of items) {
+      if (!item.title?.trim() || !item.dest) continue;
+
+      try {
+        let destArray: unknown[] | null = null;
+        if (typeof item.dest === 'string') {
+          destArray = await pdf.getDestination(item.dest);
+        } else if (Array.isArray(item.dest)) {
+          destArray = item.dest;
+        }
+
+        if (destArray && destArray.length > 0) {
+          const pageIndex = await pdf.getPageIndex(destArray[0]);
+          const pageNum = pageIndex + 1; // 1-based to match paraPageMap
+
+          // Find the first paragraph from this page or later
+          const paraIdx = paragraphPages.findIndex((p) => p >= pageNum);
+          if (paraIdx >= 0) {
+            results.push({ paragraphIndex: paraIdx, title: item.title.trim(), level });
+          }
+        }
+      } catch {
+        // Skip this outline entry if destination resolution fails
+      }
+
+      if (item.items && item.items.length > 0) {
+        await processItems(item.items, level + 1);
+      }
+    }
+  }
+
+  await processItems(outline, 1);
+  return results;
 }
 
 /**
@@ -717,21 +872,7 @@ async function fetchViaProxy(
   try {
     const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
     if (!resp.ok) {
-      let detail = '';
-      try {
-        const body = await resp.json();
-        if (body.error) detail = body.error;
-      } catch { /* ignore parse errors */ }
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get('Retry-After');
-        const waitMsg = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Please wait a moment and try again.';
-        throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
-      }
-      if (resp.status === 403) {
-        throw new Error(detail || 'Proxy rejected the request — check that PROXY_SECRET is configured in the app.');
-      }
-      throw new Error(detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
+      await handleProxyError(resp);
     }
 
     const contentLength = resp.headers.get('content-length');

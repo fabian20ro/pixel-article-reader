@@ -266,6 +266,7 @@ export class ArticleController {
 
     this.showView('article');
     refs.playerControls.classList.remove('hidden');
+    refs.chaptersBtn.classList.remove('hidden');
     this.options.onArticleRendered?.(ttsParagraphs.length);
   }
 
@@ -469,6 +470,7 @@ export class ArticleController {
 
     if (view !== 'article') {
       refs.playerControls.classList.add('hidden');
+      refs.chaptersBtn.classList.add('hidden');
     }
   }
 
