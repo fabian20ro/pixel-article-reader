@@ -350,6 +350,7 @@ async function main(): Promise<void> {
   let dragState: {
     itemId: string;
     startY: number;
+    initialTop: number;
     clone: HTMLElement;
     placeholder: HTMLElement;
     originalLi: HTMLElement;
@@ -377,15 +378,14 @@ async function main(): Promise<void> {
 
     originalLi.classList.add('queue-item-placeholder');
 
-    dragState = { itemId, startY, clone, placeholder: originalLi, originalLi, listItems };
+    dragState = { itemId, startY, initialTop: rect.top, clone, placeholder: originalLi, originalLi, listItems };
     refs.queueList.classList.add('reordering');
   }
 
   function moveDrag(clientY: number): void {
     if (!dragState) return;
     const dy = clientY - dragState.startY;
-    const origRect = dragState.originalLi.getBoundingClientRect();
-    dragState.clone.style.top = (origRect.top + dy) + 'px';
+    dragState.clone.style.top = (dragState.initialTop + dy) + 'px';
 
     const items = Array.from(refs.queueList.children) as HTMLElement[];
     const currentIdx = items.indexOf(dragState.placeholder);
@@ -524,11 +524,12 @@ async function main(): Promise<void> {
     const headings = refs.articleText.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
 
     if (headings.length === 0) {
-      refs.chaptersBtn.classList.add('hidden');
+      (refs.chaptersBtn as HTMLButtonElement).disabled = true;
+      refs.chaptersBtnText.textContent = 'Chapters';
       return;
     }
 
-    refs.chaptersBtn.classList.remove('hidden');
+    (refs.chaptersBtn as HTMLButtonElement).disabled = false;
     refs.chaptersBtnText.textContent = `Chapters (${headings.length})`;
     refs.chaptersList.innerHTML = '';
 

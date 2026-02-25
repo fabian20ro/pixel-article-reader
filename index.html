@@ -163,17 +163,6 @@
 
     <!-- Article Display -->
     <section id="article-section" class="article-section hidden">
-      <button id="chapters-btn" class="chapters-btn hidden">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="8" y1="6" x2="21" y2="6"></line>
-          <line x1="8" y1="12" x2="21" y2="12"></line>
-          <line x1="8" y1="18" x2="21" y2="18"></line>
-          <polygon points="3,6 5,7.5 3,9" fill="currentColor" stroke="none"></polygon>
-          <line x1="3" y1="12" x2="5" y2="12"></line>
-          <line x1="3" y1="18" x2="5" y2="18"></line>
-        </svg>
-        <span id="chapters-btn-text">Chapters</span>
-      </button>
       <div class="article-meta">
         <h2 id="article-title" class="article-title"></h2>
         <p id="article-info" class="article-info"></p>
@@ -184,6 +173,19 @@
       <div id="article-text" class="article-text"></div>
     </section>
   </main>
+
+  <!-- Chapters FAB (floating, bottom-right) -->
+  <button id="chapters-btn" class="chapters-btn hidden" disabled>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"></line>
+      <line x1="8" y1="12" x2="21" y2="12"></line>
+      <line x1="8" y1="18" x2="21" y2="18"></line>
+      <polygon points="3,6 5,7.5 3,9" fill="currentColor" stroke="none"></polygon>
+      <line x1="3" y1="12" x2="5" y2="12"></line>
+      <line x1="3" y1="18" x2="5" y2="18"></line>
+    </svg>
+    <span id="chapters-btn-text">Chapters</span>
+  </button>
 
   <!-- Player Controls -->
   <footer id="player-controls" class="player-controls hidden">
@@ -241,6 +243,8 @@
         <button class="segment-btn" data-rate="1.25">1.25x</button>
         <button class="segment-btn" data-rate="1.5">1.5x</button>
         <button class="segment-btn" data-rate="2">2x</button>
+        <button class="segment-btn" data-rate="2.5">2.5x</button>
+        <button class="segment-btn" data-rate="3">3x</button>
       </div>
     </div>
 
