@@ -8,7 +8,8 @@
  * - getSourceLang(): best-guess source language code for the translation API
  */
 
-export type Language = 'en' | 'ro';
+export type { Language } from './language-config.js';
+import { SUPPORTED_LANGUAGES, type Language } from './language-config.js';
 
 const RO_CHARS = /[ăâîșțĂÂÎȘȚ]/g;
 const RO_WORDS = [
@@ -85,7 +86,7 @@ export function detectLangFromUrl(url: string): string {
 
 // ── Translation decision ─────────────────────────────────────────────
 
-const EN_RO = new Set(['en', 'ro']);
+const SUPPORTED_SET = new Set<string>(SUPPORTED_LANGUAGES);
 
 /**
  * Determine if an article needs translation to English.
@@ -97,12 +98,12 @@ const EN_RO = new Set(['en', 'ro']);
 export function needsTranslation(htmlLang: string, url: string, textLang?: Language): boolean {
   // 1. Check HTML lang attribute (most reliable signal)
   const fromHtml = detectLangFromHtml(htmlLang);
-  if (fromHtml && EN_RO.has(fromHtml)) return false;
+  if (fromHtml && SUPPORTED_SET.has(fromHtml)) return false;
   if (fromHtml) return true; // known non-EN/RO language
 
   // 2. Check URL TLD
   const fromUrl = detectLangFromUrl(url);
-  if (fromUrl && EN_RO.has(fromUrl)) return false;
+  if (fromUrl && SUPPORTED_SET.has(fromUrl)) return false;
   if (fromUrl) return true; // known non-EN/RO language
 
   // 3. Check text-based detection — only trust Romanian detection

@@ -11,7 +11,7 @@
  *  - Dead-man's switch auto-stops after 30 s of no audible progress.
  */
 
-import type { Language } from './lang-detect.js';
+import { langToCode, type Language } from './language-config.js';
 import { MediaSessionController } from './media-session.js';
 import { fetchTtsAudio, type TtsAudioFetcherConfig } from './tts-audio-fetcher.js';
 
@@ -75,10 +75,6 @@ export function splitSentences(text: string): string[] {
 }
 
 // ── Voice helpers (kept for speechSynthesis fallback + voice UI) ──────
-
-function langToCode(lang: Language): string {
-  return lang === 'ro' ? 'ro' : 'en';
-}
 
 function langMatches(voiceLang: string, prefix: string): boolean {
   return voiceLang === prefix || voiceLang.startsWith(prefix + '-');

@@ -12,7 +12,8 @@ import {
   IMAGE_HTML_RE,
   type Article,
 } from './extractor.js';
-import { needsTranslation, getSourceLang, type Language } from './lang-detect.js';
+import { needsTranslation, getSourceLang } from './lang-detect.js';
+import { DEFAULT_TRANSLATION_TARGET, type Language } from './language-config.js';
 import { translateParagraphs } from './translator.js';
 import type { TTSEngine } from './tts-engine.js';
 import type { AppDomRefs } from './dom-refs.js';
@@ -441,7 +442,7 @@ export class ArticleController {
       const translated = await translateParagraphs(
         this.currentTtsParagraphs,
         sourceLang,
-        'en',
+        DEFAULT_TRANSLATION_TARGET,
         this.options.proxyBase,
         this.options.proxySecret,
       );
@@ -451,8 +452,8 @@ export class ArticleController {
         paragraphs: translated,
         textContent: translated.join('\n\n'),
         markdown: translated.join('\n\n'),
-        lang: 'en',
-        htmlLang: 'en',
+        lang: DEFAULT_TRANSLATION_TARGET,
+        htmlLang: DEFAULT_TRANSLATION_TARGET,
       };
 
       this.displayArticle(this.currentArticle);
