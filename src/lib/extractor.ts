@@ -292,10 +292,7 @@ export async function createArticleFromEpub(
     allParagraphs.push(...chapterParagraphs);
   }
 
-  let paragraphs = allParagraphs
-    .map((p) => stripNonTextContent(p))
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
-    .filter((p) => isSpeakableText(p));
+  let paragraphs = filterReadableParagraphs(allParagraphs);
 
   if (paragraphs.length === 0) {
     throw new Error('Could not extract readable text from this EPUB.');
@@ -318,6 +315,8 @@ async function loadJSZip(): Promise<JSZipConstructor> {
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement('script');
       script.src = JSZIP_CDN;
+      script.integrity = 'sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb';
+      script.crossOrigin = 'anonymous';
       script.onload = () => resolve();
       script.onerror = () => reject(new Error('Failed to load JSZip'));
       document.head.appendChild(script);
@@ -1050,20 +1049,20 @@ function isSpeakableText(text: string): boolean {
   return !!words && words.length >= 3;
 }
 
-function splitPlainTextParagraphs(text: string): string[] {
-  const byBlank = text
-    .split(/\n\s*\n/)
+/** Strip non-text content, then filter for minimum length and speakability. */
+function filterReadableParagraphs(texts: string[]): string[] {
+  return texts
     .map((p) => stripNonTextContent(p))
     .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
     .filter((p) => isSpeakableText(p));
+}
+
+function splitPlainTextParagraphs(text: string): string[] {
+  const byBlank = filterReadableParagraphs(text.split(/\n\s*\n/));
 
   if (byBlank.length > 1) return byBlank;
 
-  const byLine = text
-    .split(/\n/)
-    .map((p) => stripNonTextContent(p))
-    .filter((p) => p.length >= MIN_PARAGRAPH_LENGTH)
-    .filter((p) => isSpeakableText(p));
+  const byLine = filterReadableParagraphs(text.split(/\n/));
 
   if (byLine.length > 1) return byLine;
 

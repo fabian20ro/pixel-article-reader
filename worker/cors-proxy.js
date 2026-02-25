@@ -45,7 +45,17 @@ const PRIVATE_IP_PATTERNS = [
   /^fe80:/i,
   /^fd/i,
   /^localhost$/i,
+  /^::ffff:127\./i,       // IPv4-mapped IPv6 loopback
+  /^::ffff:10\./i,        // IPv4-mapped IPv6 private
+  /^::ffff:172\.(1[6-9]|2\d|3[01])\./i,
+  /^::ffff:192\.168\./i,
+  /^::ffff:169\.254\./i,
+  /^::ffff:0\./i,
+  /^\[::1\]$/,            // bracketed IPv6 in URL hostname
+  /^\[::ffff:/i,
 ];
+
+const MAX_REDIRECTS = 5;
 
 const LANG_CODE_RE = /^[a-z]{2,5}(-[a-zA-Z]{2,5})?$/;
 
@@ -104,7 +114,7 @@ export default {
 function createRequestContext(request, env) {
   return {
     request,
-    allowedOrigin: env.ALLOWED_ORIGIN || '*',
+    allowedOrigin: env.ALLOWED_ORIGIN || null,
     proxySecret: env.PROXY_SECRET || '',
     jinaKey: env.JINA_KEY || '',
     rateCheck: null,
@@ -237,18 +247,18 @@ function parseAndValidateArticleRequest(requestUrl, allowedOrigin) {
 async function fetchArticleHtml(targetUrl, context) {
   let response;
   try {
-    response = await fetchWithTimeout(targetUrl, {
+    response = await fetchWithRedirectValidation(targetUrl, {
       headers: {
         'User-Agent': USER_AGENT,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.8,*/*;q=0.7',
         'Accept-Language': 'en-US,en;q=0.9,ro;q=0.8',
       },
-      redirect: 'follow',
     });
   } catch (err) {
     if (isAbortError(err)) {
       return errorResponse(504, 'Upstream request timed out.', context.allowedOrigin);
     }
+    if (err instanceof Response) return err;
     return errorResponse(502, `Fetch failed: ${getErrorMessage(err)}`, context.allowedOrigin);
   }
 
@@ -326,7 +336,7 @@ async function fetchViaJina(targetUrl, context) {
 
   let response;
   try {
-    response = await fetchWithTimeout(`https://r.jina.ai/${targetUrl}`, {
+    response = await fetchWithTimeout(`https://r.jina.ai/${encodeURIComponent(targetUrl)}`, {
       headers,
       redirect: 'follow',
     });
@@ -445,6 +455,44 @@ function successHeaders(context, extra = {}) {
   };
 }
 
+/**
+ * Fetch with manual redirect following + SSRF validation on each hop.
+ * Prevents DNS rebinding / redirect-chained private IP bypass.
+ */
+async function fetchWithRedirectValidation(url, init = {}) {
+  let currentUrl = url;
+  for (let i = 0; i < MAX_REDIRECTS; i++) {
+    const response = await fetchWithTimeout(currentUrl, { ...init, redirect: 'manual' });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('Redirect with no Location header');
+
+      let redirectUrl;
+      try {
+        redirectUrl = new URL(location, currentUrl);
+      } catch {
+        throw new Error('Invalid redirect URL');
+      }
+
+      if (redirectUrl.protocol !== 'http:' && redirectUrl.protocol !== 'https:') {
+        throw new Error('Redirect to non-HTTP protocol');
+      }
+      if (isPrivateHost(redirectUrl.hostname)) {
+        throw new Error('Redirect to private/internal address blocked');
+      }
+
+      currentUrl = redirectUrl.href;
+      continue;
+    }
+
+    // Attach final URL so callers can read it
+    Object.defineProperty(response, 'url', { value: currentUrl, writable: false });
+    return response;
+  }
+  throw new Error('Too many redirects');
+}
+
 async function fetchWithTimeout(url, init = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -473,7 +521,7 @@ function noContentResponse(origin) {
 
 function corsHeaders(origin) {
   return {
-    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Origin': origin || 'null',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
     'Access-Control-Expose-Headers': 'X-Final-URL, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After',

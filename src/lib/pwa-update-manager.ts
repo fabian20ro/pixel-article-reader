@@ -5,7 +5,7 @@ export interface PwaUpdateManagerOptions {
   reload?: () => void;
 }
 
-export type PwaUpdateActionResult = 'reloaded' | 'deferred' | 'no-change' | 'failed';
+type PwaUpdateActionResult = 'reloaded' | 'deferred' | 'no-change' | 'failed';
 
 export class PwaUpdateManager {
   private registration: ServiceWorkerRegistration | undefined;

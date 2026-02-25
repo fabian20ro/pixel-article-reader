@@ -499,8 +499,8 @@ function sanitizeRenderedHtml(html: string): string {
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) return '';
 
-  // Remove dangerous elements and image-related elements (this is a text reader).
-  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg').forEach((el) => el.remove());
+  // Remove dangerous elements, form elements, and image-related elements (this is a text reader).
+  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg, form, meta, link, base').forEach((el) => el.remove());
 
   // Remove links that became empty after image removal (linked images)
   // and links whose text is just an image reference (Jina Reader format).
@@ -522,7 +522,7 @@ function sanitizeRenderedHtml(html: string): string {
         return;
       }
 
-      if ((name === 'href' || name === 'src') && /^javascript:/i.test(value)) {
+      if ((name === 'href' || name === 'src') && /^\s*(javascript|data|vbscript):/i.test(value)) {
         el.removeAttribute(attr.name);
       }
     });

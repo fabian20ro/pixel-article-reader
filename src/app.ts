@@ -9,6 +9,7 @@ import { PwaUpdateManager } from './lib/pwa-update-manager.js';
 import { ArticleController } from './lib/article-controller.js';
 import { APP_RELEASE, shortRelease } from './lib/release.js';
 import { QueueController } from './lib/queue-controller.js';
+import { QueueRenderer } from './lib/queue-renderer.js';
 import type { QueueItem } from './lib/queue-store.js';
 import type { Language } from './lib/lang-detect.js';
 
@@ -138,7 +139,7 @@ async function main(): Promise<void> {
     tts,
     callbacks: {
       onQueueChange(items, currentIndex) {
-        renderQueueUI(items, currentIndex);
+        queueRenderer.render(items, currentIndex);
       },
       onAutoAdvanceCountdown(nextTitle) {
         refs.advanceText.textContent = `Up next: ${nextTitle}`;
@@ -154,23 +155,26 @@ async function main(): Promise<void> {
     },
   });
 
-  // ── Queue Drawer (left slide-in) ──────────────────────────────
-  function openQueueDrawer(): void {
-    refs.queueDrawer.classList.add('open');
-    refs.queueOverlay.classList.remove('hidden');
-    requestAnimationFrame(() => refs.queueOverlay.classList.add('open'));
+  // ── Drawer/sheet open-close utility ─────────────────────────────
+  function openDrawer(panel: HTMLElement, overlay: HTMLElement): void {
+    panel.classList.add('open');
+    overlay.classList.remove('hidden');
+    requestAnimationFrame(() => overlay.classList.add('open'));
   }
 
-  function closeQueueDrawer(): void {
-    if (!refs.queueDrawer.classList.contains('open')) return;
-    refs.queueDrawer.classList.remove('open');
-    refs.queueOverlay.classList.remove('open');
-    refs.queueOverlay.addEventListener('transitionend', () => {
-      if (!refs.queueOverlay.classList.contains('open')) {
-        refs.queueOverlay.classList.add('hidden');
+  function closeDrawer(panel: HTMLElement, overlay: HTMLElement): void {
+    if (!panel.classList.contains('open')) return;
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+    overlay.addEventListener('transitionend', () => {
+      if (!overlay.classList.contains('open')) {
+        overlay.classList.add('hidden');
       }
     }, { once: true });
   }
+
+  const openQueueDrawer = () => openDrawer(refs.queueDrawer, refs.queueOverlay);
+  const closeQueueDrawer = () => closeDrawer(refs.queueDrawer, refs.queueOverlay);
 
   refs.menuToggle.addEventListener('click', () => {
     const isOpen = refs.queueDrawer.classList.contains('open');
@@ -243,248 +247,44 @@ async function main(): Promise<void> {
     }, { once: true });
   }
 
-  function renderQueueUI(items: QueueItem[], currentIndex: number): void {
-    // Badge on hamburger icon
-    if (items.length > 0) {
-      refs.queueBadge.textContent = String(Math.min(items.length, 99));
-      refs.queueBadge.classList.remove('hidden');
-    } else {
-      refs.queueBadge.classList.add('hidden');
-    }
-
-    // Count in drawer header
-    refs.queueCount.textContent = String(items.length);
-
-    // Empty state
-    refs.queueEmpty.classList.toggle('hidden', items.length > 0);
-    refs.queueList.classList.toggle('hidden', items.length === 0);
-
-    // "Next:" row in player
-    const nextItem = items[currentIndex + 1];
-    if (nextItem) {
-      refs.nextArticleTitle.textContent = nextItem.title;
-      refs.nextArticleRow.classList.remove('hidden');
-    } else {
-      refs.nextArticleRow.classList.add('hidden');
-    }
-
-    // Render list
-    refs.queueList.innerHTML = '';
-    items.forEach((item, idx) => {
-      const li = document.createElement('li');
-      li.className = 'queue-item' + (idx === currentIndex ? ' playing' : '');
-      li.setAttribute('role', 'listitem');
-      li.dataset.itemId = item.id;
-
-      // Drag handle (grip icon)
-      const dragHandle = document.createElement('div');
-      dragHandle.className = 'queue-drag-handle';
-      dragHandle.setAttribute('aria-label', 'Drag to reorder');
-      dragHandle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>';
-
-      // Indicator (thin bar or equalizer bars for playing item)
-      const indicator = document.createElement('div');
-      indicator.className = 'queue-item-indicator';
-      if (idx === currentIndex) {
-        indicator.innerHTML = '<div class="eq-bars"><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div></div>';
-      }
-
-      // Info
-      const info = document.createElement('div');
-      info.className = 'queue-item-info';
-
-      const title = document.createElement('div');
-      title.className = 'queue-item-title';
-      title.textContent = item.title;
-
-      const meta = document.createElement('div');
-      meta.className = 'queue-item-meta';
-      meta.textContent = [item.siteName, `${item.estimatedMinutes} min`].filter(Boolean).join(' \u00B7 ');
-
-      info.appendChild(title);
-      info.appendChild(meta);
-
-      // Action buttons
-      const actions = document.createElement('div');
-      actions.className = 'queue-item-actions';
-
-      const shareBtn = document.createElement('button');
-      shareBtn.className = 'icon-btn';
-      shareBtn.setAttribute('aria-label', 'Share');
-      shareBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
-      shareBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        void queueController!.shareItem(item);
-      });
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'icon-btn';
-      deleteBtn.setAttribute('aria-label', 'Remove');
-      deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-      deleteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        queueController!.removeItem(item.id);
-      });
-
-      actions.appendChild(shareBtn);
-      actions.appendChild(deleteBtn);
-
-      li.appendChild(dragHandle);
-      li.appendChild(indicator);
-      li.appendChild(info);
-      li.appendChild(actions);
-
-      // Click to play
-      li.addEventListener('click', () => {
-        void queueController!.playItem(item.id).then(() => tts.play());
+  const queueRenderer = new QueueRenderer(
+    {
+      queueBadge: refs.queueBadge,
+      queueCount: refs.queueCount,
+      queueEmpty: refs.queueEmpty,
+      queueList: refs.queueList,
+      nextArticleRow: refs.nextArticleRow,
+      nextArticleTitle: refs.nextArticleTitle,
+    },
+    {
+      onItemClick(itemId) {
+        void queueController!.playItem(itemId).then(() => tts.play());
         closeQueueDrawer();
-      });
-
-      refs.queueList.appendChild(li);
-    });
-  }
-
-  // ── Queue drag-and-drop reorder ─────────────────────────────
-  let dragState: {
-    itemId: string;
-    startY: number;
-    initialTop: number;
-    clone: HTMLElement;
-    placeholder: HTMLElement;
-    originalLi: HTMLElement;
-    listItems: HTMLElement[];
-  } | null = null;
-
-  function getY(e: MouseEvent | TouchEvent): number {
-    if ('touches' in e) return e.touches[0].clientY;
-    return e.clientY;
-  }
-
-  function startDrag(itemId: string, startY: number, originalLi: HTMLElement): void {
-    const listItems = Array.from(refs.queueList.children) as HTMLElement[];
-    const rect = originalLi.getBoundingClientRect();
-
-    const clone = originalLi.cloneNode(true) as HTMLElement;
-    clone.className = 'queue-item queue-item-dragging';
-    clone.style.position = 'fixed';
-    clone.style.left = rect.left + 'px';
-    clone.style.top = rect.top + 'px';
-    clone.style.width = rect.width + 'px';
-    clone.style.zIndex = '1000';
-    clone.style.pointerEvents = 'none';
-    document.body.appendChild(clone);
-
-    originalLi.classList.add('queue-item-placeholder');
-
-    dragState = { itemId, startY, initialTop: rect.top, clone, placeholder: originalLi, originalLi, listItems };
-    refs.queueList.classList.add('reordering');
-  }
-
-  function moveDrag(clientY: number): void {
-    if (!dragState) return;
-    const dy = clientY - dragState.startY;
-    dragState.clone.style.top = (dragState.initialTop + dy) + 'px';
-
-    const items = Array.from(refs.queueList.children) as HTMLElement[];
-    const currentIdx = items.indexOf(dragState.placeholder);
-
-    for (let i = 0; i < items.length; i++) {
-      if (i === currentIdx) continue;
-      const r = items[i].getBoundingClientRect();
-      const midY = r.top + r.height / 2;
-      if (i < currentIdx && clientY < midY) {
-        refs.queueList.insertBefore(dragState.placeholder, items[i]);
-        break;
-      }
-      if (i > currentIdx && clientY > midY) {
-        refs.queueList.insertBefore(dragState.placeholder, items[i].nextSibling);
-        break;
-      }
-    }
-  }
-
-  function endDrag(): void {
-    if (!dragState) return;
-    dragState.clone.remove();
-    dragState.placeholder.classList.remove('queue-item-placeholder');
-    refs.queueList.classList.remove('reordering');
-
-    const reorderedIds = Array.from(refs.queueList.children)
-      .map((li) => (li as HTMLElement).dataset.itemId)
-      .filter(Boolean) as string[];
-
-    const currentItems = queueController!.getItems();
-    const newOrder = reorderedIds
-      .map((id) => currentItems.find((i) => i.id === id))
-      .filter(Boolean) as QueueItem[];
-
-    if (newOrder.length === currentItems.length) {
-      queueController!.reorder(newOrder);
-    }
-
-    dragState = null;
-  }
-
-  refs.queueList.addEventListener('mousedown', (e) => {
-    const handle = (e.target as HTMLElement).closest('.queue-drag-handle');
-    if (!handle) return;
-    e.preventDefault();
-    const li = handle.closest('.queue-item') as HTMLElement | null;
-    if (!li?.dataset.itemId) return;
-    startDrag(li.dataset.itemId, e.clientY, li);
-
-    const onMove = (ev: MouseEvent) => moveDrag(ev.clientY);
-    const onUp = () => {
-      endDrag();
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-
-  refs.queueList.addEventListener('touchstart', (e) => {
-    const handle = (e.target as HTMLElement).closest('.queue-drag-handle');
-    if (!handle) return;
-    const li = handle.closest('.queue-item') as HTMLElement | null;
-    if (!li?.dataset.itemId) return;
-    startDrag(li.dataset.itemId, getY(e), li);
-
-    const onMove = (ev: TouchEvent) => {
-      ev.preventDefault();
-      moveDrag(getY(ev));
-    };
-    const onEnd = () => {
-      endDrag();
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onEnd);
-      document.removeEventListener('touchcancel', onEnd);
-    };
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchend', onEnd);
-    document.addEventListener('touchcancel', onEnd);
-  }, { passive: false });
+      },
+      onItemShare(item) {
+        void queueController!.shareItem(item);
+      },
+      onItemRemove(itemId) {
+        queueController!.removeItem(itemId);
+      },
+      onReorder(reorderedIds) {
+        const currentItems = queueController!.getItems();
+        const newOrder = reorderedIds
+          .map((id) => currentItems.find((i) => i.id === id))
+          .filter(Boolean) as QueueItem[];
+        if (newOrder.length === currentItems.length) {
+          queueController!.reorder(newOrder);
+        }
+      },
+    },
+  );
 
   // Initial queue render
-  renderQueueUI(queueController.getItems(), queueController.getCurrentIndex());
+  queueRenderer.render(queueController.getItems(), queueController.getCurrentIndex());
 
   // ── Settings Drawer (right slide-in) ──────────────────────────
-  function openSettingsDrawer(): void {
-    refs.settingsPanel.classList.add('open');
-    refs.settingsOverlay.classList.remove('hidden');
-    requestAnimationFrame(() => refs.settingsOverlay.classList.add('open'));
-  }
-
-  function closeSettingsDrawer(): void {
-    if (!refs.settingsPanel.classList.contains('open')) return;
-    refs.settingsPanel.classList.remove('open');
-    refs.settingsOverlay.classList.remove('open');
-    refs.settingsOverlay.addEventListener('transitionend', () => {
-      if (!refs.settingsOverlay.classList.contains('open')) {
-        refs.settingsOverlay.classList.add('hidden');
-      }
-    }, { once: true });
-  }
+  const openSettingsDrawer = () => openDrawer(refs.settingsPanel, refs.settingsOverlay);
+  const closeSettingsDrawer = () => closeDrawer(refs.settingsPanel, refs.settingsOverlay);
 
   refs.settingsToggle.addEventListener('click', () => {
     const isOpen = refs.settingsPanel.classList.contains('open');
@@ -494,22 +294,8 @@ async function main(): Promise<void> {
   refs.settingsOverlay.addEventListener('click', closeSettingsDrawer);
 
   // ── Chapters Bottom Sheet ─────────────────────────────────────
-  function openChaptersSheet(): void {
-    refs.chaptersSheet.classList.add('open');
-    refs.chaptersOverlay.classList.remove('hidden');
-    requestAnimationFrame(() => refs.chaptersOverlay.classList.add('open'));
-  }
-
-  function closeChaptersSheet(): void {
-    if (!refs.chaptersSheet.classList.contains('open')) return;
-    refs.chaptersSheet.classList.remove('open');
-    refs.chaptersOverlay.classList.remove('open');
-    refs.chaptersOverlay.addEventListener('transitionend', () => {
-      if (!refs.chaptersOverlay.classList.contains('open')) {
-        refs.chaptersOverlay.classList.add('hidden');
-      }
-    }, { once: true });
-  }
+  const openChaptersSheet = () => openDrawer(refs.chaptersSheet, refs.chaptersOverlay);
+  const closeChaptersSheet = () => closeDrawer(refs.chaptersSheet, refs.chaptersOverlay);
 
   refs.chaptersBtn.addEventListener('click', () => {
     const isOpen = refs.chaptersSheet.classList.contains('open');
@@ -624,7 +410,7 @@ async function main(): Promise<void> {
     refs.speedValue.textContent = rate + 'x';
     tts.setRate(rate);
     settings.rate = rate;
-    persistSettings(settings);
+    saveSettings(settings);
     updateSpeedButtons(rate);
   });
 
@@ -634,7 +420,7 @@ async function main(): Promise<void> {
     const name = refs.settingsVoice.value;
     if (name) tts.setVoice(name);
     settings.voiceName = name;
-    persistSettings(settings);
+    saveSettings(settings);
   });
 
   // Voice gender selector
@@ -642,7 +428,7 @@ async function main(): Promise<void> {
     btn.addEventListener('click', () => {
       const gender = btn.dataset.value as 'auto' | 'male' | 'female';
       settings.voiceGender = gender;
-      persistSettings(settings);
+      saveSettings(settings);
       updateSegmentButtons(refs.voiceGenderBtns, gender);
       applyVoiceGender(gender);
     });
@@ -657,7 +443,7 @@ async function main(): Promise<void> {
       const theme = btn.dataset.value as Theme;
       applyTheme(theme);
       settings.theme = theme;
-      persistSettings(settings);
+      saveSettings(settings);
       updateSegmentButtons(refs.themeBtns, theme);
     });
   });
@@ -678,7 +464,7 @@ async function main(): Promise<void> {
   refs.settingsWakelock.addEventListener('change', () => {
     settings.wakeLock = refs.settingsWakelock.checked;
     tts.setWakeLock(settings.wakeLock);
-    persistSettings(settings);
+    saveSettings(settings);
   });
 
   // Player controls
@@ -702,7 +488,7 @@ async function main(): Promise<void> {
       const rate = parseFloat(btn.dataset.rate ?? '1');
       tts.setRate(rate);
       settings.rate = rate;
-      persistSettings(settings);
+      saveSettings(settings);
       refs.settingsSpeed.value = String(rate);
       refs.speedValue.textContent = rate + 'x';
       updateSpeedButtons(rate);
@@ -741,18 +527,19 @@ async function main(): Promise<void> {
 
   function setLangOverride(lang: 'auto' | Language): void {
     settings.lang = lang;
-    persistSettings(settings);
+    saveSettings(settings);
     articleController.setLangOverride(lang);
   }
 
-  function persistSettings(value: AppSettings): void {
-    saveSettings(value);
+
+  function getAllowedVoices(): SpeechSynthesisVoice[] {
+    return tts
+      .getAvailableVoices()
+      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
   }
 
   function populateVoices(): void {
-    const voices = tts
-      .getAvailableVoices()
-      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
+    const voices = getAllowedVoices();
 
     voices.sort((a, b) => {
       const langCmp = a.lang.localeCompare(b.lang);
@@ -788,11 +575,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const voices = tts
-      .getAvailableVoices()
-      .filter((v) => ALLOWED_LANG_PREFIXES.some((p) => v.lang === p || v.lang.startsWith(p + '-')));
-
-    const match = voices.find((v) => detectVoiceGender(v.name) === gender);
+    const match = getAllowedVoices().find((v) => detectVoiceGender(v.name) === gender);
     if (match) {
       tts.setVoice(match.name);
       settings.voiceName = match.name;
