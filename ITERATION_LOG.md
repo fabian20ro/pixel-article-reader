@@ -677,4 +677,32 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-25] Fix 7 playback state machine bugs — queue transitions, resume, visibility, chapter sync
+
+**Context:** Production bugs: resume fails after queue transitions, screen sleeps during playback, chapter clicks don't sync audio position, auto-advance timer stalls playback. Also added version number in settings drawer.
+
+**What happened:**
+
+**Playback state machine bugs:**
+- **Bug 1 — `_stopped` not reset after `loadArticle()`** (`tts-engine.ts:263`): `stop()` sets `_stopped = true` to block `speakCurrent()`. When loading new content, the flag stays true, blocking playback on the next play request. Added `this._stopped = false` after the stop/load sequence. Root cause of resume failing after queue transitions.
+- **Bug 2 — Resume watchdog missing `_speakGen++`** (`tts-engine.ts:329`): The speechSynthesis resume fallback timer (3s of no audio detected) calls `cancel()` + `speakCurrent()` to recover. Without incrementing the generation counter first, the stale `onend` callback from the cancelled utterance could fire and double-advance position. Added `this._speakGen++` before `cancel()`.
+- **Bug 3 — Wake lock not re-acquired on `resume()`** (`tts-engine.ts:317`): The W3C Screen Wake Lock API auto-releases when the page goes hidden (backgrounded). `resume()` re-starts playback but didn't re-acquire the lock, so the screen sleeps on timeout. Added `this.acquireWakeLock()` call to `resume()`.
+- **Bug 4 — Wake lock guard incomplete** (`tts-engine.ts:759`): The async `acquireWakeLock()` method didn't handle the race where the user pauses while the lock request is pending. Added a guard to release immediately if `_isPaused` is true.
+- **Bug 5 — Visibility change handler incomplete** (`tts-engine.ts:231-248`): On `hidden`, didn't clear the resume watchdog timer (would fire while JS suspended in background, causing false triggers on resume). On `visible`, didn't reset `_lastProgressTime` (dead-man's switch would count suspended duration as "no progress"). Fixed: clear resume timer on `hidden`, reset progress timer and acquire wake lock on `visible`.
+- **Bug 6 — Auto-advance not cancelled** (`queue-controller.ts:190`, `app.ts:709`): The queue auto-advance timer (2s delay between articles) wasn't cancelled when the user seeks within an article or calls `playItem()`. The stale timer could fire mid-seek and cause unintended queue transitions. Added cancellation in `playItem()` and progress bar seek handler.
+- **Bug 7 — Chapter click doesn't sync TTS** (`app.ts:541-568`): Chapter list click scrolled to the heading but didn't sync audio position. Added DOM walk from heading to find the corresponding `.paragraph` element and call `tts.jumpToParagraph()`. Falls back to jumping to the last paragraph if heading is at the end.
+
+**Feature — Version number in settings:**
+- Added `<p id="app-version">` element to `index.html` settings drawer.
+- Wired through `dom-refs.ts`.
+- Populated in `app.ts` with `Version ${shortRelease(APP_RELEASE)}`.
+
+**Outcome:** Success. All 235 tests pass, build clean. Queue transitions now preserve playback state, screen stays on during playback, chapter clicks sync audio, and auto-advance no longer interferes with seeks.
+
+**Insight:** The TTS state machine has many interdependent flags (`_stopped`, `_isPaused`, `_speakGen`, resume timer, progress timer, wake lock, auto-advance timer). Changing one state (e.g., loading new article after `stop()`) requires cascading updates to related state (reset `_stopped`, cancel timers, acquire wake lock). Visibility changes are especially tricky: JS suspension in background breaks timer accuracy, so timers should be cleared when backgrounded and metrics reset when returning to foreground. Generation counters must be incremented in ALL code paths that call `cancel()`+`speakCurrent()`, not just the main skip paths. Chapter/section navigation (DOM-based UX) must explicitly sync the TTS position via `jumpToParagraph()` or similar — DOM scroll alone doesn't update audio state.
+
+**Promoted to Lessons Learned:** Yes — five new lessons added to "TTS State Management & UI Sync" section covering: `_stopped` reset, `_speakGen` in all cancel paths, wake lock re-acquisition, visibility handler edge cases, auto-advance timer cancellation, and chapter sync requirements.
+
+---
+
 <!-- New entries go above this line, most recent first -->

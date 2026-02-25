@@ -539,6 +539,31 @@ async function main(): Promise<void> {
       li.dataset.level = String(level);
       li.textContent = text;
       li.addEventListener('click', () => {
+        // Sync TTS to this heading's paragraph so audio matches scroll.
+        // The heading itself may be a .paragraph, or we walk forward to
+        // find the first .paragraph sibling.
+        let target: HTMLElement | null = heading.classList.contains('paragraph')
+          ? heading : null;
+        if (!target) {
+          let sibling: Element | null = heading;
+          while (sibling) {
+            if (sibling.classList.contains('paragraph') && (sibling as HTMLElement).dataset.index != null) {
+              target = sibling as HTMLElement;
+              break;
+            }
+            sibling = sibling.nextElementSibling;
+          }
+        }
+        if (target?.dataset.index != null) {
+          tts.jumpToParagraph(parseInt(target.dataset.index, 10));
+        } else {
+          // Heading at end of article — jump to the last paragraph
+          const allParas = refs.articleText.querySelectorAll<HTMLElement>('.paragraph[data-index]');
+          if (allParas.length > 0) {
+            tts.jumpToParagraph(parseInt(allParas[allParas.length - 1].dataset.index!, 10));
+          }
+        }
+
         heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
         closeChaptersSheet();
       });
@@ -560,6 +585,7 @@ async function main(): Promise<void> {
   });
 
   refs.updateStatus.textContent = `Build ${shortRelease(APP_RELEASE)}`;
+  refs.appVersion.textContent = `Version ${shortRelease(APP_RELEASE)}`;
   await updateManager.init('sw.js');
 
   // Install prompt
@@ -687,6 +713,7 @@ async function main(): Promise<void> {
     const total = tts.state.totalParagraphs;
     if (total === 0) return;
 
+    queueController!.cancelAutoAdvance();
     const rect = refs.progressBar.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     const idx = Math.max(0, Math.min(total - 1, Math.floor(ratio * total)));

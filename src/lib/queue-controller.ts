@@ -187,6 +187,7 @@ export class QueueController {
     const idx = this.items.findIndex((i) => i.id === id);
     if (idx === -1) return;
 
+    this.cancelAutoAdvance();
     this.currentIndex = idx;
     const item = this.items[idx];
     this.notify();
