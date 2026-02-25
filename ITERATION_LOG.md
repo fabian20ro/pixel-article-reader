@@ -695,4 +695,24 @@ Each entry should follow this structure:
 
 ---
 
+### 2026-02-25 — Deep TTS prefetch + device voice only setting
+
+**Task:** User reported two issues: (1) voice switching between online (Google Translate TTS) and offline (speechSynthesis) is jarring when internet drops for ~90 seconds in the subway, and (2) they wanted an option to use the device voice consistently.
+
+**Changes:**
+- Increased TTS prefetch window from 2 to 20 sentences ahead (sliding window, refilled after each sentence completes) to buffer ~2 minutes of audio, covering subway station gaps
+- Bumped Cloudflare Worker rate limit from 20 to 60 requests/minute to accommodate the burst of prefetch requests
+- Added `setDeviceVoiceOnly()` method to TTSEngine — stores/restores `audioConfig` to cleanly switch between audio-based TTS and speechSynthesis-only mode
+- Added `deviceVoiceOnly` boolean to settings store with localStorage persistence
+- Added "Use device voice only (no background playback)" checkbox to settings drawer
+- Wired setting through app.ts with standard checkbox pattern
+
+**Outcome:** Success. The deeper prefetch buffer should survive 90-second internet gaps without voice switching. Users who prefer consistent device voice can enable the toggle, trading background playback for voice consistency.
+
+**Insight:** The `audioConfig` null-check pattern already gates all audio-vs-speechSynthesis paths in TTSEngine, so toggling device voice only required just saving/restoring the config object — no control flow changes needed. The rate limit increase from 20→60 req/min gives headroom for the initial 20-sentence burst plus ~12 sentences/min during normal playback.
+
+**Promoted to Lessons Learned:** No — straightforward feature addition using existing patterns.
+
+---
+
 <!-- New entries go above this line, most recent first -->
