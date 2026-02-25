@@ -56,10 +56,6 @@ export interface AppDomRefs {
   queueClearBtn: HTMLElement;
   nextArticleRow: HTMLElement;
   nextArticleTitle: HTMLElement;
-  addQueueSnackbar: HTMLElement;
-  snackbarTitle: HTMLElement;
-  playNowBtn: HTMLElement;
-  addQueueBtn: HTMLElement;
   autoAdvanceToast: HTMLElement;
   advanceText: HTMLElement;
   advanceSkipBtn: HTMLElement;
@@ -139,10 +135,6 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     queueClearBtn: requireElement('queue-clear-btn', root),
     nextArticleRow: requireElement('next-article-row', root),
     nextArticleTitle: requireElement('next-article-title', root),
-    addQueueSnackbar: requireElement('add-queue-snackbar', root),
-    snackbarTitle: requireElement('snackbar-title', root),
-    playNowBtn: requireElement('play-now-btn', root),
-    addQueueBtn: requireElement('add-queue-btn', root),
     autoAdvanceToast: requireElement('auto-advance-toast', root),
     advanceText: requireElement('advance-text', root),
     advanceSkipBtn: requireElement('advance-skip-btn', root),

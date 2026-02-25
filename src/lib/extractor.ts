@@ -87,6 +87,11 @@ const FETCH_TIMEOUT = 10_000;           // 10 s
 const PDF_FETCH_TIMEOUT = 30_000;       // 30 s (PDFs are larger)
 const WORDS_PER_MINUTE = 180;           // spoken pace
 
+/** Shared image-stripping regex patterns for markdown content. */
+export const IMAGE_MD_RE = /!\[[^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/g;
+export const IMAGE_JINA_RE = /\[Image\s*[:\d][^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/gi;
+export const IMAGE_HTML_RE = /<img[^>]*\/?>/gi;
+
 /**
  * Create an Article directly from pasted plain text (no fetch needed).
  */
@@ -693,14 +698,30 @@ async function parsePdfFromArrayBuffer(
   sourceUrl: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
+  // Phase 1: Extract raw text from each page
   const pdfjsLib = await loadPdfJs();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const { paragraphs: rawParagraphs, pageMap } = await extractPdfRawText(pdf, onProgress);
 
+  // Phase 2: Filter and assemble speakable paragraphs
+  const { paragraphs, paragraphPages } = filterPdfParagraphs(rawParagraphs, pageMap);
+
+  // Phase 3: Insert chapter headings from PDF outline
+  await insertPdfChapterHeadings(pdf, paragraphs, paragraphPages);
+
+  // Phase 4: Build article metadata
+  return buildPdfArticle(paragraphs, sourceUrl);
+}
+
+/** Phase 1: Walk PDF pages and extract raw paragraph text with page mapping. */
+async function extractPdfRawText(
+  pdf: PdfJsDocument,
+  onProgress?: (message: string) => void,
+): Promise<{ paragraphs: string[]; pageMap: number[] }> {
   onProgress?.(`Extracting text from ${pdf.numPages} pages...`);
 
-  // Track which page each raw paragraph came from
-  const allParagraphs: string[] = [];
-  const paraPageMap: number[] = [];
+  const paragraphs: string[] = [];
+  const pageMap: number[] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     if (pdf.numPages > 10 && i % 5 === 0) {
@@ -708,46 +729,58 @@ async function parsePdfFromArrayBuffer(
     }
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const pageParagraphs = extractParagraphsFromTextItems(content.items);
-    for (const p of pageParagraphs) {
-      paraPageMap.push(i);
-      allParagraphs.push(p);
+    for (const p of extractParagraphsFromTextItems(content.items)) {
+      pageMap.push(i);
+      paragraphs.push(p);
     }
   }
 
-  // Filter paragraphs while preserving page mapping
+  return { paragraphs, pageMap };
+}
+
+/** Phase 2: Filter raw paragraphs to speakable text, falling back to sentence splitting. */
+function filterPdfParagraphs(
+  rawParagraphs: string[],
+  pageMap: number[],
+): { paragraphs: string[]; paragraphPages: number[] } {
   const filtered: Array<{ text: string; page: number }> = [];
-  for (let i = 0; i < allParagraphs.length; i++) {
-    const stripped = stripNonTextContent(allParagraphs[i]);
+  for (let i = 0; i < rawParagraphs.length; i++) {
+    const stripped = stripNonTextContent(rawParagraphs[i]);
     if (stripped.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(stripped)) {
-      filtered.push({ text: stripped, page: paraPageMap[i] });
+      filtered.push({ text: stripped, page: pageMap[i] });
     }
   }
-
-  let paragraphs: string[];
-  let paragraphPages: number[];
 
   if (filtered.length <= 1) {
     const saved = filtered[0]?.text;
-    const fullText = allParagraphs.join(' ');
+    const fullText = rawParagraphs.join(' ');
     const fromSentences = splitPlainTextParagraphs(fullText);
-    paragraphs = fromSentences.length > 0 ? fromSentences : (saved ? [saved] : []);
-    paragraphPages = [];
-  } else {
-    paragraphs = filtered.map((f) => f.text);
-    paragraphPages = filtered.map((f) => f.page);
+    return {
+      paragraphs: fromSentences.length > 0 ? fromSentences : (saved ? [saved] : []),
+      paragraphPages: [],
+    };
   }
 
-  if (paragraphs.length === 0) {
+  if (filtered.length === 0) {
     throw new Error('Could not extract readable text from this PDF.');
   }
 
-  // Extract PDF outline for chapter support
+  return {
+    paragraphs: filtered.map((f) => f.text),
+    paragraphPages: filtered.map((f) => f.page),
+  };
+}
+
+/** Phase 3: Extract PDF outline and insert chapter headings into paragraphs. */
+async function insertPdfChapterHeadings(
+  pdf: PdfJsDocument,
+  paragraphs: string[],
+  paragraphPages: number[],
+): Promise<void> {
   try {
     if (paragraphPages.length > 0) {
       const chapters = await extractPdfChapters(pdf, paragraphPages);
       if (chapters.length > 0) {
-        // Insert headings in reverse order to preserve indices
         for (let i = chapters.length - 1; i >= 0; i--) {
           const ch = chapters[i];
           const prefix = '#'.repeat(Math.min(Math.max(ch.level + 1, 2), 4));
@@ -758,8 +791,14 @@ async function parsePdfFromArrayBuffer(
   } catch {
     // Outline extraction failed — proceed without chapters
   }
+}
 
-  // Try to extract a meaningful title from the first paragraph or URL
+/** Phase 4: Assemble the final Article from paragraphs and source URL. */
+function buildPdfArticle(paragraphs: string[], sourceUrl: string): Article {
+  if (paragraphs.length === 0) {
+    throw new Error('Could not extract readable text from this PDF.');
+  }
+
   let title: string;
   try {
     const urlPath = new URL(sourceUrl).pathname;
@@ -770,23 +809,20 @@ async function parsePdfFromArrayBuffer(
   }
 
   const textContent = paragraphs.join('\n\n');
-  const markdown = textContent;
   const wordCount = countWords(textContent);
-  const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
-  const lang = detectLanguage(textContent);
 
   return {
     title,
     content: '',
     textContent,
-    markdown,
+    markdown: textContent,
     paragraphs,
-    lang,
+    lang: detectLanguage(textContent),
     htmlLang: '',
     siteName: 'PDF',
     excerpt: textContent.slice(0, 200),
     wordCount,
-    estimatedMinutes,
+    estimatedMinutes: Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE)),
     resolvedUrl: sourceUrl,
   };
 }
@@ -1163,8 +1199,8 @@ function stripNonTextContent(text: string): string {
   return text
     .replace(/<[^>]+>/g, ' ')
     .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
-    .replace(/!\[[^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/g, '')           // image markdown ![alt](url) (handles parens in URLs)
-    .replace(/\[Image\s*[:\d][^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/gi, '') // [Image: ...](url) Jina format
+    .replace(IMAGE_MD_RE, '')           // image markdown ![alt](url) (handles parens in URLs)
+    .replace(IMAGE_JINA_RE, '') // [Image: ...](url) Jina format
     .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(?=\s|$|\)|])/gi, '') // image URLs
     .replace(/https?:\/\/\S{80,}/g, '')
     .replace(/\[Image\s*[:\d][^\]]*\]/gi, '')            // standalone [Image: ...] references

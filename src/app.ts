@@ -212,26 +212,6 @@ async function main(): Promise<void> {
     queueController!.skipToNext();
   });
 
-  // Snackbar: Play Now / Add to Queue
-  let pendingSnackbarArticle: import('./lib/extractor.js').Article | null = null;
-
-  refs.playNowBtn.addEventListener('click', () => {
-    hideSnackbar(refs.addQueueSnackbar);
-    if (pendingSnackbarArticle && queueController) {
-      const item = queueController.addArticle(pendingSnackbarArticle);
-      void queueController.playItem(item.id).then(() => tts.play());
-    }
-    pendingSnackbarArticle = null;
-  });
-
-  refs.addQueueBtn.addEventListener('click', () => {
-    hideSnackbar(refs.addQueueSnackbar);
-    if (pendingSnackbarArticle && queueController) {
-      queueController.addArticle(pendingSnackbarArticle);
-    }
-    pendingSnackbarArticle = null;
-  });
-
   function showSnackbar(el: HTMLElement): void {
     el.classList.remove('hidden');
     requestAnimationFrame(() => el.classList.add('visible'));
