@@ -1,6 +1,11 @@
 /*
  * Minimal Turndown-compatible adapter used by Article Local Reader.
+ * Derived from Turndown (https://github.com/mixmark-io/turndown).
  * Exposes `window.TurndownService` with a `turndown(html)` method.
+ *
+ * Original work Copyright (c) 2017 Dom Christie
+ * Licensed under the MIT License.
+ * See THIRD-PARTY-LICENSES.md for the full license text.
  */
 (function (global) {
   function normalize(text) {

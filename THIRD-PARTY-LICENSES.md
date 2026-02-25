@@ -42,12 +42,42 @@ Licensed under the MIT License (see [full text below](#mit-license-jszip)).
 
 ## PDF.js
 
-- **Source:** <https://github.com/nicolo-ribaudo/tc39-proposal-structs>
+- **Source:** <https://github.com/mozilla/pdf.js>
 - **Files:** `vendor/pdfjs/pdf.min.mjs`, `vendor/pdfjs/pdf.worker.min.mjs`
 - **Copyright:** Copyright 2024 Mozilla Foundation
 - **License:** Apache License 2.0
 
 Licensed under the Apache License, Version 2.0 (see [full text below](#apache-license-20)).
+
+---
+
+## Marked (minimal adapter)
+
+- **Source:** <https://github.com/markedjs/marked>
+- **File:** `vendor/marked.js`
+- **Copyright:** (c) 2011-2018 Christopher Jeffrey, (c) 2018+ MarkedJS contributors
+- **License:** MIT
+
+Minimal markdown-to-HTML adapter derived from the marked library. The code has
+been substantially rewritten but retains the API design and parsing approach of
+the original.
+
+Licensed under the MIT License (see [full text below](#mit-license-marked)).
+
+---
+
+## Turndown (minimal adapter)
+
+- **Source:** <https://github.com/mixmark-io/turndown>
+- **File:** `vendor/turndown.js`
+- **Copyright:** (c) 2017 Dom Christie
+- **License:** MIT
+
+Minimal HTML-to-Markdown adapter derived from the Turndown library. The code has
+been substantially rewritten but retains the API design and conversion approach
+of the original.
+
+Licensed under the MIT License (see [full text below](#mit-license-turndown)).
 
 ---
 
@@ -263,6 +293,55 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ```
 Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+### MIT License (marked)
+
+```
+Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/)
+Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+### MIT License (Turndown)
+
+```
+Copyright (c) 2017 Dom Christie
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
