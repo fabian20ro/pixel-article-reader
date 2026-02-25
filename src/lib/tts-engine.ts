@@ -233,15 +233,22 @@ export class TTSEngine {
         this.acquireWakeLock();
         this.mediaSession.notifyResume();
 
+        // Reset dead-man's switch so it doesn't fire right after resume
+        this._lastProgressTime = Date.now();
+
         // Restart TTS audio if the browser paused it while backgrounded
-        if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused) {
+        if (this.ttsAudio && this.ttsAudio.src && this.ttsAudio.paused && this.ttsAudio.currentTime > 0) {
           Promise.resolve(this.ttsAudio.play()).catch(() => {
-            // Audio element is broken — re-speak the current sentence
+            // Audio element is broken — invalidate in-flight fetches and re-speak
+            this._speakGen++;
+            this.cancelCurrentAudio();
             this.speakCurrent();
           });
         } else if (!this.ttsAudio || !this.ttsAudio.src) {
           // speechSynthesis path — check if it stalled
           if (!speechSynthesis.speaking && !speechSynthesis.pending) {
+            this._speakGen++;
+            this.cancelCurrentAudio();
             this.speakCurrent();
           }
         }
@@ -264,7 +271,8 @@ export class TTSEngine {
     this.stop();
     this.clearAudioCache();
     this.rawParagraphs = paragraphs;
-    this.paragraphs = paragraphs.map((p) => splitSentences(p));
+    // Strip heading markdown so TTS never speaks "hash hash"
+    this.paragraphs = paragraphs.map((p) => splitSentences(p.replace(/^#{1,6}\s+/, '')));
     this.lang = lang;
     this.articleTitle = title || '';
     this.paraIdx = 0;
