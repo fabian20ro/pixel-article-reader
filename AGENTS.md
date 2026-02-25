@@ -47,3 +47,4 @@ Specialized agents in `.claude/agents/`. Invoke proactively — don't wait to be
 | Security Reviewer | `.claude/agents/security-reviewer.md` | User input handling, API endpoints, sensitive data |
 | UX Expert | `.claude/agents/ux-expert.md` | UI components, interaction patterns, accessibility |
 | Agent Creator | `.claude/agents/agent-creator.md` | Need a new specialized agent for a recurring domain |
+| Legal License Reviewer | `.claude/agents/legal-license-reviewer.md` | Vendored library changes, license audits |

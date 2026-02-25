@@ -119,20 +119,6 @@ export class MediaSessionController {
     this.startKeepAlive();
   }
 
-  /** Signal pause to OS lock screen — keeps session alive. */
-  notifyPause(): void {
-    this.setPlaybackState('paused');
-    // NOTE: do NOT pause the audio element — it keeps the PWA alive in background
-  }
-
-  /** Signal resume to OS lock screen and ensure audio is still running. */
-  notifyResume(): void {
-    if (this._active && this.audio?.paused) {
-      Promise.resolve(this.audio.play()).catch(() => {});
-    }
-    this.setPlaybackState('playing');
-  }
-
   /** Stop silent audio and clear media session. */
   deactivate(): void {
     this._active = false;

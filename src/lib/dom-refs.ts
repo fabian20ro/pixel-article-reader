@@ -57,20 +57,16 @@ export interface AppDomRefs {
   queueClearBtn: HTMLElement;
   nextArticleRow: HTMLElement;
   nextArticleTitle: HTMLElement;
-  addQueueSnackbar: HTMLElement;
-  snackbarTitle: HTMLElement;
-  playNowBtn: HTMLElement;
-  addQueueBtn: HTMLElement;
   autoAdvanceToast: HTMLElement;
   advanceText: HTMLElement;
   advanceSkipBtn: HTMLElement;
   advanceCancelBtn: HTMLElement;
   // Chapters
   chaptersBtn: HTMLElement;
-  chaptersBtnText: HTMLElement;
   chaptersSheet: HTMLElement;
   chaptersOverlay: HTMLElement;
   chaptersList: HTMLElement;
+  appVersion: HTMLElement;
 }
 
 function requireElement<T extends HTMLElement>(id: string, root: Document): T {
@@ -141,19 +137,15 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     queueClearBtn: requireElement('queue-clear-btn', root),
     nextArticleRow: requireElement('next-article-row', root),
     nextArticleTitle: requireElement('next-article-title', root),
-    addQueueSnackbar: requireElement('add-queue-snackbar', root),
-    snackbarTitle: requireElement('snackbar-title', root),
-    playNowBtn: requireElement('play-now-btn', root),
-    addQueueBtn: requireElement('add-queue-btn', root),
     autoAdvanceToast: requireElement('auto-advance-toast', root),
     advanceText: requireElement('advance-text', root),
     advanceSkipBtn: requireElement('advance-skip-btn', root),
     advanceCancelBtn: requireElement('advance-cancel-btn', root),
     // Chapters
     chaptersBtn: requireElement('chapters-btn', root),
-    chaptersBtnText: requireElement('chapters-btn-text', root),
     chaptersSheet: requireElement('chapters-sheet', root),
     chaptersOverlay: requireElement('chapters-overlay', root),
     chaptersList: requireElement('chapters-list', root),
+    appVersion: requireElement('app-version', root),
   };
 }

@@ -709,9 +709,76 @@ Each entry should follow this structure:
 
 **Outcome:** Success. The deeper prefetch buffer should survive 90-second internet gaps without voice switching. Users who prefer consistent device voice can enable the toggle, trading background playback for voice consistency.
 
-**Insight:** The `audioConfig` null-check pattern already gates all audio-vs-speechSynthesis paths in TTSEngine, so toggling device voice only required just saving/restoring the config object — no control flow changes needed. The rate limit increase from 20→60 req/min gives headroom for the initial 20-sentence burst plus ~12 sentences/min during normal playback.
+**Insight:** The `audioConfig` null-check pattern already gates all audio-vs-speechSynthesis paths in TTSEngine, so toggling device voice only required just saving/restoring the config object — no control flow changes needed. The rate limit increase from 20→60 req/min gives headroom for the initial 20-sentence burst plus ~12 sentences/min during normal playback. Note: this was ported to the new AudioTTSBackend architecture during the merge conflict resolution.
 
 **Promoted to Lessons Learned:** No — straightforward feature addition using existing patterns.
+
+---
+
+### [2026-02-25] Fix 7 playback state machine bugs — queue transitions, resume, visibility, chapter sync
+
+**Context:** Production bugs: resume fails after queue transitions, screen sleeps during playback, chapter clicks don't sync audio position, auto-advance timer stalls playback. Also added version number in settings drawer.
+
+**What happened:**
+
+**Playback state machine bugs:**
+- **Bug 1 — `_stopped` not reset after `loadArticle()`** (`tts-engine.ts:263`): `stop()` sets `_stopped = true` to block `speakCurrent()`. When loading new content, the flag stays true, blocking playback on the next play request. Added `this._stopped = false` after the stop/load sequence. Root cause of resume failing after queue transitions.
+- **Bug 2 — Resume watchdog missing `_speakGen++`** (`tts-engine.ts:329`): The speechSynthesis resume fallback timer (3s of no audio detected) calls `cancel()` + `speakCurrent()` to recover. Without incrementing the generation counter first, the stale `onend` callback from the cancelled utterance could fire and double-advance position. Added `this._speakGen++` before `cancel()`.
+- **Bug 3 — Wake lock not re-acquired on `resume()`** (`tts-engine.ts:317`): The W3C Screen Wake Lock API auto-releases when the page goes hidden (backgrounded). `resume()` re-starts playback but didn't re-acquire the lock, so the screen sleeps on timeout. Added `this.acquireWakeLock()` call to `resume()`.
+- **Bug 4 — Wake lock guard incomplete** (`tts-engine.ts:759`): The async `acquireWakeLock()` method didn't handle the race where the user pauses while the lock request is pending. Added a guard to release immediately if `_isPaused` is true.
+- **Bug 5 — Visibility change handler incomplete** (`tts-engine.ts:231-248`): On `hidden`, didn't clear the resume watchdog timer (would fire while JS suspended in background, causing false triggers on resume). On `visible`, didn't reset `_lastProgressTime` (dead-man's switch would count suspended duration as "no progress"). Fixed: clear resume timer on `hidden`, reset progress timer and acquire wake lock on `visible`.
+- **Bug 6 — Auto-advance not cancelled** (`queue-controller.ts:190`, `app.ts:709`): The queue auto-advance timer (2s delay between articles) wasn't cancelled when the user seeks within an article or calls `playItem()`. The stale timer could fire mid-seek and cause unintended queue transitions. Added cancellation in `playItem()` and progress bar seek handler.
+- **Bug 7 — Chapter click doesn't sync TTS** (`app.ts:541-568`): Chapter list click scrolled to the heading but didn't sync audio position. Added DOM walk from heading to find the corresponding `.paragraph` element and call `tts.jumpToParagraph()`. Falls back to jumping to the last paragraph if heading is at the end.
+
+**Feature — Version number in settings:**
+- Added `<p id="app-version">` element to `index.html` settings drawer.
+- Wired through `dom-refs.ts`.
+- Populated in `app.ts` with `Version ${shortRelease(APP_RELEASE)}`.
+
+**Outcome:** Success. All 235 tests pass, build clean. Queue transitions now preserve playback state, screen stays on during playback, chapter clicks sync audio, and auto-advance no longer interferes with seeks.
+
+**Insight:** The TTS state machine has many interdependent flags (`_stopped`, `_isPaused`, `_speakGen`, resume timer, progress timer, wake lock, auto-advance timer). Changing one state (e.g., loading new article after `stop()`) requires cascading updates to related state (reset `_stopped`, cancel timers, acquire wake lock). Visibility changes are especially tricky: JS suspension in background breaks timer accuracy, so timers should be cleared when backgrounded and metrics reset when returning to foreground. Generation counters must be incremented in ALL code paths that call `cancel()`+`speakCurrent()`, not just the main skip paths. Chapter/section navigation (DOM-based UX) must explicitly sync the TTS position via `jumpToParagraph()` or similar — DOM scroll alone doesn't update audio state.
+
+**Promoted to Lessons Learned:** Yes — five new lessons added to "TTS State Management & UI Sync" section covering: `_stopped` reset, `_speakGen` in all cancel paths, wake lock re-acquisition, visibility handler edge cases, auto-advance timer cancellation, and chapter sync requirements.
+
+---
+
+### [2026-02-25] Full codebase structural and maintainability analysis
+
+**Context:** Comprehensive code analysis using four parallel specialized agents (Architect, Security Reviewer, Code Reviewer, Refactor Cleaner) to identify structural, security, quality, and dead code issues across the entire codebase.
+
+**What happened:**
+- Launched all four agents in parallel to analyze the ~7100-line codebase
+- Architect identified: `app.ts` as a 850-line god function, Article object mutation as hidden side effect, near-duplicate `Article`/`StoredArticleContent` types, tight coupling between QueueController and ArticleController
+- Security reviewer found 12 issues: SSRF via redirect-following in worker, XSS sanitizer missing `data:` URI checks, no Content Security Policy, CDN scripts without SRI, CORS wildcard fallback
+- Refactor cleaner found 9 safely removable dead code items (~80 lines), 3 careful items (unused feature scaffolding), and 5 consolidation opportunities (duplicate `splitSentences`, repeated image-stripping regexes, triplicated drawer open/close logic)
+- Code reviewer confirmed architectural issues and added: `parsePdfFromArrayBuffer` as 102-line function, `filterParagraphs` pattern duplicated 4x in extractor.ts, inline import type cast in queue-controller.ts
+- All findings compiled into `docs/code-analysis-2026-02-25.md` with prioritized remediation matrix
+
+**Outcome:** Success. Complete analysis report produced with 18 prioritized improvement items across three tiers (Must Fix, Should Fix, Nice to Have). No critical security issues, but several HIGH-severity items identified.
+
+**Insight:** The codebase has a solid foundation — zero `any` types, clean dependency graph, good error handling, 0 npm vulnerabilities. The main structural risks are: (1) `app.ts` accumulating too much responsibility, (2) shared mutable `Article` objects creating hidden coupling, and (3) the HTML sanitizer having gaps that are unprotected due to missing CSP. The dead code (~80 lines) is modest and safe to remove. The most impactful single refactor would be extracting QueueRenderer from `app.ts`.
+
+**Promoted to Lessons Learned:** No — findings are analysis observations, not reusable patterns. Report is in `docs/code-analysis-2026-02-25.md`.
+
+---
+
+### [2026-02-25] Architecture refactoring — 4 items implemented
+
+**Context:** Prior investigation identified 5 architectural improvements. Validated, prioritized, and implemented 4 of them (deferred DOM decoupling as poor cost/benefit).
+
+**What happened:**
+- Phase 1: Created `src/lib/language-config.ts` as single source of truth for Language type, supported languages, TTS codes, and translation target. Updated 6 consumer files. Zero behavioral change.
+- Phase 2: Split `extractor.ts` (1240 lines) into `src/lib/extractors/` subdirectory with 6 focused modules (types, utils, extract-html, extract-pdf, extract-epub, extract-text). Original file becomes a barrel re-exporting everything — zero consumer changes needed. Moved `sanitizeRenderedHtml` from article-controller to extract-html.
+- Phase 3: Vendored pdf.js (pdfjs-dist@4.9.155) and JSZip (3.10.1) from npm into `vendor/`. Updated extractors to load from local paths instead of CDN URLs. Enables offline PDF/EPUB support.
+- Phase 4: Extracted TTSBackend interface with AudioTTSBackend and SpeechTTSBackend implementations. TTSEngine delegates speak/pause/resume/cancel to backends while keeping all orchestration. Added `activeBackend` tracker for correct pause/resume routing.
+- Deferred item 5 (Decouple ArticleController from DOM): 545-line file is manageable, no component framework, no existing tests, poor cost/benefit.
+
+**Outcome:** Success. All 244 tests pass after each phase. 4 commits, clean build. CDN blocked by proxy so used npm to download vendor files.
+
+**Insight:** The barrel re-export pattern for extractor split was key — zero consumer changes. For TTS strategy: the `activeBackend` tracker was the missing piece that made pause/resume routing clean. The generation counter pattern (stale callback protection) must stay in the engine, not the backends.
+
+**Promoted to Lessons Learned:** No — these are one-time refactoring decisions.
 
 ---
 

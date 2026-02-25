@@ -6,7 +6,7 @@
 // - Proxy/API requests: network-only.
 //
 // Bump SW_VERSION on releases that change cache behavior or app-shell wiring.
-const SW_VERSION = '2026.02.24.5';
+const SW_VERSION = '2026.02.25.4';
 const CACHE_NAME = `article-reader-${SW_VERSION}`;
 
 const PRECACHE = [
@@ -18,15 +18,28 @@ const PRECACHE = [
   './vendor/Readability.js',
   './vendor/turndown.js',
   './vendor/marked.js',
+  './vendor/pdfjs/pdf.min.mjs',
+  './vendor/pdfjs/pdf.worker.min.mjs',
+  './vendor/jszip.min.js',
   './lib/article-controller.js',
   './lib/dom-refs.js',
   './lib/extractor.js',
+  './lib/extractors/types.js',
+  './lib/extractors/utils.js',
+  './lib/extractors/extract-html.js',
+  './lib/extractors/extract-pdf.js',
+  './lib/extractors/extract-epub.js',
+  './lib/extractors/extract-text.js',
+  './lib/language-config.js',
   './lib/lang-detect.js',
   './lib/pwa-update-manager.js',
   './lib/release.js',
   './lib/settings-store.js',
   './lib/translator.js',
   './lib/media-session.js',
+  './lib/tts-backend.js',
+  './lib/tts-backend-audio.js',
+  './lib/tts-backend-speech.js',
   './lib/tts-audio-fetcher.js',
   './lib/tts-engine.js',
   './lib/url-utils.js',

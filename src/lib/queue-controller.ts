@@ -21,7 +21,8 @@ import {
   loadArticleContent,
   deleteArticleContent,
   clearArticleContent,
-  type StoredArticleContent,
+  toStorable,
+  fromStorable,
 } from './article-content-store.js';
 
 export interface QueueCallbacks {
@@ -78,10 +79,6 @@ export class QueueController {
     return this.currentIndex < this.items.length - 1;
   }
 
-  hasPrevious(): boolean {
-    return this.currentIndex > 0;
-  }
-
   getNextItem(): QueueItem | null {
     return this.items[this.currentIndex + 1] ?? null;
   }
@@ -96,20 +93,7 @@ export class QueueController {
 
     // For local files (no URL), persist article content in IndexedDB
     if (!item.url || !isValidArticleUrl(item.url)) {
-      const content: StoredArticleContent = {
-        id: item.id,
-        title: article.title,
-        markdown: article.markdown,
-        paragraphs: article.paragraphs,
-        textContent: article.textContent,
-        lang: article.lang,
-        htmlLang: article.htmlLang,
-        siteName: article.siteName,
-        excerpt: article.excerpt,
-        wordCount: article.wordCount,
-        estimatedMinutes: article.estimatedMinutes,
-      };
-      void saveArticleContent(content);
+      void saveArticleContent(toStorable(article, item.id));
     }
 
     return item;
@@ -149,24 +133,6 @@ export class QueueController {
     this.notify();
   }
 
-  /** Move an item up (toward index 0) in the queue. */
-  moveUp(id: string): void {
-    const idx = this.items.findIndex((i) => i.id === id);
-    if (idx <= 0) return;
-    const newOrder = [...this.items];
-    [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
-    this.reorder(newOrder);
-  }
-
-  /** Move an item down (toward end) in the queue. */
-  moveDown(id: string): void {
-    const idx = this.items.findIndex((i) => i.id === id);
-    if (idx === -1 || idx >= this.items.length - 1) return;
-    const newOrder = [...this.items];
-    [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
-    this.reorder(newOrder);
-  }
-
   /** Clear the entire queue. Stops playback. */
   clearAll(): void {
     this.tts.stop();
@@ -187,6 +153,7 @@ export class QueueController {
     const idx = this.items.findIndex((i) => i.id === id);
     if (idx === -1) return;
 
+    this.cancelAutoAdvance();
     this.currentIndex = idx;
     const item = this.items[idx];
     this.notify();
@@ -218,29 +185,6 @@ export class QueueController {
         await this.loadFromStoredContent(item);
       }
       this.currentIndex = nextIndex;
-      this.notify();
-      this.tts.play();
-    } catch {
-      this.cb.onError(`Failed to load: ${item.title}`);
-    } finally {
-      this._isLoadingItem = false;
-    }
-  }
-
-  /** Go back to the previous queue item and start playing. */
-  async playPrevious(): Promise<void> {
-    if (!this.hasPrevious()) return;
-    const prevIndex = this.currentIndex - 1;
-    const item = this.items[prevIndex];
-
-    this._isLoadingItem = true;
-    try {
-      if (item.url && isValidArticleUrl(item.url)) {
-        await this.ac.loadArticleFromUrl(item.url);
-      } else {
-        await this.loadFromStoredContent(item);
-      }
-      this.currentIndex = prevIndex;
       this.notify();
       this.tts.play();
     } catch {
@@ -330,21 +274,7 @@ export class QueueController {
       throw new Error('Content no longer available. Re-open the file to listen again.');
     }
 
-    // Reconstruct an Article from stored content and display it
-    await this.ac.loadArticleFromStored({
-      title: stored.title,
-      content: '',
-      textContent: stored.textContent,
-      markdown: stored.markdown,
-      paragraphs: stored.paragraphs,
-      lang: stored.lang as import('./lang-detect.js').Language,
-      htmlLang: stored.htmlLang,
-      siteName: stored.siteName,
-      excerpt: stored.excerpt,
-      wordCount: stored.wordCount,
-      estimatedMinutes: stored.estimatedMinutes,
-      resolvedUrl: '',
-    });
+    await this.ac.loadArticleFromStored(fromStorable(stored));
   }
 
   private notify(): void {
