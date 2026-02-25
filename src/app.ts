@@ -659,6 +659,15 @@ async function main(): Promise<void> {
     persistSettings(settings);
   });
 
+  // Device voice only
+  tts.setDeviceVoiceOnly(settings.deviceVoiceOnly);
+  refs.settingsDeviceVoice.checked = settings.deviceVoiceOnly;
+  refs.settingsDeviceVoice.addEventListener('change', () => {
+    settings.deviceVoiceOnly = refs.settingsDeviceVoice.checked;
+    tts.setDeviceVoiceOnly(settings.deviceVoiceOnly);
+    persistSettings(settings);
+  });
+
   // Player controls
   refs.playPauseBtn.addEventListener('click', () => {
     if (tts.state.isPaused) {

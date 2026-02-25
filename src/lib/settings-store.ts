@@ -13,6 +13,7 @@ export interface AppSettings {
   voiceGender: VoiceGender;
   wakeLock: boolean;
   theme: Theme;
+  deviceVoiceOnly: boolean;
 }
 
 export interface SettingsDefaults {
@@ -52,6 +53,7 @@ export function createDefaultSettings(defaults: SettingsDefaults): AppSettings {
     voiceGender: 'auto',
     wakeLock: true,
     theme: 'dark',
+    deviceVoiceOnly: false,
   };
 }
 
@@ -70,6 +72,7 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
       voiceGender: isVoiceGender(parsed.voiceGender) ? parsed.voiceGender : 'auto',
       wakeLock: typeof parsed.wakeLock === 'boolean' ? parsed.wakeLock : true,
       theme: isTheme(parsed.theme) ? parsed.theme : 'dark',
+      deviceVoiceOnly: typeof parsed.deviceVoiceOnly === 'boolean' ? parsed.deviceVoiceOnly : false,
     };
   } catch {
     return fallback;

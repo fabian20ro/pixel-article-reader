@@ -7,7 +7,7 @@
  *  - Fallback: Web Speech API speechSynthesis (foreground-only, used when
  *    audio fetch fails).
  *  - Each sentence becomes one audio fetch / utterance to keep chunks short.
- *  - Pre-fetches next 2 sentences while current one plays.
+ *  - Pre-fetches next 20 sentences (sliding window) while current one plays.
  *  - Dead-man's switch auto-stops after 30 s of no audible progress.
  */
 
@@ -194,6 +194,8 @@ export class TTSEngine {
 
   // Audio-based TTS
   private audioConfig: TtsAudioFetcherConfig | null = null;
+  private _savedAudioConfig: TtsAudioFetcherConfig | null = null;
+  private _deviceVoiceOnly = false;
   private ttsAudio: HTMLAudioElement | null = null;
   private audioCache = new Map<string, Promise<string | null>>();
 
@@ -494,6 +496,18 @@ export class TTSEngine {
     else if (this._isPlaying) this.acquireWakeLock();
   }
 
+  setDeviceVoiceOnly(enabled: boolean): void {
+    if (this._deviceVoiceOnly === enabled) return;
+    this._deviceVoiceOnly = enabled;
+    if (enabled) {
+      this._savedAudioConfig = this.audioConfig;
+      this.audioConfig = null;
+    } else {
+      this.audioConfig = this._savedAudioConfig;
+      this._savedAudioConfig = null;
+    }
+  }
+
   get state(): TTSState {
     return {
       isPlaying: this._isPlaying,
@@ -545,13 +559,15 @@ export class TTSEngine {
     return promise;
   }
 
+  private static readonly PREFETCH_AHEAD = 20;
+
   private prefetchUpcoming(): void {
     if (!this.audioConfig) return;
     let p = this.paraIdx;
     let s = this.sentIdx + 1;
     let count = 0;
 
-    while (count < 2 && p < this.paragraphs.length) {
+    while (count < TTSEngine.PREFETCH_AHEAD && p < this.paragraphs.length) {
       if (s >= this.paragraphs[p].length) {
         p++;
         s = 0;

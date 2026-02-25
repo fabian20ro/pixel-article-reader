@@ -73,6 +73,7 @@ describe('settings-store', () => {
       voiceGender: 'auto',
       wakeLock: false,
       theme: 'dark',
+      deviceVoiceOnly: false,
     };
 
     saveSettings(expected);

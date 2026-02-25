@@ -33,6 +33,7 @@ export interface AppDomRefs {
   speedValue: HTMLElement;
   settingsVoice: HTMLSelectElement;
   settingsWakelock: HTMLInputElement;
+  settingsDeviceVoice: HTMLInputElement;
   checkUpdateBtn: HTMLElement;
   updateStatus: HTMLElement;
   voiceGenderGroup: HTMLElement;
@@ -116,6 +117,7 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     speedValue: requireElement('speed-value', root),
     settingsVoice: requireElement<HTMLSelectElement>('settings-voice', root),
     settingsWakelock: requireElement<HTMLInputElement>('settings-wakelock', root),
+    settingsDeviceVoice: requireElement<HTMLInputElement>('settings-device-voice', root),
     checkUpdateBtn: requireElement('check-update-btn', root),
     updateStatus: requireElement('update-status', root),
     voiceGenderGroup: requireElement('voice-gender-group', root),
