@@ -251,7 +251,7 @@ async function fetchArticleHtml(targetUrl, context) {
     response = await fetchWithRedirectValidation(targetUrl, {
       headers: {
         'User-Agent': USER_AGENT,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.8,*/*;q=0.7',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.8,application/epub+zip;q=0.8,*/*;q=0.7',
         'Accept-Language': 'en-US,en;q=0.9,ro;q=0.8',
       },
     });
@@ -271,11 +271,16 @@ async function fetchArticleHtml(targetUrl, context) {
 
   // PDF response — return binary with higher size limit
   if (ct.includes('application/pdf')) {
-    return fetchPdfResponse(response, targetUrl, context);
+    return fetchBinaryResponse(response, targetUrl, context, 'PDF', 'application/pdf', '%PDF-');
+  }
+
+  // EPUB response — return binary (EPUB is a ZIP archive, magic bytes: PK)
+  if (ct.includes('application/epub') || ct.includes('application/epub+zip')) {
+    return fetchBinaryResponse(response, targetUrl, context, 'EPUB', 'application/epub+zip', 'PK');
   }
 
   if (!ct.includes('text/html') && !ct.includes('application/xhtml')) {
-    return errorResponse(400, 'URL does not point to an HTML page or PDF.', context.allowedOrigin);
+    return errorResponse(400, 'URL does not point to an HTML page, PDF, or EPUB.', context.allowedOrigin);
   }
 
   const tooLargeByHeader = isResponseTooLargeByHeader(response);
@@ -298,28 +303,28 @@ async function fetchArticleHtml(targetUrl, context) {
   });
 }
 
-async function fetchPdfResponse(response, targetUrl, context) {
+async function fetchBinaryResponse(response, targetUrl, context, label, contentType, magicPrefix) {
   const tooLarge = isResponseTooLargeByHeader(response, MAX_PDF_RESPONSE_BYTES);
   if (tooLarge) {
-    return errorResponse(400, 'PDF too large (>10 MB).', context.allowedOrigin);
+    return errorResponse(400, `${label} too large (>10 MB).`, context.allowedOrigin);
   }
 
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength > MAX_PDF_RESPONSE_BYTES) {
-    return errorResponse(400, 'PDF too large (>10 MB).', context.allowedOrigin);
+    return errorResponse(400, `${label} too large (>10 MB).`, context.allowedOrigin);
   }
 
-  // Validate PDF magic bytes (%PDF-)
-  const header = new Uint8Array(buffer, 0, Math.min(5, buffer.byteLength));
+  // Validate magic bytes
+  const header = new Uint8Array(buffer, 0, Math.min(magicPrefix.length, buffer.byteLength));
   const magic = String.fromCharCode(...header);
-  if (!magic.startsWith('%PDF-')) {
-    return errorResponse(400, 'Response claims to be PDF but has invalid format.', context.allowedOrigin);
+  if (!magic.startsWith(magicPrefix)) {
+    return errorResponse(400, `Response claims to be ${label} but has invalid format.`, context.allowedOrigin);
   }
 
   return new Response(buffer, {
     status: 200,
     headers: successHeaders(context, {
-      'Content-Type': 'application/pdf',
+      'Content-Type': contentType,
       'Cache-Control': 'no-store',
       'X-Final-URL': response.url || targetUrl,
     }),

@@ -50,20 +50,16 @@ async function loadJSZip(): Promise<JSZipConstructor> {
 }
 
 /**
- * Create an Article from a local EPUB file.
+ * Core EPUB parsing: unzips buffer, reads OPF, extracts chapters → Article.
  */
-export async function createArticleFromEpub(
-  file: File,
+async function parseEpubCore(
+  buffer: ArrayBuffer,
+  titleFallback: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  if (file.size > MAX_PDF_SIZE) {
-    throw new Error('EPUB is too large (>10 MB). Please use a smaller file.');
-  }
-
   onProgress?.('Loading EPUB...');
   const JSZip = await loadJSZip();
 
-  const buffer = await file.arrayBuffer();
   const zip = await new JSZip().loadAsync(buffer);
 
   // Parse container.xml to find the OPF file
@@ -123,8 +119,44 @@ export async function createArticleFromEpub(
     throw new Error('Could not extract readable text from this EPUB.');
   }
 
-  const title = epubTitle || file.name.replace(/\.epub$/i, '') || 'EPUB Document';
+  const title = epubTitle || titleFallback || 'EPUB Document';
   return buildArticleFromParagraphs(paragraphs, title, 'EPUB', paragraphs.join('\n\n'));
+}
+
+/**
+ * Create an Article from a local EPUB file.
+ */
+export async function createArticleFromEpub(
+  file: File,
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  if (file.size > MAX_PDF_SIZE) {
+    throw new Error('EPUB is too large (>10 MB). Please use a smaller file.');
+  }
+
+  const buffer = await file.arrayBuffer();
+  return parseEpubCore(buffer, file.name.replace(/\.epub$/i, ''), onProgress);
+}
+
+/**
+ * Create an Article from an EPUB ArrayBuffer fetched from a URL.
+ */
+export async function parseEpubFromArrayBuffer(
+  buffer: ArrayBuffer,
+  sourceUrl: string,
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  // Derive a fallback title from the URL filename
+  let titleFallback = '';
+  try {
+    const pathname = new URL(sourceUrl).pathname;
+    const filename = pathname.split('/').pop() || '';
+    titleFallback = filename.replace(/\.epub(?:\.\w+)?$/i, '');
+  } catch { /* ignore invalid URLs */ }
+
+  const article = await parseEpubCore(buffer, titleFallback, onProgress);
+  article.resolvedUrl = sourceUrl;
+  return article;
 }
 
 /** Read a file from a JSZip instance, trying both exact path and case-insensitive match. */

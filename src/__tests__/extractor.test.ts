@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   extractArticle,
   extractArticleWithJina,
+  extractArticleFromEpubUrl,
   createArticleFromText,
   createArticleFromTextFile,
   createArticleFromPdf,
@@ -1125,6 +1126,128 @@ describe('extractArticleFromPdfUrl', () => {
     } as unknown as Response);
 
     await expect(extractArticleFromPdfUrl('https://example.com/huge.pdf', PROXY))
+      .rejects.toThrow(/too large/i);
+  });
+});
+
+// ── extractArticle: EPUB URL detection ──────────────────────────────
+
+// Minimal JSZip mock so loadJSZip() returns immediately instead of trying to
+// load a <script> tag (which hangs forever in jsdom).
+function installJSZipMock() {
+  const mockZip = {
+    files: {},
+    loadAsync: () => Promise.resolve(mockZip),
+    file: () => null, // container.xml not found → "Invalid EPUB: missing container.xml"
+  };
+  (globalThis as Record<string, unknown>).JSZip = class { files = {}; loadAsync = mockZip.loadAsync; file = mockZip.file; };
+}
+
+function removeJSZipMock() {
+  delete (globalThis as Record<string, unknown>).JSZip;
+}
+
+describe('extractArticle EPUB URL detection', () => {
+  beforeEach(() => installJSZipMock());
+  afterEach(() => removeJSZipMock());
+
+  it('detects .epub URL extension and fetches as binary', async () => {
+    // When URL ends in .epub, extractArticle should fetch as binary (ArrayBuffer)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'x-final-url') return 'https://gutenberg.org/ebooks/test.epub';
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    // JSZip mock returns null for container.xml → "Invalid EPUB: missing container.xml"
+    await expect(extractArticle('https://gutenberg.org/ebooks/test.epub', PROXY))
+      .rejects.toThrow(/EPUB/i);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('https://gutenberg.org/ebooks/test.epub')),
+      expect.any(Object),
+    );
+  });
+
+  it('detects .epub.noimages URL pattern (Gutenberg variant)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: { get: () => null },
+    } as unknown as Response);
+
+    await expect(extractArticle('https://gutenberg.org/ebooks/49038.epub.noimages', PROXY))
+      .rejects.toThrow(/EPUB/i);
+
+    // Should have been fetched as an EPUB (binary), not as HTML
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('https://gutenberg.org/ebooks/49038.epub.noimages')),
+      expect.any(Object),
+    );
+  });
+
+  it('detects EPUB by content-type when URL has no .epub extension', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'content-type') return 'application/epub+zip';
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    // extractArticle fetches, sees application/epub+zip content-type, reads as ArrayBuffer
+    await expect(extractArticle('https://example.com/book/12345', PROXY))
+      .rejects.toThrow(/EPUB/i);
+  });
+});
+
+// ── extractArticleFromEpubUrl ───────────────────────────────────────
+
+describe('extractArticleFromEpubUrl', () => {
+  it('throws on rate limit error from proxy', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: 'Too Many Requests',
+      json: () => Promise.resolve({ error: 'Rate limit exceeded' }),
+      headers: {
+        get: (name: string) => (name === 'Retry-After' ? '30' : null),
+      },
+    } as unknown as Response);
+
+    await expect(extractArticleFromEpubUrl('https://gutenberg.org/ebooks/49038.epub.noimages', PROXY))
+      .rejects.toThrow(/Rate limit/i);
+  });
+
+  it('throws on oversized EPUB response', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+      headers: {
+        get: (name: string) => {
+          if (name.toLowerCase() === 'content-length') return '20000000'; // 20 MB
+          return null;
+        },
+      },
+    } as unknown as Response);
+
+    await expect(extractArticleFromEpubUrl('https://gutenberg.org/ebooks/49038.epub', PROXY))
       .rejects.toThrow(/too large/i);
   });
 });

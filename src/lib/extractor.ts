@@ -13,13 +13,16 @@ export { IMAGE_MD_RE, IMAGE_JINA_RE, IMAGE_HTML_RE } from './extractors/types.js
 // Shared utilities (re-exported for test access)
 export { splitTextBySentences } from './extractors/utils.js';
 
-// HTML / URL extraction
+// URL fetch orchestration (detects format and dispatches to the right parser)
 export {
   extractArticle,
   extractArticleWithJina,
   extractArticleFromPdfUrl,
-  sanitizeRenderedHtml,
-} from './extractors/extract-html.js';
+  extractArticleFromEpubUrl,
+} from './extractors/extract-url.js';
+
+// HTML parsing
+export { sanitizeRenderedHtml } from './extractors/extract-html.js';
 
 // PDF
 export {
@@ -28,7 +31,10 @@ export {
 } from './extractors/extract-pdf.js';
 
 // EPUB
-export { createArticleFromEpub } from './extractors/extract-epub.js';
+export {
+  createArticleFromEpub,
+  parseEpubFromArrayBuffer,
+} from './extractors/extract-epub.js';
 
 // Plain text & Markdown files
 export {
