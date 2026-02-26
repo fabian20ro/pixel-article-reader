@@ -4,7 +4,7 @@
  */
 
 import { type Article, MAX_PDF_SIZE } from './types.js';
-import { buildArticleFromParagraphs, filterReadableParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
+import { buildArticleFromParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
 
 // ── JSZip types ───────────────────────────────────────────────────────
 

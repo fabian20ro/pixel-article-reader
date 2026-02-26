@@ -49,8 +49,8 @@ function isPdfUrl(url: string): boolean {
 function isEpubUrl(url: string): boolean {
   try {
     const pathname = new URL(url).pathname.toLowerCase();
-    // Matches .epub at end AND .epub.<variant> (e.g. .epub.noimages, .epub.images)
-    return pathname.endsWith('.epub') || /\.epub\./.test(pathname);
+    // Matches .epub at end AND .epub.<variant> at end (e.g. .epub.noimages, .epub.images)
+    return pathname.endsWith('.epub') || /\.epub\.[^/]+$/.test(pathname);
   } catch {
     return false;
   }
@@ -248,19 +248,14 @@ export async function extractArticle(
       throw new Error('Article is too large (>2 MB).');
     }
 
-    // Fallback: detect binary format by magic bytes when content-type was wrong
-    const format = detectBinaryFormat(body.slice(0, 5));
-    if (format === 'pdf') {
+    // Fallback: detect PDF by magic bytes when content-type was wrong.
+    // Note: resp.text() + TextEncoder round-trip can corrupt bytes > 0x7F,
+    // but %PDF- is pure ASCII so the header check is reliable. pdf.js is
+    // tolerant of minor byte corruption in practice. EPUB is not handled here
+    // because ZIP headers are binary-sensitive and would be corrupted.
+    if (body.startsWith('%PDF-')) {
       onProgress?.('Extracting text from PDF...');
       return parsePdfFromArrayBuffer(
-        new TextEncoder().encode(body).buffer as ArrayBuffer,
-        resp.headers.get('X-Final-URL') || url,
-        onProgress,
-      );
-    }
-    if (format === 'epub') {
-      onProgress?.('Extracting text from EPUB...');
-      return parseEpubFromArrayBuffer(
         new TextEncoder().encode(body).buffer as ArrayBuffer,
         resp.headers.get('X-Final-URL') || url,
         onProgress,

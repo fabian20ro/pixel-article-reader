@@ -9,9 +9,6 @@ import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
   WORDS_PER_MINUTE,
-  IMAGE_MD_RE,
-  IMAGE_JINA_RE,
-  IMAGE_HTML_RE,
 } from './types.js';
 import {
   splitPlainTextParagraphs,
