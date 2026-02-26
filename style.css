@@ -772,11 +772,6 @@ body {
     border-radius: var(--radius) var(--radius) 0 0;
   }
 
-  .chapters-sheet {
-    max-width: 720px;
-    left: 50%;
-    margin-left: -360px;
-  }
 }
 
 /* === Queue Badge (on hamburger icon) === */
@@ -901,6 +896,20 @@ body {
 .chapter-item[data-level="4"],
 .chapter-item[data-level="5"],
 .chapter-item[data-level="6"] { padding-left: 64px; font-size: 12px; color: var(--text-dim); }
+
+/* Desktop centering for chapters sheet — placed after base styles for correct cascade.
+   Uses translateX(-50%) (same pattern as .player-controls) to stay responsive to width. */
+@media (min-width: 768px) {
+  .chapters-sheet {
+    max-width: 720px;
+    left: 50%;
+    right: auto;
+    transform: translateY(100%) translateX(-50%);
+  }
+  .chapters-sheet.open {
+    transform: translateY(0) translateX(-50%);
+  }
+}
 
 .queue-empty {
   padding: 40px 24px;

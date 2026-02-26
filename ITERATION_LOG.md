@@ -782,4 +782,27 @@ Each entry should follow this structure:
 
 ---
 
+### 2026-02-26 — EPUB URL support + extract-url refactor + chapters drawer fix
+
+**Task:** User reported two issues: (1) pasting a Gutenberg EPUB URL gave "URL does not point to an HTML page or PDF" error, (2) chapters drawer on desktop had text positioned outside the viewport.
+
+**What happened:**
+- Diagnosed EPUB URL issue: worker's `fetchArticleHtml()` only accepted PDF and HTML content-types, rejecting `application/epub+zip`. Client's `extractArticle()` also lacked EPUB format detection.
+- Diagnosed chapters drawer CSS: desktop media query used `left: 50%; margin-left: -360px` without overriding `right: 0`, causing incorrect width calculation. Source order issue: media query came before base `.chapters-sheet.open`, so base transform always won.
+- Created `src/lib/extractors/extract-url.ts` — extracted URL fetch orchestration from `extract-html.ts` (SRP: HTML parsing vs URL format detection). Added `isEpubUrl()` (handles `.epub` and `.epub.noimages` patterns), `extractArticleFromEpubUrl()`, content-type detection, and magic bytes fallback (`PK` for ZIP/EPUB).
+- Refactored `extract-epub.ts`: shared core logic via `parseEpubCore()`, exposed `parseEpubFromArrayBuffer()` for URL-fetched EPUBs.
+- Worker: added EPUB content-type handling, generalized `fetchPdfResponse()` → `fetchBinaryResponse()` (parameterized label, contentType, magicPrefix).
+- Fixed desktop chapters CSS: used `transform: translateX(-50%)` (matching player-controls), `right: auto`, placed media query after base styles for correct cascade.
+- Added 5 tests for EPUB URL detection. Key challenge: `loadJSZip()` hangs in jsdom (script tag never fires onload), solved by mocking `globalThis.JSZip` directly.
+
+**Outcome:** Success. 249 tests pass (5 new), clean build. Pushed to `claude/add-epub-support-g3C4h`.
+
+**Insight:** When adding format support to a URL-fetching pipeline, changes are needed at 3 layers: (1) proxy/worker must accept the content-type and return binary, (2) client URL orchestrator must detect format by URL/content-type/magic-bytes, (3) format-specific parser must accept ArrayBuffer (not just File). The `fetchBinaryViaProxy()` helper consolidates the shared binary fetch logic for both PDF and EPUB.
+
+**Insight:** CSS centering with `left: 50%; margin-left: -Npx` is fragile — it hardcodes element width and doesn't work when `right: 0` isn't overridden. `transform: translateX(-50%)` is responsive to actual element width. When combining with Y transforms for show/hide animation, both transforms must be in the same `transform` property.
+
+**Promoted to Lessons Learned:** Pending — both insights may be reusable.
+
+---
+
 <!-- New entries go above this line, most recent first -->

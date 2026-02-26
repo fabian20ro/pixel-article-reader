@@ -4,7 +4,7 @@
  */
 
 import { type Article, MAX_PDF_SIZE } from './types.js';
-import { buildArticleFromParagraphs, filterReadableParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
+import { buildArticleFromParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
 
 // ── JSZip types ───────────────────────────────────────────────────────
 
@@ -50,20 +50,16 @@ async function loadJSZip(): Promise<JSZipConstructor> {
 }
 
 /**
- * Create an Article from a local EPUB file.
+ * Core EPUB parsing: unzips buffer, reads OPF, extracts chapters → Article.
  */
-export async function createArticleFromEpub(
-  file: File,
+async function parseEpubCore(
+  buffer: ArrayBuffer,
+  titleFallback: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  if (file.size > MAX_PDF_SIZE) {
-    throw new Error('EPUB is too large (>10 MB). Please use a smaller file.');
-  }
-
   onProgress?.('Loading EPUB...');
   const JSZip = await loadJSZip();
 
-  const buffer = await file.arrayBuffer();
   const zip = await new JSZip().loadAsync(buffer);
 
   // Parse container.xml to find the OPF file
@@ -123,8 +119,44 @@ export async function createArticleFromEpub(
     throw new Error('Could not extract readable text from this EPUB.');
   }
 
-  const title = epubTitle || file.name.replace(/\.epub$/i, '') || 'EPUB Document';
+  const title = epubTitle || titleFallback || 'EPUB Document';
   return buildArticleFromParagraphs(paragraphs, title, 'EPUB', paragraphs.join('\n\n'));
+}
+
+/**
+ * Create an Article from a local EPUB file.
+ */
+export async function createArticleFromEpub(
+  file: File,
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  if (file.size > MAX_PDF_SIZE) {
+    throw new Error('EPUB is too large (>10 MB). Please use a smaller file.');
+  }
+
+  const buffer = await file.arrayBuffer();
+  return parseEpubCore(buffer, file.name.replace(/\.epub$/i, ''), onProgress);
+}
+
+/**
+ * Create an Article from an EPUB ArrayBuffer fetched from a URL.
+ */
+export async function parseEpubFromArrayBuffer(
+  buffer: ArrayBuffer,
+  sourceUrl: string,
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  // Derive a fallback title from the URL filename
+  let titleFallback = '';
+  try {
+    const pathname = new URL(sourceUrl).pathname;
+    const filename = pathname.split('/').pop() || '';
+    titleFallback = filename.replace(/\.epub(?:\.\w+)?$/i, '');
+  } catch { /* ignore invalid URLs */ }
+
+  const article = await parseEpubCore(buffer, titleFallback, onProgress);
+  article.resolvedUrl = sourceUrl;
+  return article;
 }
 
 /** Read a file from a JSZip instance, trying both exact path and case-insensitive match. */
@@ -142,10 +174,26 @@ async function readZipFile(zip: JSZipInstance, path: string): Promise<string | n
   return null;
 }
 
-/** Extract the OPF file path from container.xml. */
+/** Extract the OPF file path from container.xml with bounds and character validation. */
 function extractOpfPath(containerXml: string): string | null {
-  const match = containerXml.match(/full-path\s*=\s*"([^"]+)"/);
-  return match ? match[1] : null;
+  const match = containerXml.match(/full-path\s*=\s*"([^"]{1,512})"/);
+  if (!match) return null;
+  const path = match[1];
+  // Only allow safe path characters
+  if (!/^[\w/.\-]+$/.test(path)) return null;
+  return path;
+}
+
+/** Sanitize a ZIP-internal href from OPF manifest to prevent path traversal. */
+function sanitizeHref(href: string): string {
+  const decoded = decodeURIComponent(href).replace(/\\/g, '/');
+  const parts = decoded.split('/').filter(Boolean);
+  const safe: string[] = [];
+  for (const part of parts) {
+    if (part === '..') safe.pop();
+    else if (part !== '.') safe.push(part);
+  }
+  return safe.join('/');
 }
 
 /** Parse OPF (Open Packaging Format) to get title and ordered chapter paths. */
@@ -175,7 +223,7 @@ function parseOpf(opfXml: string, opfDir: string): { title: string; chapterPaths
     if (entry) {
       // Only include XHTML/HTML content documents
       if (entry.mediaType.includes('html') || entry.mediaType.includes('xml') || entry.mediaType.includes('xhtml')) {
-        chapterPaths.push(opfDir + entry.href);
+        chapterPaths.push(opfDir + sanitizeHref(entry.href));
       }
     }
   });
