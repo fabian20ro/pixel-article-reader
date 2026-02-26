@@ -274,9 +274,9 @@ async function fetchArticleHtml(targetUrl, context) {
     return fetchBinaryResponse(response, targetUrl, context, 'PDF', 'application/pdf', '%PDF-');
   }
 
-  // EPUB response — return binary (EPUB is a ZIP archive, magic bytes: PK)
+  // EPUB response — return binary (EPUB is a ZIP archive, magic bytes: PK\x03\x04)
   if (ct.includes('application/epub') || ct.includes('application/epub+zip')) {
-    return fetchBinaryResponse(response, targetUrl, context, 'EPUB', 'application/epub+zip', 'PK');
+    return fetchBinaryResponse(response, targetUrl, context, 'EPUB', 'application/epub+zip', 'PK\x03\x04');
   }
 
   if (!ct.includes('text/html') && !ct.includes('application/xhtml')) {

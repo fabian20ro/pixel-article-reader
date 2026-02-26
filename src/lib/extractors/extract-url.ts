@@ -159,7 +159,12 @@ async function fetchBinaryViaProxy(
 /** Check first bytes to detect binary format when content-type is unreliable. */
 function detectBinaryFormat(firstBytes: string): 'pdf' | 'epub' | null {
   if (firstBytes.startsWith('%PDF-')) return 'pdf';
-  if (firstBytes.startsWith('PK')) return 'epub';
+  // ZIP local file header: PK\x03\x04 (not just PK, to avoid false matches on .docx etc.)
+  if (firstBytes.length >= 4 &&
+      firstBytes.charCodeAt(0) === 0x50 &&
+      firstBytes.charCodeAt(1) === 0x4B &&
+      firstBytes.charCodeAt(2) === 0x03 &&
+      firstBytes.charCodeAt(3) === 0x04) return 'epub';
   return null;
 }
 

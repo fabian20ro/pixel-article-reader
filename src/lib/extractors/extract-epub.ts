@@ -174,10 +174,26 @@ async function readZipFile(zip: JSZipInstance, path: string): Promise<string | n
   return null;
 }
 
-/** Extract the OPF file path from container.xml. */
+/** Extract the OPF file path from container.xml with bounds and character validation. */
 function extractOpfPath(containerXml: string): string | null {
-  const match = containerXml.match(/full-path\s*=\s*"([^"]+)"/);
-  return match ? match[1] : null;
+  const match = containerXml.match(/full-path\s*=\s*"([^"]{1,512})"/);
+  if (!match) return null;
+  const path = match[1];
+  // Only allow safe path characters
+  if (!/^[\w/.\-]+$/.test(path)) return null;
+  return path;
+}
+
+/** Sanitize a ZIP-internal href from OPF manifest to prevent path traversal. */
+function sanitizeHref(href: string): string {
+  const decoded = decodeURIComponent(href).replace(/\\/g, '/');
+  const parts = decoded.split('/').filter(Boolean);
+  const safe: string[] = [];
+  for (const part of parts) {
+    if (part === '..') safe.pop();
+    else if (part !== '.') safe.push(part);
+  }
+  return safe.join('/');
 }
 
 /** Parse OPF (Open Packaging Format) to get title and ordered chapter paths. */
@@ -207,7 +223,7 @@ function parseOpf(opfXml: string, opfDir: string): { title: string; chapterPaths
     if (entry) {
       // Only include XHTML/HTML content documents
       if (entry.mediaType.includes('html') || entry.mediaType.includes('xml') || entry.mediaType.includes('xhtml')) {
-        chapterPaths.push(opfDir + entry.href);
+        chapterPaths.push(opfDir + sanitizeHref(entry.href));
       }
     }
   });
