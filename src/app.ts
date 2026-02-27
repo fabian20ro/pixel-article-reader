@@ -263,6 +263,7 @@ async function main(): Promise<void> {
     container: refs.queueDrawerHeader,
     list: refs.queueList,
     insertBefore: refs.queueClearBtn,
+    ariaLabel: 'Filter queue',
     getText: (el) => {
       const title = el.querySelector('.queue-item-title')?.textContent ?? '';
       const meta = el.querySelector('.queue-item-meta')?.textContent ?? '';
@@ -299,9 +300,11 @@ async function main(): Promise<void> {
   const chaptersFilter = new ListFilter({
     container: refs.chaptersSheetHandle,
     list: refs.chaptersList,
+    ariaLabel: 'Filter chapters',
   });
 
   function buildChaptersList(): void {
+    chaptersFilter.clear();
     const headings = refs.articleText.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
 
     if (headings.length === 0) {
@@ -352,8 +355,6 @@ async function main(): Promise<void> {
       });
       refs.chaptersList.appendChild(li);
     });
-
-    chaptersFilter.applyFilter();
   }
 
   // ── PWA Update Manager ────────────────────────────────────────

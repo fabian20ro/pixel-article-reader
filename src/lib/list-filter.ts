@@ -15,6 +15,9 @@ export interface ListFilterOptions {
   /** Placeholder text shown in the input. Defaults to "Filter". */
   placeholder?: string;
 
+  /** Accessible label for screen readers. Defaults to placeholder value. */
+  ariaLabel?: string;
+
   /**
    * Extract searchable text from a list item.
    * Defaults to `(el) => el.textContent ?? ''`.
@@ -38,7 +41,7 @@ export class ListFilter {
     this.input.type = 'search';
     this.input.className = 'list-filter-input';
     this.input.placeholder = opts.placeholder ?? 'Filter';
-    this.input.setAttribute('aria-label', opts.placeholder ?? 'Filter');
+    this.input.setAttribute('aria-label', opts.ariaLabel ?? opts.placeholder ?? 'Filter');
     this.input.autocomplete = 'off';
 
     if (opts.insertBefore) {
@@ -48,6 +51,8 @@ export class ListFilter {
     }
 
     this.input.addEventListener('input', () => this.applyFilter());
+    // WebKit fires 'search' (not always 'input') when the native clear button is clicked
+    this.input.addEventListener('search', () => this.applyFilter());
 
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') e.preventDefault();
