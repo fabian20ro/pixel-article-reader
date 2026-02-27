@@ -50,6 +50,7 @@ export interface AppDomRefs {
   menuToggle: HTMLElement;
   queueDrawer: HTMLElement;
   queueOverlay: HTMLElement;
+  queueDrawerHeader: HTMLElement;
   queueBadge: HTMLElement;
   queueList: HTMLElement;
   queueEmpty: HTMLElement;
@@ -65,6 +66,7 @@ export interface AppDomRefs {
   chaptersBtn: HTMLElement;
   chaptersSheet: HTMLElement;
   chaptersOverlay: HTMLElement;
+  chaptersSheetHandle: HTMLElement;
   chaptersList: HTMLElement;
   appVersion: HTMLElement;
 }
@@ -130,6 +132,7 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     menuToggle: requireElement('menu-toggle', root),
     queueDrawer: requireElement('queue-drawer', root),
     queueOverlay: requireElement('queue-overlay', root),
+    queueDrawerHeader: requireElement('queue-drawer-header', root),
     queueBadge: requireElement('queue-badge', root),
     queueList: requireElement('queue-list', root),
     queueEmpty: requireElement('queue-empty', root),
@@ -145,6 +148,7 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     chaptersBtn: requireElement('chapters-btn', root),
     chaptersSheet: requireElement('chapters-sheet', root),
     chaptersOverlay: requireElement('chapters-overlay', root),
+    chaptersSheetHandle: requireElement('chapters-sheet-handle', root),
     chaptersList: requireElement('chapters-list', root),
     appVersion: requireElement('app-version', root),
   };
