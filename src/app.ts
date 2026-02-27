@@ -12,6 +12,7 @@ import { QueueController } from './lib/queue-controller.js';
 import { QueueRenderer } from './lib/queue-renderer.js';
 import type { QueueItem } from './lib/queue-store.js';
 import { SUPPORTED_LANGUAGES, type Language } from './lib/language-config.js';
+import { ListFilter } from './lib/list-filter.js';
 
 const CONFIG = {
   PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
@@ -138,6 +139,7 @@ async function main(): Promise<void> {
     callbacks: {
       onQueueChange(items, currentIndex) {
         queueRenderer.render(items, currentIndex);
+        queueFilter.applyFilter();
       },
       onAutoAdvanceCountdown(nextTitle) {
         refs.advanceText.textContent = `Up next: ${nextTitle}`;
@@ -257,8 +259,20 @@ async function main(): Promise<void> {
     },
   );
 
+  const queueFilter = new ListFilter({
+    container: refs.queueDrawerHeader,
+    list: refs.queueList,
+    insertBefore: refs.queueClearBtn,
+    getText: (el) => {
+      const title = el.querySelector('.queue-item-title')?.textContent ?? '';
+      const meta = el.querySelector('.queue-item-meta')?.textContent ?? '';
+      return title + ' ' + meta;
+    },
+  });
+
   // Initial queue render
   queueRenderer.render(queueController.getItems(), queueController.getCurrentIndex());
+  queueFilter.applyFilter();
 
   // ── Settings Drawer (right slide-in) ──────────────────────────
   const openSettingsDrawer = () => openDrawer(refs.settingsPanel, refs.settingsOverlay);
@@ -281,6 +295,11 @@ async function main(): Promise<void> {
   });
 
   refs.chaptersOverlay.addEventListener('click', closeChaptersSheet);
+
+  const chaptersFilter = new ListFilter({
+    container: refs.chaptersSheetHandle,
+    list: refs.chaptersList,
+  });
 
   function buildChaptersList(): void {
     const headings = refs.articleText.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
@@ -333,6 +352,8 @@ async function main(): Promise<void> {
       });
       refs.chaptersList.appendChild(li);
     });
+
+    chaptersFilter.applyFilter();
   }
 
   // ── PWA Update Manager ────────────────────────────────────────
