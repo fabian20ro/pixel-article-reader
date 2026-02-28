@@ -24,12 +24,14 @@ export class AudioTTSBackend implements TTSBackend {
     rate: number,
     _voice: SpeechSynthesisVoice | null,
     callbacks: TTSBackendCallbacks,
+    isValid?: () => boolean,
   ): void {
     this.lang = lang as Language;
     this.rate = rate;
     this.ensureAudio();
 
     this.fetchAudio(text).then((audioUrl) => {
+      if (isValid && !isValid()) return; // stale fetch — abort
       if (!audioUrl) {
         callbacks.onError(true); // fallback to speech
         return;

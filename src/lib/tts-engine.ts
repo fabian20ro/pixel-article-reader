@@ -432,12 +432,18 @@ export class TTSEngine {
     };
 
     if (this.activeBackend === 'audio' && this.audioBackend?.isPaused()) {
+      // Audio was properly paused — seamless resume
       this.audioBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
-    } else {
-      // speechSynthesis fallback resume
+    } else if (this.activeBackend === 'speech' && speechSynthesis.paused) {
+      // Speech was properly paused — seamless resume
       this.speechBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
+    } else {
+      // Nothing properly paused (fetch was in-flight during pause, or backend
+      // state lost). Cancel any stale playback and re-speak from current position.
+      this.mediaSession.activate(this.articleTitle);
+      onNeedsRespeak();
     }
     this.emitState();
   }
@@ -620,7 +626,7 @@ export class TTSEngine {
   // ── Internal: speak orchestrator ────────────────────────────────
 
   private speakCurrent(): void {
-    if (this._stopped) return;
+    if (this._stopped || this._isPaused) return;
     if (this.paraIdx >= this.paragraphs.length) {
       this.handleEnd();
       return;
@@ -652,7 +658,7 @@ export class TTSEngine {
     const lang = langToCode(this.lang);
 
     const onEnd = () => {
-      if (this._stopped || gen !== this._speakGen) return;
+      if (this._stopped || gen !== this._speakGen || this._isPaused) return;
       this._lastProgressTime = Date.now();
       this.sentIdx++;
       this.emitProgress();
@@ -662,20 +668,25 @@ export class TTSEngine {
     // Try audio backend first (works in background)
     if (this.audioBackend) {
       this.activeBackend = 'audio';
-      this.audioBackend.speak(text, lang, this.rate, this.voice, {
-        onEnd,
-        onError: (shouldFallback) => {
-          if (this._stopped || gen !== this._speakGen) return;
-          if (shouldFallback) {
-            // Fall back to speechSynthesis for this sentence
-            this.activeBackend = 'speech';
-            this.speechBackend.speak(text, lang, this.rate, this.voice, {
-              onEnd,
-              onError: () => {},
-            });
-          }
+      this.audioBackend.speak(
+        text, lang, this.rate, this.voice,
+        {
+          onEnd,
+          onError: (shouldFallback) => {
+            if (this._stopped || gen !== this._speakGen) return;
+            if (this._isPaused) return;
+            if (shouldFallback) {
+              // Fall back to speechSynthesis for this sentence
+              this.activeBackend = 'speech';
+              this.speechBackend.speak(text, lang, this.rate, this.voice, {
+                onEnd,
+                onError: () => {},
+              });
+            }
+          },
         },
-      });
+        () => gen === this._speakGen && !this._stopped && !this._isPaused,
+      );
       this.emitProgress();
       return;
     }
