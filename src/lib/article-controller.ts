@@ -24,27 +24,14 @@ declare const marked: { parse(md: string): string };
 
 /**
  * TTS paragraph minimum length.  Blocks whose normalised text is shorter
- * than this are merged with the following block so that short items like
- * author bylines ("Ilene S. Cohen, Ph.D."), photo credits, or short
- * headings don't produce their own pause-bounded TTS utterance.
+ * than this are merged with the following block so that very short items
+ * like author bylines or short headings don't produce their own
+ * pause-bounded TTS utterance.
  */
-const MIN_TTS_PARAGRAPH = 80;
+const MIN_TTS_PARAGRAPH = 40;
 
-const MARKDOWN_BLOCK_SELECTOR = [
-  ':scope > h1',
-  ':scope > h2',
-  ':scope > h3',
-  ':scope > h4',
-  ':scope > h5',
-  ':scope > h6',
-  ':scope > p',
-  ':scope > ul',
-  ':scope > ol',
-  ':scope > blockquote',
-  ':scope > pre',
-  ':scope > hr',
-  ':scope > figure',
-].join(', ');
+/** Tags that should never become TTS blocks (non-content elements). */
+const SKIP_BLOCK_TAGS = new Set(['SCRIPT', 'STYLE', 'BR', 'COL', 'COLGROUP']);
 
 export interface ArticleControllerOptions {
   refs: AppDomRefs;
@@ -315,25 +302,34 @@ export class ArticleController {
         };
 
         blocks.forEach((block) => {
-          // Skipped blocks stay in the DOM but never receive the
-          // .paragraph class or a data-index, so they are invisible
-          // to highlightParagraph() and click-to-seek.
-          if (block.tagName === 'PRE') return;
-
-          let text: string;
-          if (block.tagName === 'FIGURE') {
-            const figcaption = block.querySelector('figcaption');
-            text = this.normalizeTtsText(figcaption?.textContent ?? '');
-          } else {
-            text = this.normalizeTtsText(block.textContent ?? '');
+          // Code blocks: announce with truncated content instead of
+          // silently skipping.  Always flush immediately so code never
+          // merges with adjacent prose.
+          if (block.tagName === 'PRE') {
+            const codeText = this.normalizeTtsText(block.textContent ?? '');
+            if (codeText) {
+              const truncated = codeText.length > 200
+                ? codeText.slice(0, 200) + '...'
+                : codeText;
+              pendingText = pendingText
+                ? pendingText + ' ' + 'Code block: ' + truncated
+                : 'Code block: ' + truncated;
+              pendingBlocks.push(block);
+              flush();
+            }
+            return;
           }
-          if (!text) return;
 
-          pendingText = pendingText ? pendingText + ' ' + text : text;
-          pendingBlocks.push(block);
-
-          if (pendingText.length >= MIN_TTS_PARAGRAPH) {
-            flush();
+          // Decompose compound blocks (lists, blockquotes) into
+          // individual sub-items so each gets its own TTS paragraph.
+          const subItems = this.extractSubItems(block);
+          for (const { element, text } of subItems) {
+            if (!text) continue;
+            pendingText = pendingText ? pendingText + ' ' + text : text;
+            pendingBlocks.push(element);
+            if (pendingText.length >= MIN_TTS_PARAGRAPH) {
+              flush();
+            }
           }
         });
         flush();
@@ -381,13 +377,62 @@ export class ArticleController {
     return text.replace(/\s+/g, ' ').trim();
   }
 
-  private getMarkdownBlocks(container: HTMLElement): HTMLElement[] {
-    try {
-      return Array.from(container.querySelectorAll<HTMLElement>(MARKDOWN_BLOCK_SELECTOR));
-    } catch {
-      const ALLOWED = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'P', 'UL', 'OL', 'BLOCKQUOTE', 'PRE', 'HR', 'FIGURE']);
-      return Array.from(container.children).filter((el) => ALLOWED.has(el.tagName)) as HTMLElement[];
+  /**
+   * Break a compound block (list, blockquote) into individual sub-items
+   * so each can become its own TTS paragraph.  For simple blocks (p, h1-h6,
+   * table, etc.) returns the block itself.
+   */
+  private extractSubItems(
+    block: HTMLElement,
+  ): Array<{ element: HTMLElement; text: string }> {
+    const tag = block.tagName;
+
+    // Lists: each <li> is a separate sub-item
+    if (tag === 'UL' || tag === 'OL') {
+      const items = Array.from(
+        block.querySelectorAll<HTMLElement>(':scope > li'),
+      );
+      if (items.length > 0) {
+        return items.map((li) => ({
+          element: li,
+          text: this.normalizeTtsText(li.textContent ?? ''),
+        }));
+      }
     }
+
+    // Blockquotes with multiple paragraphs: each <p> is separate
+    if (tag === 'BLOCKQUOTE') {
+      const paras = Array.from(
+        block.querySelectorAll<HTMLElement>(':scope > p'),
+      );
+      if (paras.length > 1) {
+        return paras.map((p) => ({
+          element: p,
+          text: this.normalizeTtsText(p.textContent ?? ''),
+        }));
+      }
+    }
+
+    // Figures: use figcaption only
+    if (tag === 'FIGURE') {
+      const figcaption = block.querySelector<HTMLElement>('figcaption');
+      return [{
+        element: block,
+        text: this.normalizeTtsText(figcaption?.textContent ?? ''),
+      }];
+    }
+
+    // Default: whole block
+    return [{
+      element: block,
+      text: this.normalizeTtsText(block.textContent ?? ''),
+    }];
+  }
+
+  private getMarkdownBlocks(container: HTMLElement): HTMLElement[] {
+    return Array.from(container.children).filter(
+      (el) => !SKIP_BLOCK_TAGS.has(el.tagName),
+    ) as HTMLElement[];
   }
 
   private async retryWithJina(): Promise<void> {
