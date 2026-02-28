@@ -73,7 +73,7 @@ function mergeShortSentences(sentences: string[]): string[] {
 const LONG_SPLIT_DELIMITERS: RegExp[] = [
   /;\s*/,           // semicolons
   /\s[—–]\s/,      // em/en dashes with surrounding spaces
-  /:\s*/,           // colons
+  /:\s+(?!\d|\/)/,  // colons (not before digits/slashes — avoids times, URLs)
   /,\s*/,           // commas
 ];
 
@@ -124,6 +124,7 @@ function splitKeepingDelimiter(text: string, delim: RegExp): string[] {
 
 /** Greedily merge small segments, keeping each chunk within maxLen. */
 function greedyMerge(segments: string[], maxLen: number): string[] {
+  if (segments.length === 0) return [];
   const result: string[] = [];
   let current = segments[0];
 
@@ -148,6 +149,13 @@ function splitAtWordBoundary(text: string, maxLen: number): string[] {
 
   for (const word of words) {
     if (current.length === 0) {
+      if (word.length > maxLen) {
+        // Hard character split for unsplittable tokens (e.g. long URLs)
+        for (let i = 0; i < word.length; i += maxLen) {
+          chunks.push(word.slice(i, i + maxLen));
+        }
+        continue;
+      }
       current = word;
     } else if (current.length + 1 + word.length <= maxLen) {
       current += ' ' + word;
@@ -671,7 +679,9 @@ export class TTSEngine {
             this.activeBackend = 'speech';
             this.speechBackend.speak(text, lang, this.rate, this.voice, {
               onEnd,
-              onError: () => {},
+              onError: () => {
+                this.cb.onError?.('TTS error: speech synthesis failed');
+              },
             });
           }
         },

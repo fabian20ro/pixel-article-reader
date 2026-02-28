@@ -182,6 +182,33 @@ describe('splitSentences', () => {
     const result = splitSentences(short);
     expect(result).toEqual([short]);
   });
+
+  it('splits sentences exceeding 200 chars at colons', () => {
+    const long =
+      'The committee outlined the following priorities for the upcoming year: ensuring all departments meet the new compliance standards that were introduced last quarter: reviewing budget allocations across all teams and divisions';
+    expect(long.length).toBeGreaterThan(200);
+    const result = splitSentences(long);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
+
+  it('does not split colons in times or URLs', () => {
+    const withTime = 'The meeting scheduled for 12:00 was moved to 14:30 in the afternoon.';
+    const result = splitSentences(withTime);
+    // Short enough not to need splitting, but colon should not break it
+    expect(result).toEqual([withTime]);
+  });
+
+  it('handles a single token longer than 200 chars', () => {
+    const longToken = 'a'.repeat(250);
+    const result = splitSentences(longToken);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
 });
 
 // ── selectVoice ─────────────────────────────────────────────────────
