@@ -43,9 +43,10 @@ export function buildArticleFromParagraphs(
 /**
  * Check if text contains enough real words to be worth speaking aloud.
  * Filters out paragraphs that are mostly URLs, base64 data, or non-text artifacts.
+ * Uses Unicode \p{L} to support all scripts (Latin, CJK, Cyrillic, Arabic, etc.).
  */
 export function isSpeakableText(text: string): boolean {
-  const words = text.match(/[a-zA-Z\u00C0-\u024F]{2,}/g);
+  const words = text.match(/[\p{L}]{2,}/gu);
   return !!words && words.length >= 3;
 }
 
