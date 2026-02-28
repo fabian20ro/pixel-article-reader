@@ -805,4 +805,23 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-02-28] Fix play/pause voice sync bug — two simultaneous voices
+
+**Context:** User reported pressing play/pause produced two voices reading different parts of the article simultaneously. Had to press play/pause ~8 times to stop both voices.
+
+**What happened:**
+- Root cause was a race condition between the audio backend's async fetch pipeline and the engine's pause/resume state machine.
+- Four interconnected bugs: (1) `pause()` can't stop in-flight audio fetches (`audioBackend.pause()` guards on `this.audio.src` — no-op if fetch still in-flight), (2) `speakCurrent()` and `onEnd` didn't check `_isPaused` — phantom chains continued while "paused", (3) `resume()` fell through to wrong backend when phantom audio was playing, (4) audio fetch `.then()` had no generation/pause check.
+- Fix: Added `_isPaused` guards to `speakCurrent()`, `onEnd`, and `onError` callbacks. Added `isValid` callback to `AudioTTSBackend.speak()` to abort stale fetches. Rewrote `resume()` else-branch for explicit backend routing (audio paused → seamless resume, speech paused → seamless resume, nothing paused → immediate cancel+respeak).
+- Updated mock to track `speaking`/`paused` state. Added 4 new tests.
+- All 258 tests pass.
+
+**Outcome:** Success. Phantom playback chains eliminated. Happy-path seamless resume preserved.
+
+**Insight:** The `_speakGen` counter only protects against stale `onEnd`/`onError` callbacks — it does NOT prevent the async `.then()` inside `AudioTTSBackend.speak()` from calling `playAudio()`. When audio fetch completes after a pause, the audio starts even though the engine thinks it's paused. Need BOTH gen checks in callbacks AND validity checks before starting new audio.
+
+**Promoted to Lessons Learned:** Yes — extends the existing `_speakGen` lesson.
+
+---
+
 <!-- New entries go above this line, most recent first -->

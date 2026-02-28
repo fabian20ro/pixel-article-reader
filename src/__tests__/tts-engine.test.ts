@@ -18,14 +18,27 @@ class MockUtterance {
 }
 
 function createMockSpeechSynthesis() {
-  return {
+  const synth = {
     speak: vi.fn((utter: MockUtterance) => {
+      synth.speaking = true;
       // Simulate immediate onend for testing
-      setTimeout(() => utter.onend?.(), 0);
+      setTimeout(() => {
+        synth.speaking = false;
+        utter.onend?.();
+      }, 0);
     }),
-    cancel: vi.fn(),
-    pause: vi.fn(),
-    resume: vi.fn(),
+    cancel: vi.fn(() => {
+      synth.speaking = false;
+      synth.paused = false;
+    }),
+    pause: vi.fn(() => {
+      synth.paused = true;
+      synth.speaking = false;
+    }),
+    resume: vi.fn(() => {
+      synth.paused = false;
+      synth.speaking = true;
+    }),
     speaking: false,
     paused: false,
     pending: false,
@@ -33,6 +46,7 @@ function createMockSpeechSynthesis() {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   };
+  return synth;
 }
 
 function makeVoice(name: string, lang: string): SpeechSynthesisVoice {
@@ -653,6 +667,100 @@ describe('TTSEngine', () => {
 
     const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
     expect(utter.voice?.name).toBe('Ioana');
+  });
+
+  // ── Voice sync bug fixes ─────────────────────────────────────────
+
+  it('speakCurrent does not advance chain when paused', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    engine.loadArticle([
+      'First sentence is long enough to stand alone. Second sentence is also long enough on its own.',
+    ], 'en');
+    engine.play();
+
+    // First sentence is being spoken
+    expect(mockSynth.speak).toHaveBeenCalledTimes(1);
+    expect(engine.state.currentSentence).toBe(0);
+
+    // Pause before the sentence finishes
+    engine.pause();
+    expect(engine.state.isPaused).toBe(true);
+
+    // Simulate the first utterance finishing (onend fires while paused)
+    // This mimics the phantom chain scenario
+    vi.runAllTimers();
+
+    // Position should NOT advance because engine is paused
+    expect(engine.state.currentSentence).toBe(0);
+    // No second speak call should have been made
+    expect(mockSynth.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it('resume re-speaks immediately when backend has nothing paused', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    engine.loadArticle(['Hello world. Second sentence.'], 'en');
+    engine.play();
+
+    // Manually set paused state without actually pausing the backend
+    // (simulates the case where pause happened during in-flight fetch)
+    engine.pause();
+    // Force the mock to not be paused (simulating lost backend state)
+    mockSynth.paused = false;
+    mockSynth.speaking = false;
+
+    const speakCountBefore = mockSynth.speak.mock.calls.length;
+    const cancelCountBefore = mockSynth.cancel.mock.calls.length;
+    engine.resume();
+
+    // onNeedsRespeak should have called cancel + re-speak
+    expect(mockSynth.cancel.mock.calls.length).toBeGreaterThan(cancelCountBefore);
+    expect(mockSynth.speak.mock.calls.length).toBeGreaterThan(speakCountBefore);
+    vi.runAllTimers();
+  });
+
+  it('rapid play/pause cycles do not create parallel chains', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    engine.loadArticle([
+      'First sentence is certainly long enough. Second sentence is also long enough. Third sentence is here too.',
+    ], 'en');
+    engine.play();
+
+    // Rapid play/pause/play/pause cycle (last action is play → resume)
+    for (let i = 0; i < 8; i++) {
+      engine.pause();
+      engine.play();
+    }
+
+    // Engine should be in a consistent state after rapid clicking
+    expect(engine.state.isPlaying).toBe(true);
+    expect(engine.state.isPaused).toBe(false);
+    // Position should still be at the start (no phantom advancement)
+    expect(engine.state.currentSentence).toBe(0);
+    vi.runAllTimers();
+  });
+
+  it('onEnd does not advance sentence index when paused', () => {
+    vi.useFakeTimers();
+    const onProgress = vi.fn();
+    const engine = createEngine({ onProgress });
+    engine.loadArticle([
+      'First sentence is long enough to stand alone. Second sentence is also long enough on its own.',
+    ], 'en');
+    engine.play();
+
+    expect(engine.state.currentSentence).toBe(0);
+
+    // Pause immediately
+    engine.pause();
+
+    // Simulate onend firing (from audio that completed after pause)
+    vi.runAllTimers();
+
+    // Sentence index should not have advanced
+    expect(engine.state.currentSentence).toBe(0);
   });
 
   it('seekToTime jumps to the correct paragraph/sentence', () => {
