@@ -130,6 +130,58 @@ describe('splitSentences', () => {
   it('handles empty string gracefully', () => {
     expect(splitSentences('')).toEqual(['']);
   });
+
+  // ── Long sentence splitting ────────────────────────────────────────
+
+  it('splits sentences exceeding 200 chars at semicolons', () => {
+    const long =
+      'The government announced new policies affecting all citizens across the country; these policies include much stricter regulations on data usage and privacy; compliance deadlines are firmly set for next year; penalties for violations will be quite severe';
+    expect(long.length).toBeGreaterThan(200);
+    const result = splitSentences(long);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
+
+  it('splits sentences exceeding 200 chars at commas when no semicolons', () => {
+    const long =
+      'The organization released a comprehensive statement addressing the concerns of stakeholders, partners, and community members, emphasizing the importance of transparency, accountability, and continued collaboration across all levels';
+    expect(long.length).toBeGreaterThan(200);
+    const result = splitSentences(long);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
+
+  it('splits sentences exceeding 200 chars at em dashes', () => {
+    const long =
+      'The administration has taken a firm stance on this issue — stating that all departments must comply with the new directive — and has outlined consequences for noncompliance — including budget reductions and personnel changes';
+    expect(long.length).toBeGreaterThan(200);
+    const result = splitSentences(long);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
+
+  it('splits at word boundaries as last resort for long text without delimiters', () => {
+    const words = Array(50).fill('longword').join(' ');
+    expect(words.length).toBeGreaterThan(200);
+    const result = splitSentences(words);
+    for (const s of result) {
+      expect(s.length).toBeLessThanOrEqual(200);
+    }
+    expect(result.length).toBeGreaterThan(1);
+  });
+
+  it('does not split sentences already within 200 chars', () => {
+    const short = 'This is a reasonably short sentence that stays within limits.';
+    expect(short.length).toBeLessThan(200);
+    const result = splitSentences(short);
+    expect(result).toEqual([short]);
+  });
 });
 
 // ── selectVoice ─────────────────────────────────────────────────────

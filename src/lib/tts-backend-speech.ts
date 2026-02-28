@@ -7,11 +7,6 @@ import type { TTSBackend, TTSBackendCallbacks } from './tts-backend.js';
 
 export class SpeechTTSBackend implements TTSBackend {
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
-  private onErrorCb: ((msg: string) => void) | null = null;
-
-  constructor(onError?: (msg: string) => void) {
-    this.onErrorCb = onError ?? null;
-  }
 
   speak(
     text: string,
@@ -31,7 +26,7 @@ export class SpeechTTSBackend implements TTSBackend {
 
     utter.onerror = (ev) => {
       if (ev.error === 'interrupted' || ev.error === 'canceled') return;
-      this.onErrorCb?.(`TTS error: ${ev.error}`);
+      callbacks.onError(false);
     };
 
     speechSynthesis.speak(utter);

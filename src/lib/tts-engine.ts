@@ -67,11 +67,108 @@ function mergeShortSentences(sentences: string[]): string[] {
   return merged;
 }
 
+// ── Long sentence splitting ───────────────────────────────────────────
+
+/** Delimiter tiers for splitting long sentences, from most to least natural. */
+const LONG_SPLIT_DELIMITERS: RegExp[] = [
+  /;\s*/,           // semicolons
+  /\s[—–]\s/,      // em/en dashes with surrounding spaces
+  /:\s*/,           // colons
+  /,\s*/,           // commas
+];
+
+/**
+ * Split a sentence exceeding maxLen at natural breakpoints.
+ * Tries delimiters in priority order, falls back to word boundaries.
+ */
+function splitLongSentence(sentence: string, maxLen: number): string[] {
+  if (sentence.length <= maxLen) return [sentence];
+
+  for (const delim of LONG_SPLIT_DELIMITERS) {
+    const segments = splitKeepingDelimiter(sentence, delim);
+    if (segments.length <= 1) continue;
+
+    const chunks = greedyMerge(segments, maxLen);
+    // Recursively split any chunks that still exceed maxLen
+    const result = chunks.flatMap((c) =>
+      c.length > maxLen ? splitLongSentence(c, maxLen) : [c],
+    );
+    if (result.length > 1) return result;
+  }
+
+  return splitAtWordBoundary(sentence, maxLen);
+}
+
+/**
+ * Split text on a delimiter, keeping the delimiter attached to the
+ * end of the preceding segment (natural pause point).
+ */
+function splitKeepingDelimiter(text: string, delim: RegExp): string[] {
+  const global = new RegExp(delim.source, 'g');
+  const segments: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = global.exec(text)) !== null) {
+    const end = match.index + match[0].length;
+    const seg = text.slice(lastIndex, end).trim();
+    if (seg.length > 0) segments.push(seg);
+    lastIndex = end;
+  }
+
+  const tail = text.slice(lastIndex).trim();
+  if (tail.length > 0) segments.push(tail);
+
+  return segments;
+}
+
+/** Greedily merge small segments, keeping each chunk within maxLen. */
+function greedyMerge(segments: string[], maxLen: number): string[] {
+  const result: string[] = [];
+  let current = segments[0];
+
+  for (let i = 1; i < segments.length; i++) {
+    const candidate = current + ' ' + segments[i];
+    if (candidate.length <= maxLen) {
+      current = candidate;
+    } else {
+      result.push(current);
+      current = segments[i];
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+/** Hard split at word boundaries as a last resort. */
+function splitAtWordBoundary(text: string, maxLen: number): string[] {
+  const words = text.split(/\s+/);
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= maxLen) {
+      current += ' ' + word;
+    } else {
+      chunks.push(current);
+      current = word;
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks;
+}
+
 export function splitSentences(text: string): string[] {
   const raw = text.match(/[^.!?]*[.!?]+[\s]?|[^.!?]+$/g);
   if (!raw) return [text];
   const pieces = raw.map((s) => s.trim()).filter((s) => s.length > 0);
-  return mergeShortSentences(pieces);
+  const merged = mergeShortSentences(pieces);
+  return merged.flatMap((s) =>
+    s.length > MAX_UTTERANCE_LENGTH ? splitLongSentence(s, MAX_UTTERANCE_LENGTH) : [s],
+  );
 }
 
 // ── Voice helpers ────────────────────────────────────────────────────
@@ -213,9 +310,7 @@ export class TTSEngine {
       });
     }
 
-    this.speechBackend = new SpeechTTSBackend(
-      (msg: string) => this.cb.onError?.(msg),
-    );
+    this.speechBackend = new SpeechTTSBackend();
 
     this.mediaSession.setActions({
       play: () => this.play(),
@@ -589,7 +684,9 @@ export class TTSEngine {
     this.activeBackend = 'speech';
     this.speechBackend.speak(text, lang, this.rate, this.voice, {
       onEnd,
-      onError: () => {},
+      onError: () => {
+        this.cb.onError?.('TTS error: speech synthesis failed');
+      },
     });
     this.emitProgress();
   }
