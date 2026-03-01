@@ -824,4 +824,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-03-01] Fix vendor.js loading failure + auto-generate PRECACHE
+
+**Context:** PDF loading was completely broken — users reported "Could not load PDF support. The vendor file may be missing." when opening any PDF (e.g. arxiv URLs like `https://arxiv.org/pdf/2602.22010`). Previous fix attempt (PR #45) addressed reading from `globalThis` after import but didn't fix the underlying path resolution bug.
+
+**What happened:**
+- Root cause: `extract-pdf.ts` used `import('./vendor/pdfjs/pdf.min.mjs')`. Dynamic `import()` resolves paths relative to the *module* (`lib/extractors/extract-pdf.js`), not the page root. Browser tried `lib/extractors/vendor/pdfjs/pdf.min.mjs` → 404.
+- Contrast: EPUB's JSZip loading used `document.createElement('script')` with `script.src = path`, which resolves relative to the page URL. That worked correctly.
+- Secondary issue: `sw.js` PRECACHE array was manually maintained and had drifted — 10 of 35 lib/ files were missing, breaking offline PWA support.
+- Fix 1: Resolve vendor paths via `new URL(path, document.baseURI).href` before passing to `import()`. Same fix applied to `workerSrc`.
+- Fix 2: Added `scripts/update-precache.mjs` that auto-generates the PRECACHE array and bumps `SW_VERSION` at build time. Integrated into `npm run build`.
+- All 258 tests pass, build is idempotent.
+
+**Outcome:** Success — PDF loading fixed, PRECACHE always in sync with actual files.
+
+**Insight:** Dynamic `import()` resolves relative paths from the *calling module's URL*, not the page URL. This is different from `<script src="...">` which resolves from the page. When loading vendored files from deeply nested modules, use `new URL(relativePath, document.baseURI).href` to get page-relative resolution. The EPUB extractor happened to avoid this bug by using a script tag approach.
+
+**Promoted to Lessons Learned:** Yes
+
+---
+
 <!-- New entries go above this line, most recent first -->

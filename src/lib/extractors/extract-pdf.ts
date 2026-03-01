@@ -49,8 +49,9 @@ interface PdfJsLib {
   };
 }
 
-// Local vendored paths (relative to the page URL root, not the module).
-// These are lazy-loaded on first PDF open and cached by the service worker.
+// Vendored paths relative to the page root. Resolved via document.baseURI
+// before use — dynamic import() resolves relative to the *module*, not the
+// page, so a bare './vendor/...' path would break from lib/extractors/.
 const PDF_JS_PATH = './vendor/pdfjs/pdf.min.mjs';
 const PDF_JS_WORKER_PATH = './vendor/pdfjs/pdf.worker.min.mjs';
 
@@ -71,17 +72,19 @@ async function loadPdfJs(): Promise<PdfJsLib> {
     // globalThis.pdfjsLib rather than using ES module exports. Dynamic import()
     // executes the script (populating globalThis.pdfjsLib) but returns an empty
     // module namespace. Read the library from globalThis after import.
-    const url = PDF_JS_PATH;
+    const url = new URL(PDF_JS_PATH, document.baseURI).href;
     await import(/* webpackIgnore: true */ url);
     const lib = (globalThis as Record<string, unknown>).pdfjsLib as PdfJsLib | undefined;
     if (!lib || typeof lib.getDocument !== 'function') {
       throw new Error('pdfjsLib not available after import');
     }
-    lib.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_PATH;
+    lib.GlobalWorkerOptions.workerSrc = new URL(PDF_JS_WORKER_PATH, document.baseURI).href;
     _pdfjsLib = lib;
     return lib;
-  } catch {
-    throw new Error('Could not load PDF support. The vendor file may be missing.');
+  } catch (err) {
+    throw new Error(
+      `Could not load PDF support. The vendor file may be missing. (${err instanceof Error ? err.message : String(err)})`,
+    );
   }
 }
 
