@@ -13,6 +13,10 @@
  *  - The visibilitychange handler re-ensures audio on return from background.
  */
 
+import { createLogger } from './logger.js';
+
+const log = createLogger('MediaSession');
+
 export interface MediaSessionActions {
   play: () => void;
   pause: () => void;
@@ -86,7 +90,9 @@ export class MediaSessionController {
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this._active) {
         if (this.audio && this.audio.paused) {
-          Promise.resolve(this.audio.play()).catch(() => {});
+          Promise.resolve(this.audio.play()).catch((err) => {
+            log.warn('Silent audio resume failed on visibility change', err);
+          });
         }
       }
     };
@@ -113,7 +119,9 @@ export class MediaSessionController {
     if (!this.audio) return;
 
     this._active = true;
-    Promise.resolve(this.audio.play()).catch(() => {});
+    Promise.resolve(this.audio.play()).catch((err) => {
+      log.warn('Silent audio play failed on activate', err);
+    });
     this.updateMetadata(title);
     this.setPlaybackState('playing');
     this.startKeepAlive();
@@ -156,8 +164,8 @@ export class MediaSessionController {
         position: Math.max(0, Math.min(position, duration)),
         playbackRate: Math.max(0.1, playbackRate),
       });
-    } catch {
-      // setPositionState can throw if values are invalid or unsupported
+    } catch (err) {
+      log.warn('setPositionState failed', err);
     }
   }
 
@@ -194,7 +202,9 @@ export class MediaSessionController {
     this.stopKeepAlive();
     this.keepAliveTimer = setInterval(() => {
       if (this._active && this.audio && this.audio.paused) {
-        Promise.resolve(this.audio.play()).catch(() => {});
+        Promise.resolve(this.audio.play()).catch((err) => {
+          log.warn('Keep-alive audio restart failed', err);
+        });
       }
     }, 5000);
   }

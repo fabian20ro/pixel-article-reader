@@ -5,6 +5,9 @@
 
 import { isValidArticleUrl } from './url-utils.js';
 import type { Article } from './extractor.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('QueueStore');
 
 export interface QueueItem {
   id: string;
@@ -49,17 +52,20 @@ export function loadQueue(): QueueItem[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(isValidQueueItem);
-  } catch {
+  } catch (err) {
+    log.warn('Failed to load queue from localStorage', err);
     return [];
   }
 }
 
-/** Persist queue to localStorage. Catches QuotaExceededError silently. */
-export function saveQueue(items: QueueItem[]): void {
+/** Persist queue to localStorage. Returns false on QuotaExceededError. */
+export function saveQueue(items: QueueItem[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  } catch {
-    // QuotaExceededError — queue is still in memory, just not persisted.
+    return true;
+  } catch (err) {
+    log.warn('Failed to save queue (quota exceeded?)', err);
+    return false;
   }
 }
 
