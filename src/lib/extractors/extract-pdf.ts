@@ -67,13 +67,19 @@ async function loadPdfJs(): Promise<PdfJsLib> {
   if (_pdfjsLib) return _pdfjsLib;
 
   try {
-    // Dynamic import from local vendor path — browser resolves at runtime.
-    // TypeScript cannot resolve dynamic URLs, so we use a variable to suppress static analysis.
+    // The vendored pdf.min.mjs is a webpack bundle that assigns exports to
+    // globalThis.pdfjsLib rather than using ES module exports. Dynamic import()
+    // executes the script (populating globalThis.pdfjsLib) but returns an empty
+    // module namespace. Read the library from globalThis after import.
     const url = PDF_JS_PATH;
-    const module = await import(/* webpackIgnore: true */ url) as PdfJsLib;
-    module.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_PATH;
-    _pdfjsLib = module;
-    return module;
+    await import(/* webpackIgnore: true */ url);
+    const lib = (globalThis as Record<string, unknown>).pdfjsLib as PdfJsLib | undefined;
+    if (!lib || typeof lib.getDocument !== 'function') {
+      throw new Error('pdfjsLib not available after import');
+    }
+    lib.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_PATH;
+    _pdfjsLib = lib;
+    return lib;
   } catch {
     throw new Error('Could not load PDF support. The vendor file may be missing.');
   }
