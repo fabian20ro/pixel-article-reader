@@ -14,6 +14,11 @@ import { langToCode, type Language } from './language-config.js';
 import { MediaSessionController } from './media-session.js';
 import { AudioTTSBackend } from './tts-backend-audio.js';
 import { SpeechTTSBackend } from './tts-backend-speech.js';
+import { splitSentences } from './sentence-splitter.js';
+import { WakeLockManager } from './wake-lock-manager.js';
+
+// Re-export for backward compatibility with existing tests and consumers
+export { splitSentences } from './sentence-splitter.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -37,138 +42,6 @@ export interface TTSConfig {
   proxyBase: string;
   proxySecret: string;
   callbacks?: TTSCallbacks;
-}
-
-// ── Sentence splitting ────────────────────────────────────────────────
-
-const MIN_SENTENCE_LENGTH = 40;
-const MAX_UTTERANCE_LENGTH = 200;
-
-function mergeShortSentences(sentences: string[]): string[] {
-  if (sentences.length <= 1) return sentences;
-
-  const merged: string[] = [];
-  let current = sentences[0];
-
-  for (let i = 1; i < sentences.length; i++) {
-    const next = sentences[i];
-    if (
-      current.length < MIN_SENTENCE_LENGTH &&
-      current.length + 1 + next.length <= MAX_UTTERANCE_LENGTH
-    ) {
-      current += ' ' + next;
-    } else {
-      merged.push(current);
-      current = next;
-    }
-  }
-  merged.push(current);
-
-  return merged;
-}
-
-// ── Long sentence splitting ───────────────────────────────────────────
-
-/** Delimiter tiers for splitting long sentences, from most to least natural. */
-const LONG_SPLIT_DELIMITERS: RegExp[] = [
-  /;\s*/,           // semicolons
-  /\s[—–]\s/,      // em/en dashes with surrounding spaces
-  /:\s*/,           // colons
-  /,\s*/,           // commas
-];
-
-/**
- * Split a sentence exceeding maxLen at natural breakpoints.
- * Tries delimiters in priority order, falls back to word boundaries.
- */
-function splitLongSentence(sentence: string, maxLen: number): string[] {
-  if (sentence.length <= maxLen) return [sentence];
-
-  for (const delim of LONG_SPLIT_DELIMITERS) {
-    const segments = splitKeepingDelimiter(sentence, delim);
-    if (segments.length <= 1) continue;
-
-    const chunks = greedyMerge(segments, maxLen);
-    // Recursively split any chunks that still exceed maxLen
-    const result = chunks.flatMap((c) =>
-      c.length > maxLen ? splitLongSentence(c, maxLen) : [c],
-    );
-    if (result.length > 1) return result;
-  }
-
-  return splitAtWordBoundary(sentence, maxLen);
-}
-
-/**
- * Split text on a delimiter, keeping the delimiter attached to the
- * end of the preceding segment (natural pause point).
- */
-function splitKeepingDelimiter(text: string, delim: RegExp): string[] {
-  const global = new RegExp(delim.source, 'g');
-  const segments: string[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = global.exec(text)) !== null) {
-    const end = match.index + match[0].length;
-    const seg = text.slice(lastIndex, end).trim();
-    if (seg.length > 0) segments.push(seg);
-    lastIndex = end;
-  }
-
-  const tail = text.slice(lastIndex).trim();
-  if (tail.length > 0) segments.push(tail);
-
-  return segments;
-}
-
-/** Greedily merge small segments, keeping each chunk within maxLen. */
-function greedyMerge(segments: string[], maxLen: number): string[] {
-  const result: string[] = [];
-  let current = segments[0];
-
-  for (let i = 1; i < segments.length; i++) {
-    const candidate = current + ' ' + segments[i];
-    if (candidate.length <= maxLen) {
-      current = candidate;
-    } else {
-      result.push(current);
-      current = segments[i];
-    }
-  }
-  result.push(current);
-  return result;
-}
-
-/** Hard split at word boundaries as a last resort. */
-function splitAtWordBoundary(text: string, maxLen: number): string[] {
-  const words = text.split(/\s+/);
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    if (current.length === 0) {
-      current = word;
-    } else if (current.length + 1 + word.length <= maxLen) {
-      current += ' ' + word;
-    } else {
-      chunks.push(current);
-      current = word;
-    }
-  }
-  if (current.length > 0) chunks.push(current);
-
-  return chunks;
-}
-
-export function splitSentences(text: string): string[] {
-  const raw = text.match(/[^.!?]*[.!?]+[\s]?|[^.!?]+$/g);
-  if (!raw) return [text];
-  const pieces = raw.map((s) => s.trim()).filter((s) => s.length > 0);
-  const merged = mergeShortSentences(pieces);
-  return merged.flatMap((s) =>
-    s.length > MAX_UTTERANCE_LENGTH ? splitLongSentence(s, MAX_UTTERANCE_LENGTH) : [s],
-  );
 }
 
 // ── Voice helpers ────────────────────────────────────────────────────
@@ -271,8 +144,7 @@ export class TTSEngine {
   private _stopped = true;
 
   // Wake Lock
-  private wakeLock: WakeLockSentinel | null = null;
-  private useWakeLock = false;
+  private wakeLockManager = new WakeLockManager();
 
   // Media session (background audio + lock screen controls)
   private mediaSession = new MediaSessionController();
@@ -325,17 +197,12 @@ export class TTSEngine {
 
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // Clear any pending resume watchdog — it shouldn't fire while
-        // the page is backgrounded (speechSynthesis is suspended anyway).
         this.speechBackend.clearResumeTimer();
       } else if (document.visibilityState === 'visible' && this._isPlaying) {
-        // Reset dead-man's switch so it doesn't false-trigger after the
-        // browser suspended JS execution while backgrounded.
         this._lastProgressTime = Date.now();
-        this.acquireWakeLock();
+        this.wakeLockManager.acquire(() => !this._stopped && !this._isPaused);
         if (!this._isPaused) {
           this.mediaSession.activate(this.articleTitle);
-          // Restart audio if the browser paused it while backgrounded
           if (this.activeBackend === 'audio' && this.audioBackend?.isPaused()) {
             this.audioBackend.resume(() => {
               this._speakGen++;
@@ -374,9 +241,6 @@ export class TTSEngine {
     this.articleTitle = title || '';
     this.paraIdx = 0;
     this.sentIdx = 0;
-    // Reset _stopped so that a subsequent play() → speakCurrent() is not
-    // short-circuited.  stop() sets _stopped = true, but after loading new
-    // content the engine is in a "ready to play" state, not "stopped".
     this._stopped = false;
     this.voice = selectVoice(this.allVoices, lang, this.preferredVoiceName);
     this.emitState();
@@ -394,7 +258,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = false;
     this._lastProgressTime = Date.now();
-    this.acquireWakeLock();
+    this.wakeLockManager.acquire(() => !this._stopped && !this._isPaused);
     this.mediaSession.activate(this.articleTitle);
     this.audioBackend?.ensureAudio();
     this.startDeadManSwitch();
@@ -412,8 +276,6 @@ export class TTSEngine {
     } else {
       this.speechBackend.pause();
     }
-    // Fully deactivate the media session so other apps (e.g. YouTube Music)
-    // can reclaim audio focus without being interrupted by our silent audio loop.
     this.mediaSession.deactivate();
     this.emitState();
   }
@@ -423,7 +285,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._lastProgressTime = Date.now();
     this.startDeadManSwitch();
-    this.acquireWakeLock();
+    this.wakeLockManager.acquire(() => !this._stopped && !this._isPaused);
 
     const onNeedsRespeak = () => {
       this._speakGen++;
@@ -432,16 +294,12 @@ export class TTSEngine {
     };
 
     if (this.activeBackend === 'audio' && this.audioBackend?.isPaused()) {
-      // Audio was properly paused — seamless resume
       this.audioBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
     } else if (this.activeBackend === 'speech' && speechSynthesis.paused) {
-      // Speech was properly paused — seamless resume
       this.speechBackend.resume(onNeedsRespeak);
       this.mediaSession.activate(this.articleTitle);
     } else {
-      // Nothing properly paused (fetch was in-flight during pause, or backend
-      // state lost). Cancel any stale playback and re-speak from current position.
       this.mediaSession.activate(this.articleTitle);
       onNeedsRespeak();
     }
@@ -455,7 +313,7 @@ export class TTSEngine {
     this.stopDeadManSwitch();
     this._speakGen++;
     this.cancelAllBackends();
-    this.releaseWakeLock();
+    this.wakeLockManager.release();
     this.mediaSession.deactivate();
     this.paraIdx = 0;
     this.sentIdx = 0;
@@ -587,9 +445,10 @@ export class TTSEngine {
   }
 
   setWakeLock(enabled: boolean): void {
-    this.useWakeLock = enabled;
-    if (!enabled) this.releaseWakeLock();
-    else if (this._isPlaying) this.acquireWakeLock();
+    this.wakeLockManager.setEnabled(enabled);
+    if (enabled && this._isPlaying) {
+      this.wakeLockManager.acquire(() => !this._stopped && !this._isPaused);
+    }
   }
 
   setDeviceVoiceOnly(enabled: boolean): void {
@@ -676,7 +535,6 @@ export class TTSEngine {
             if (this._stopped || gen !== this._speakGen) return;
             if (this._isPaused) return;
             if (shouldFallback) {
-              // Fall back to speechSynthesis for this sentence
               this.activeBackend = 'speech';
               this.speechBackend.speak(text, lang, this.rate, this.voice, {
                 onEnd,
@@ -739,7 +597,7 @@ export class TTSEngine {
     this._isPaused = false;
     this._stopped = true;
     this.stopDeadManSwitch();
-    this.releaseWakeLock();
+    this.wakeLockManager.release();
     this.mediaSession.deactivate();
     this.activeBackend = null;
     this.emitState();
@@ -791,28 +649,5 @@ export class TTSEngine {
       clearInterval(this._deadManTimer);
       this._deadManTimer = null;
     }
-  }
-
-  // ── Wake Lock ─────────────────────────────────────────────────────
-
-  private async acquireWakeLock(): Promise<void> {
-    if (!this.useWakeLock) return;
-    if (!('wakeLock' in navigator)) return;
-    try {
-      const sentinel = await navigator.wakeLock.request('screen');
-      // Guard: if stopped or paused while awaiting, release immediately
-      if (this._stopped || this._isPaused) {
-        sentinel.release().catch(() => {});
-      } else {
-        this.wakeLock = sentinel;
-      }
-    } catch {
-      // Wake Lock request can fail (e.g., low battery mode)
-    }
-  }
-
-  private releaseWakeLock(): void {
-    this.wakeLock?.release().catch(() => {});
-    this.wakeLock = null;
   }
 }

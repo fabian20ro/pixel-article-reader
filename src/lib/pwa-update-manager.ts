@@ -1,3 +1,7 @@
+import { createLogger } from './logger.js';
+
+const log = createLogger('PWA');
+
 export interface PwaUpdateManagerOptions {
   onUpdateReady?: () => void;
   onStatus?: (status: string) => void;
@@ -24,7 +28,11 @@ export class PwaUpdateManager {
 
     this.registration = await navigator.serviceWorker
       .register(scriptUrl, { updateViaCache: 'none' })
-      .catch(() => undefined);
+      .catch((err) => {
+        log.warn('Service worker registration failed', err);
+        this.options.onStatus?.('Offline support unavailable.');
+        return undefined;
+      });
 
     await this.checkForUpdates({ silent: true });
   }

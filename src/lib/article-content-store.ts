@@ -6,6 +6,9 @@
  */
 
 import type { Article } from './extractor.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('ContentStore');
 
 /** Storable subset of Article: everything except content and resolvedUrl, plus an id. */
 export type StoredArticleContent = Pick<Article,
@@ -86,8 +89,8 @@ export async function saveArticleContent(content: StoredArticleContent): Promise
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // IndexedDB unavailable or quota exceeded — content just won't persist
+  } catch (err) {
+    log.warn('Failed to save article content (quota exceeded?)', err);
   }
 }
 
@@ -101,7 +104,8 @@ export async function loadArticleContent(id: string): Promise<StoredArticleConte
       request.onsuccess = () => resolve(request.result ?? null);
       request.onerror = () => reject(request.error);
     });
-  } catch {
+  } catch (err) {
+    log.warn('Failed to load article content', err);
     return null;
   }
 }
@@ -116,8 +120,8 @@ export async function deleteArticleContent(id: string): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // Ignore — content is already gone or DB unavailable
+  } catch (err) {
+    log.warn('Failed to delete article content', err);
   }
 }
 
@@ -131,7 +135,7 @@ export async function clearArticleContent(): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch {
-    // Ignore
+  } catch (err) {
+    log.warn('Failed to clear article content store', err);
   }
 }

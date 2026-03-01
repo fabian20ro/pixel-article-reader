@@ -24,6 +24,7 @@ import {
   toStorable,
   fromStorable,
 } from './article-content-store.js';
+import { EventEmitter } from './event-emitter.js';
 
 export interface QueueCallbacks {
   onQueueChange(items: QueueItem[], currentIndex: number): void;
@@ -31,6 +32,14 @@ export interface QueueCallbacks {
   onAutoAdvanceCancelled(): void;
   onError(msg: string): void;
 }
+
+/** Typed events emitted by QueueController for decoupled consumers. */
+export type QueueEvents = {
+  queueChanged: { items: QueueItem[]; currentIndex: number };
+  autoAdvanceStarted: { nextTitle: string };
+  autoAdvanceCancelled: void;
+  error: { message: string };
+};
 
 export interface QueueControllerOptions {
   articleController: ArticleController;
@@ -48,6 +57,9 @@ export class QueueController {
   private readonly ac: ArticleController;
   private readonly tts: TTSEngine;
   private readonly cb: QueueCallbacks;
+
+  /** Typed event bus for decoupled consumers. Subscribe via `events.on(...)`. */
+  readonly events = new EventEmitter<QueueEvents>();
 
   constructor(opts: QueueControllerOptions) {
     this.ac = opts.articleController;
@@ -188,7 +200,9 @@ export class QueueController {
       this.notify();
       this.tts.play();
     } catch {
-      this.cb.onError(`Failed to load: ${item.title}`);
+      const msg = `Failed to load: ${item.title}`;
+      this.cb.onError(msg);
+      this.events.emit('error', { message: msg });
     } finally {
       this._isLoadingItem = false;
     }
@@ -228,6 +242,7 @@ export class QueueController {
     if (!next) return;
 
     this.cb.onAutoAdvanceCountdown(next.title);
+    this.events.emit('autoAdvanceStarted', { nextTitle: next.title });
 
     this.autoAdvanceTimer = setTimeout(() => {
       this.autoAdvanceTimer = null;
@@ -241,6 +256,7 @@ export class QueueController {
       clearTimeout(this.autoAdvanceTimer);
       this.autoAdvanceTimer = null;
       this.cb.onAutoAdvanceCancelled();
+      this.events.emit('autoAdvanceCancelled');
     }
   }
 
@@ -279,5 +295,6 @@ export class QueueController {
 
   private notify(): void {
     this.cb.onQueueChange(this.items, this.currentIndex);
+    this.events.emit('queueChanged', { items: this.items, currentIndex: this.currentIndex });
   }
 }

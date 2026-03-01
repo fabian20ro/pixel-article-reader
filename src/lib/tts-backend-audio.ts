@@ -6,6 +6,9 @@
 import { langToCode, type Language } from './language-config.js';
 import { fetchTtsAudio, type TtsAudioFetcherConfig } from './tts-audio-fetcher.js';
 import type { TTSBackend, TTSBackendCallbacks } from './tts-backend.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('AudioTTS');
 
 export class AudioTTSBackend implements TTSBackend {
   private audio: HTMLAudioElement | null = null;
@@ -37,6 +40,10 @@ export class AudioTTSBackend implements TTSBackend {
         return;
       }
       this.playAudio(audioUrl, rate, callbacks);
+    }).catch((err) => {
+      log.warn('Audio fetch/playback failed, falling back to speech', err);
+      if (isValid && !isValid()) return;
+      callbacks.onError(true);
     });
   }
 
