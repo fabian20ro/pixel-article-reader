@@ -4,7 +4,7 @@
   "description": "PWA that reads any article aloud using on-device TTS",
   "private": true,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/update-precache.mjs",
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -54,6 +54,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-24]** `navigator.mediaSession.setPositionState()` unlocks the notification seekbar — Without calling `setPositionState({ duration, position, playbackRate })`, Android's media notification shows buttons only (no progress bar, no time display). For TTS apps with discrete paragraphs/sentences, a character-count-based estimation (~14 chars/sec at 1× rate) maps well to a continuous timeline. Call it on every sentence completion for smooth seekbar updates. The `seekto` action handler receives `seekTime` in seconds and needs reverse-mapping back to paragraph/sentence position using the same character-count model.
 
+**[2026-03-01]** Dynamic `import()` resolves relative to the module, not the page — `import('./vendor/file.js')` inside `lib/extractors/foo.js` resolves to `lib/extractors/vendor/file.js`, not `vendor/file.js`. This is different from `<script src="./vendor/file.js">` which resolves from the page URL. To load vendored files from nested modules, construct an absolute URL first: `new URL('./vendor/file.js', document.baseURI).href`. The EPUB extractor avoided this bug by using a dynamically-created `<script>` tag instead of `import()`.
+
 ## Performance & Infrastructure
 
 **[2026-02-22]** Manifest and SW paths must be relative for subdirectory deployment — GitHub Pages serves at `/<repo>/`, not `/`. Using absolute paths like `"start_url": "/"` or `'/index.html'` in the SW precache list will break. Use `"."` for manifest `start_url`/`scope`/`share_target.action` and `'./'`-prefixed paths in the SW precache list.
