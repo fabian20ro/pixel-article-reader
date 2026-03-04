@@ -469,7 +469,6 @@ async function main(): Promise<void> {
     isPlaybackActive() { return tts.state.isPlaying && !tts.state.isPaused; },
   });
 
-  refs.updateStatus.textContent = `Build ${shortRelease(APP_RELEASE)}`;
   refs.appVersion.textContent = shortRelease(APP_RELEASE);
   await updateManager.init('sw.js');
 

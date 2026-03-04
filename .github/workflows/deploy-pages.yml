@@ -44,7 +44,7 @@ jobs:
 
       - name: Stamp app release metadata
         run: |
-          RELEASE="sha-${GITHUB_SHA::7}-run-${GITHUB_RUN_NUMBER}"
+          RELEASE="$(date -u '+%y-%m-%d %H:%M')"
           sed -i "s|__APP_RELEASE__|${RELEASE}|g" src/lib/release.ts
 
       - run: npm run build
