@@ -470,7 +470,7 @@ async function main(): Promise<void> {
   });
 
   refs.updateStatus.textContent = `Build ${shortRelease(APP_RELEASE)}`;
-  refs.appVersion.textContent = `Version ${shortRelease(APP_RELEASE)}`;
+  refs.appVersion.textContent = shortRelease(APP_RELEASE);
   await updateManager.init('sw.js');
 
   // ── Install Prompt ──────────────────────────────────────────

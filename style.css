@@ -251,6 +251,34 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.build-badge {
+  display: inline-flex;
+  border-radius: 4px;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  line-height: 20px;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.build-badge-label {
+  padding: 0 8px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.build-badge-value {
+  padding: 0 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.build-badge:hover .build-badge-value {
+  background: var(--accent-hover);
+}
+
 .settings-label {
   display: flex;
   align-items: center;
