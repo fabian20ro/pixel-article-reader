@@ -201,7 +201,7 @@ async function routeTts(requestUrl, context) {
     status: 200,
     headers: successHeaders(context, {
       'Content-Type': resp.headers.get('content-type') || 'audio/mpeg',
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'public, max-age=180',
     }),
   });
 }
