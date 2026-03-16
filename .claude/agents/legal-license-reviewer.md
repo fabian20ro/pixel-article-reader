@@ -1,3 +1,10 @@
+---
+name: legal-license-reviewer
+description: Reviews vendored and third-party library licenses for legal compliance. Use PROACTIVELY when vendored libraries change or license audits are needed.
+tools: ["Read", "Grep", "Glob", "Bash"]
+model: sonnet
+---
+
 # Legal License Reviewer
 
 Reviews vendored and third-party library licenses for legal compliance.

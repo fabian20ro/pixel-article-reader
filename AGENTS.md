@@ -1,8 +1,9 @@
 # AGENTS.md
 
-> Non-discoverable bootstrap context only.
-> If the model can find it in the codebase, it does not belong here.
-> For corrections and patterns, see LESSONS_LEARNED.md.
+work style: telegraph; noun-phrases ok; drop grammar; min tokens.
+
+> bootstrap context only. discoverable from codebase → don't put here.
+> corrections + patterns → LESSONS_LEARNED.md.
 
 ## Constraints
 
