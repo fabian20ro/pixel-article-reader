@@ -15,11 +15,11 @@ Thin entrypoint that wires modules together.
 
 ## src/lib/article-controller.ts — Article UI + Flow
 
-Coordinates URL submit, extraction, rendering, translation, markdown export, and Jina retry.
+Coordinates URL submit, extraction, rendering, translation, and markdown export.
 
 | Method | Purpose |
 |--------|---------|
-| `init()` | Binds UI event listeners (go, translate, Jina retry, copy markdown, retry) |
+| `init()` | Binds UI event listeners (go, translate, copy markdown, retry) |
 | `handleInitialSharedUrl()` | Handles share-target query params |
 | `setLangOverride(lang)` | Updates language override and active article playback language |
 | `displayArticle(article)` | Renders metadata + markdown/paragraphs, loads TTS |
@@ -28,7 +28,6 @@ Coordinates URL submit, extraction, rendering, translation, markdown export, and
 - Markdown render path: `marked.parse()` + sanitizer
 - TTS alignment: maps rendered top-level blocks to paragraph indices
 - Copy action: writes `article.markdown` to clipboard
-- Jina retry: calls `extractArticleWithJina()` using current URL
 
 ---
 
@@ -42,7 +41,6 @@ Converts fetched content into `Article` with markdown and TTS paragraphs.
 | Function | Purpose |
 |----------|---------|
 | `extractArticle(url, proxyBase, proxySecret?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
-| `extractArticleWithJina(url, proxyBase, proxySecret?)` | Worker markdown mode (`mode=markdown`) via Jina; falls back to default extractor |
 | `createArticleFromText(text)` | Creates article from pasted text without fetching |
 
 **Pipeline details:**
@@ -137,8 +135,7 @@ Language detection and translation gating heuristics.
 ## worker/cors-proxy.js — Cloudflare Worker
 
 Endpoints:
-- `GET /?url=...` → fetch HTML
-- `GET /?url=...&mode=markdown` → fetch markdown through Jina Reader
+- `GET /?url=...` → fetch HTML/PDF/EPUB
 - `POST /?action=translate` → Google Translate API proxy
 
 Security and limits:

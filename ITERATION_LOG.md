@@ -824,6 +824,30 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-10] Native YouTube Support + REST API + Modern Bundling
+
+**Context:** User wants to support YouTube transcripts and expose a `/parse` endpoint for AI agents.
+**Happened:**
+- Removed Jina Reader fallback (UI, proxy, tests).
+- Refactored extractors to be environment-agnostic (Shared Library architecture).
+- Implemented native YouTube support (title, description, transcripts).
+- Migrated to Vite/Wrangler bundling for both Frontend and Worker.
+- Exposed `POST /parse` and `GET /parse` in Cloudflare Worker.
+- Updated all mocks to use modular `vi.mock` instead of global globals.
+**Outcome:** Success. All 224 tests passing. App now natively supports YouTube and exposes an AI-friendly Markdown API.
+**Promoted to Lessons Learned:** Yes (Modular mocking and Bundling transitions).
+
+---
+
+### [2026-04-10] Periodic maintenance — audit and clean all config files
+
+**Context:** Periodic hygiene task to keep agent context focused and lean.
+**What happened:** Audited `AGENTS.md`, `LESSONS_LEARNED.md`, and sub-agents. Condensed `AGENTS.md` and consolidated visibility lessons.
+**Outcome:** Success. Files are leaner and more focused.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-03-01] Fix vendor.js loading failure + auto-generate PRECACHE
 
 **Context:** PDF loading was completely broken — users reported "Could not load PDF support. The vendor file may be missing." when opening any PDF (e.g. arxiv URLs like `https://arxiv.org/pdf/2602.22010`). Previous fix attempt (PR #45) addressed reading from `globalThis` after import but didn't fix the underlying path resolution bug.

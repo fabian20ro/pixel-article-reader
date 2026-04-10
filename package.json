@@ -4,16 +4,30 @@
   "description": "PWA that reads any article aloud using on-device TTS",
   "private": true,
   "scripts": {
-    "build": "tsc && node scripts/update-precache.mjs",
-    "watch": "tsc --watch",
+    "dev": "vite",
+    "build": "vite build && node scripts/update-precache.mjs",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate-icons": "node scripts/generate-icons.mjs"
+    "generate-icons": "node scripts/generate-icons.mjs",
+    "worker:dev": "wrangler dev worker/index.ts",
+    "worker:deploy": "wrangler deploy worker/index.ts"
   },
   "devDependencies": {
     "jsdom": "^28.1.0",
     "sharp": "^0.34.5",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.81.1"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "jszip": "^3.10.1",
+    "linkedom": "^0.18.12",
+    "marked": "^18.0.0",
+    "pdfjs-dist": "^5.6.205",
+    "turndown": "^7.2.4",
+    "youtube-transcript-plus": "^2.0.0"
   }
 }

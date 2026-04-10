@@ -12,7 +12,7 @@ PWA that turns any article into audio using on-device TTS with a queue-based pla
 4. Press **Play** — TTS reads the article aloud using your device's voices (Web Speech API for foreground, Google Translate TTS audio for background playback)
 5. When an article finishes, the next one in the queue auto-advances after a countdown
 
-The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches, Jina Reader requests, Google Translate TTS audio, and text translation.
+The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches, Google Translate TTS audio, and text translation.
 
 ## Quick Start
 
@@ -34,14 +34,12 @@ In Cloudflare Worker settings:
 
 1. Set `ALLOWED_ORIGIN` to `https://fabian20ro.github.io`
 2. Add secret `PROXY_SECRET` (optional)
-3. Add secret `JINA_KEY` (optional, for higher Jina limits)
 
 You can also set secrets with Wrangler:
 
 ```sh
 cd worker
 npx wrangler secret put PROXY_SECRET
-npx wrangler secret put JINA_KEY   # optional
 ```
 
 #### Step-by-step: Set `PROXY_SECRET` for the client build (optional)
@@ -84,7 +82,6 @@ If you prefer to deploy manually the first time:
 cd worker
 npx wrangler deploy
 npx wrangler secret put PROXY_SECRET
-npx wrangler secret put JINA_KEY   # optional
 # paste your secret when prompted
 ```
 
@@ -133,7 +130,6 @@ Articles are managed in a playlist-style queue:
 
 ### Reading View Actions
 
-- **Try with Jina Reader** — re-fetches the same URL via Worker `mode=markdown` using Jina Reader and re-renders
 - **Copy as Markdown** — copies normalized article markdown to clipboard
 
 ### Settings (gear icon)
@@ -279,7 +275,6 @@ npm test
 | Markdown intermediate format | Extraction output is normalized to markdown so the app can render rich content, keep TTS chunks deterministic, and support clipboard export. |
 | Queue with IndexedDB | Queue metadata in localStorage, file/pasted content in IndexedDB. URL-based articles are re-fetched from network; local content is preserved because files can't be re-read after the picker closes. |
 | Silent audio media session | A looping silent WAV keeps the PWA alive in background on Android Chrome and enables lock-screen media controls. |
-| Jina fallback mode | On-demand retry path for sites where Readability performs poorly; key is kept server-side in Worker `JINA_KEY`. |
 | Mozilla Readability.js | Battle-tested article extraction — same engine as Firefox Reader View. |
 | No bundler | Vanilla TypeScript compiled with `tsc`. ES modules loaded directly by the browser. Keeps deployment simple — just static files. |
 | GitHub Pages | Free HTTPS hosting (required for PWA + Share Target). |

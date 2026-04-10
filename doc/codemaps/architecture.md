@@ -24,13 +24,12 @@ url-utils.ts ── extractUrl() / getUrlFromParams()
   │              ├── markdown normalization
   │              └── TTS paragraph extraction
   │
-  │  (optional retry button)
-  │                      extractor.ts ── fetchViaProxy(mode=markdown)
+  │  (optional translate button)
+  │                      translator.ts ── POST /?action=translate
   │                        │                         │
-  │                        │                         └── Worker fetches https://r.jina.ai/<url>
-  │                        │                             with optional Bearer JINA_KEY
+  │                        │                         └── Worker calls Google Translate API
   │                        ▼
-  │            parseArticleFromMarkdown() ── fallback to extractArticle() on error
+  │            Article.paragraphs = translated strings
   │
   ├── No URL (pasted text) ──┐
   │                          ▼
@@ -43,7 +42,7 @@ url-utils.ts ── extractUrl() / getUrlFromParams()
 article-controller.ts
   ├── marked.parse(markdown) + sanitize
   ├── render block elements + map to TTS paragraph indices
-  ├── copy markdown / retry with Jina
+  ├── copy markdown
   └── call tts-engine.ts
 
 tts-engine.ts ── sentence chunking ── SpeechSynthesisUtterance per sentence

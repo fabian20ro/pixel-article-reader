@@ -5,6 +5,8 @@
  * URL fetch orchestration lives in extract-url.ts.
  */
 
+import { Readability } from '@mozilla/readability';
+import TurndownService from 'turndown';
 import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
@@ -17,18 +19,12 @@ import {
   countWords,
 } from './utils.js';
 
-// Readability is loaded as a global via <script> tag (vendor/Readability.js)
-declare const Readability: new (doc: Document) => {
-  parse(): { title: string; content: string; textContent: string; siteName: string; excerpt: string } | null;
-};
-
-// Turndown is loaded as a global via <script> tag (vendor/turndown.js)
-declare const TurndownService: new (options?: Record<string, unknown>) => {
-  turndown(html: string): string;
-};
-
-export function parseArticleFromHtml(html: string, sourceUrl: string): Article {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+export function parseArticleFromHtml(
+  html: string,
+  sourceUrl: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
+): Article {
+  const doc = new DOMParserConstructor().parseFromString(html, 'text/html');
 
   const htmlLang = doc.documentElement.getAttribute('lang')
     || doc.documentElement.getAttribute('xml:lang')
@@ -163,8 +159,11 @@ function prependTitleHeading(markdown: string, title: string): string {
  * Sanitize rendered HTML for safe display in the article view.
  * Removes scripts, images, dangerous attributes, etc.
  */
-export function sanitizeRenderedHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+export function sanitizeRenderedHtml(
+  html: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
+): string {
+  const doc = new DOMParserConstructor().parseFromString(`<div>${html}</div>`, 'text/html');
   const container = doc.body.firstElementChild as HTMLElement | null;
   if (!container) return '';
 

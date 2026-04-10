@@ -28,5 +28,4 @@ export const WORDS_PER_MINUTE = 180;           // spoken pace
 
 /** Shared image-stripping regex patterns for markdown content. */
 export const IMAGE_MD_RE = /!\[[^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/g;
-export const IMAGE_JINA_RE = /\[Image\s*[:\d][^\]]*\]\([^()]*(?:\([^)]*\)[^()]*)*\)/gi;
 export const IMAGE_HTML_RE = /<img[^>]*\/?>/gi;
