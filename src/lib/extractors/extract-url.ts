@@ -8,6 +8,7 @@ import {
   MAX_ARTICLE_SIZE,
   MAX_PDF_SIZE,
   PDF_FETCH_TIMEOUT,
+  UpstreamResponseError,
 } from './types.js';
 import { parsePdfFromArrayBuffer } from './extract-pdf.js';
 import { parseEpubFromArrayBuffer } from './extract-epub.js';
@@ -32,12 +33,12 @@ async function handleProxyError(resp: Response): Promise<never> {
   if (resp.status === 429) {
     const retryAfter = resp.headers.get('Retry-After');
     const waitMsg = retryAfter ? ` Try again in ${retryAfter} seconds.` : ' Please wait a moment and try again.';
-    throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
+    throw new UpstreamResponseError(429, detail || `Rate limit exceeded — too many requests.${waitMsg}`);
   }
   if (resp.status === 403) {
-    throw new Error(detail || 'Proxy rejected the request.');
+    throw new UpstreamResponseError(403, detail || 'Proxy rejected the request.');
   }
-  throw new Error(detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
+  throw new UpstreamResponseError(resp.status, detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
 }
 
 /** Check if a URL likely points to a PDF based on its path. */

@@ -7,6 +7,7 @@
 import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
+  UpstreamResponseError,
   WORDS_PER_MINUTE,
 } from './types.js';
 import {
@@ -27,6 +28,16 @@ const XML_ENTITY_MAP: Record<string, string> = {
 };
 
 const XML_TEXT_RE = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
+
+async function handleYoutubeResponse(response: Response, label: string): Promise<Response> {
+  if (response.status === 429) {
+    throw new UpstreamResponseError(429, `YouTube rate limit exceeded when ${label}.`);
+  }
+  if (!response.ok) {
+    throw new Error(`YouTube returned ${response.status} when ${label}.`);
+  }
+  return response;
+}
 
 type TranscriptSegment = {
   text: string;
@@ -103,6 +114,7 @@ export async function extractArticleFromYoutube(
     article.resolvedUrl = url;
     return article;
   } catch (err: unknown) {
+    if (err instanceof UpstreamResponseError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`YouTube extraction failed: ${msg}`);
   }
@@ -112,10 +124,7 @@ async function fetchYoutubePage(videoId: string, fetcher: typeof fetch): Promise
   const response = await fetcher(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: { 'User-Agent': USER_AGENT },
   });
-  if (!response.ok) {
-    throw new Error(`YouTube returned ${response.status} when fetching video page.`);
-  }
-  return response;
+  return handleYoutubeResponse(response, 'fetching video page');
 }
 
 function extractInnertubeApiKey(html: string): string {
@@ -145,9 +154,7 @@ async function fetchPlayerJson(videoId: string, apiKey: string, fetcher: typeof 
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(`YouTube returned ${response.status} when fetching transcript metadata.`);
-  }
+  await handleYoutubeResponse(response, 'fetching transcript metadata');
 
   return await response.json();
 }
@@ -181,9 +188,7 @@ async function fetchTranscriptSegments(track: TranscriptTrack, fetcher: typeof f
   const response = await fetcher(transcriptUrl, {
     headers: { 'User-Agent': USER_AGENT },
   });
-  if (!response.ok) {
-    throw new Error(`YouTube transcript fetch failed with status ${response.status}.`);
-  }
+  await handleYoutubeResponse(response, 'fetching transcript data');
 
   const xml = await response.text();
   return [...xml.matchAll(XML_TEXT_RE)].map((match) => ({

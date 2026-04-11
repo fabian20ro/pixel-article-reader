@@ -7,7 +7,7 @@
 import { DOMParser as LinkedomBaseDOMParser } from 'linkedom';
 import { extractArticle } from '../src/lib/extractors/extract-url.js';
 import { extractArticleFromYoutube, extractYoutubeVideoId } from '../src/lib/extractors/extract-youtube.js';
-import type { Article } from '../src/lib/extractors/types.js';
+import { type Article, UpstreamResponseError } from '../src/lib/extractors/types.js';
 
 export interface Env {
   ALLOWED_ORIGIN: string;
@@ -117,6 +117,9 @@ async function handleParseRequest(request: Request, env: Env, remaining: number)
       }, remaining),
     });
   } catch (err: unknown) {
+    if (err instanceof UpstreamResponseError) {
+      return errorResponse(err.status, err.message, env.ALLOWED_ORIGIN);
+    }
     return errorResponse(500, `Extraction failed: ${String(err)}`, env.ALLOWED_ORIGIN);
   }
 }

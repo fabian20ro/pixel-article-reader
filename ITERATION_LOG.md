@@ -868,7 +868,19 @@ Each entry should follow this structure:
 
 ---
 
-### [2026-04-11] Remediate PR 55 build, worker, and YouTube regressions
+### [2026-04-11] Fix PDF version mismatch and YouTube 429 error handling
+
+**Context:** User reported a PDF version mismatch (5.6.205 vs 4.9.155) and 500 errors when YouTube rate-limited the worker.
+
+**Changes:**
+- Synced vendored PDF.js worker/assets in `vendor/pdfjs/` from `node_modules/pdfjs-dist/legacy/build/` to match version `5.6.205`.
+- Introduced `UpstreamResponseError` in `src/lib/extractors/types.ts` to propagate status codes from extractors to the worker.
+- Updated `worker/index.ts` to return the correct status code (e.g., 429) when `UpstreamResponseError` is caught.
+- Updated `extract-youtube.ts` and `extract-url.ts` to throw `UpstreamResponseError` on rate limits and proxy errors.
+- Removed unused `youtube-transcript-plus` dependency from `package.json`.
+- Bumped `SW_VERSION` to `2026.04.11.02` to trigger cache refresh.
+
+**Outcome:** PDF extraction restored; YouTube rate limits correctly reported as 429 instead of 500; codebase cleaned up.
 
 **Context:** PR review found four merge blockers: broken Vite build output handling, extractor API misuse in the browser caller, browser-owned YouTube transcript fetching, and worker SSRF hardening regressions.
 

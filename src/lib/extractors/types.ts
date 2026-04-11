@@ -4,6 +4,13 @@
 
 import type { Language } from '../language-config.js';
 
+export class UpstreamResponseError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'UpstreamResponseError';
+  }
+}
+
 export interface Article {
   title: string;
   content: string;         // HTML from Readability

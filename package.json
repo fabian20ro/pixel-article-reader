@@ -28,7 +28,6 @@
     "linkedom": "^0.18.12",
     "marked": "^18.0.0",
     "pdfjs-dist": "^5.6.205",
-    "turndown": "^7.2.4",
-    "youtube-transcript-plus": "^2.0.0"
+    "turndown": "^7.2.4"
   }
 }
