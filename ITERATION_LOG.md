@@ -876,11 +876,15 @@ Each entry should follow this structure:
 - Synced vendored PDF.js worker/assets in `vendor/pdfjs/` from `node_modules/pdfjs-dist/legacy/build/` to match version `5.6.205`.
 - Introduced `UpstreamResponseError` in `src/lib/extractors/types.ts` to propagate status codes from extractors to the worker.
 - Updated `worker/index.ts` to return the correct status code (e.g., 429) when `UpstreamResponseError` is caught.
-- Updated `extract-youtube.ts` and `extract-url.ts` to throw `UpstreamResponseError` on rate limits and proxy errors.
+- Implemented "Stealth Headers" for YouTube:
+    - Added `ANDROID` client context with `X-Goog-Api-Format-Version: 2` and matching `User-Agent`.
+    - Switched to the more robust `json3` transcript format (replacing XML parsing).
+    - Moved metadata extraction (title/description) to use the direct API instead of HTML parsing.
+- Updated unit tests (`youtube.test.ts`, `worker.test.ts`) to match the new JSON-based implementation.
 - Removed unused `youtube-transcript-plus` dependency from `package.json`.
 - Bumped `SW_VERSION` to `2026.04.11.02` to trigger cache refresh.
 
-**Outcome:** PDF extraction restored; YouTube rate limits correctly reported as 429 instead of 500; codebase cleaned up.
+**Outcome:** PDF extraction restored; YouTube rate limits correctly reported as 429 instead of 500; YouTube extraction is much more robust against bot detection; codebase cleaned up.
 
 **Context:** PR review found four merge blockers: broken Vite build output handling, extractor API misuse in the browser caller, browser-owned YouTube transcript fetching, and worker SSRF hardening regressions.
 

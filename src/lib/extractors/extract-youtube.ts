@@ -15,19 +15,11 @@ import {
   countWords,
 } from './utils.js';
 
-const USER_AGENT =
-  'Mozilla/5.0 (Linux; Android 14; Pixel 9a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
+const DESKTOP_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
 
-const XML_ENTITY_MAP: Record<string, string> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&apos;': "'",
-};
-
-const XML_TEXT_RE = /<text start="([^"]*)" dur="([^"]*)">([^<]*)<\/text>/g;
+const ANDROID_USER_AGENT =
+  'com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US)';
 
 async function handleYoutubeResponse(response: Response, label: string): Promise<Response> {
   if (response.status === 429) {
@@ -86,9 +78,12 @@ export async function extractArticleFromYoutube(
   try {
     const watchResponse = await fetchYoutubePage(videoId, fetcher);
     const html = await watchResponse.text();
-    const metadata = parseYoutubeMetadata(html);
     const apiKey = extractInnertubeApiKey(html);
     const playerJson = await fetchPlayerJson(videoId, apiKey, fetcher);
+
+    const title = playerJson.videoDetails?.title || 'YouTube Video';
+    const description = (playerJson.videoDetails?.shortDescription || '').trim();
+
     const track = pickTranscriptTrack(playerJson);
     const transcriptItems = await fetchTranscriptSegments(track, fetcher);
 
@@ -97,16 +92,15 @@ export async function extractArticleFromYoutube(
     }
 
     const paragraphs = groupTranscriptIntoParagraphs(transcriptItems.map((item) => item.text));
-    const title = `Transcript for: ${metadata.title}`;
-    const description = metadata.description.trim();
+    const articleTitle = `Transcript for: ${title}`;
     const textContent = paragraphs.join('\n\n');
-    const markdownParts = [`# ${title}`];
+    const markdownParts = [`# ${articleTitle}`];
     if (description) {
       markdownParts.push(`> ${description.replace(/\n/g, '\n> ')}`);
     }
     markdownParts.push(textContent);
 
-    const article = buildArticleFromParagraphs(paragraphs, title, 'YouTube', markdownParts.join('\n\n'));
+    const article = buildArticleFromParagraphs(paragraphs, articleTitle, 'YouTube', markdownParts.join('\n\n'));
     article.lang = detectLanguage(textContent);
     article.excerpt = description.slice(0, 200) || textContent.slice(0, 200);
     article.wordCount = countWords(textContent);
@@ -122,7 +116,10 @@ export async function extractArticleFromYoutube(
 
 async function fetchYoutubePage(videoId: string, fetcher: typeof fetch): Promise<Response> {
   const response = await fetcher(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: { 'User-Agent': USER_AGENT },
+    headers: {
+      'User-Agent': DESKTOP_USER_AGENT,
+      'Referer': 'https://www.youtube.com/ ',
+    },
   });
   return handleYoutubeResponse(response, 'fetching video page');
 }
@@ -141,13 +138,18 @@ async function fetchPlayerJson(videoId: string, apiKey: string, fetcher: typeof 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': USER_AGENT,
+      'User-Agent': ANDROID_USER_AGENT,
+      'X-Goog-Api-Format-Version': '2',
+      'Referer': 'https://www.youtube.com/ ',
     },
     body: JSON.stringify({
       context: {
         client: {
           clientName: 'ANDROID',
           clientVersion: '20.10.38',
+          androidSdkVersion: 32,
+          hl: 'en',
+          gl: 'US',
         },
       },
       videoId,
@@ -180,51 +182,30 @@ function pickTranscriptTrack(playerJson: any): TranscriptTrack {
 }
 
 async function fetchTranscriptSegments(track: TranscriptTrack, fetcher: typeof fetch): Promise<TranscriptSegment[]> {
-  const transcriptUrl = (track.baseUrl || track.url || '').replace(/&fmt=[^&]+/, '');
+  const transcriptUrl = (track.baseUrl || track.url || '').replace(/&fmt=[^&]+/, '') + '&fmt=json3';
   if (!transcriptUrl) {
     throw new Error('Transcript track is missing a fetch URL.');
   }
 
   const response = await fetcher(transcriptUrl, {
-    headers: { 'User-Agent': USER_AGENT },
+    headers: {
+      'User-Agent': ANDROID_USER_AGENT,
+      'Referer': 'https://www.youtube.com/ ',
+    },
   });
   await handleYoutubeResponse(response, 'fetching transcript data');
 
-  const xml = await response.text();
-  return [...xml.matchAll(XML_TEXT_RE)].map((match) => ({
-    text: decodeXmlEntities(match[3]),
-    duration: parseFloat(match[2]),
-    offset: parseFloat(match[1]),
-    lang: track.languageCode || 'en',
-  }));
-}
+  const data = await response.json() as any;
+  const events = data.events || [];
 
-/** Extract title and description from YouTube video page HTML using ytInitialPlayerResponse. */
-function parseYoutubeMetadata(html: string): { title: string; description: string } {
-  let title = 'YouTube Video';
-  let description = '';
-
-  try {
-    const match = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
-    if (match) {
-      const data = JSON.parse(match[1]);
-      title = data.videoDetails?.title || title;
-      description = data.videoDetails?.shortDescription || '';
-    } else {
-      const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-      if (titleMatch) {
-        title = titleMatch[1].replace(' - YouTube', '').trim();
-      }
-    }
-  } catch {
-    // Ignore malformed metadata and keep fallback title.
-  }
-
-  return { title, description };
-}
-
-function decodeXmlEntities(text: string): string {
-  return text.replace(/&(?:amp|lt|gt|quot|apos|#39);/g, (match) => XML_ENTITY_MAP[match] ?? match);
+  return events
+    .filter((event: any) => event.segs)
+    .map((event: any) => ({
+      text: event.segs.map((seg: any) => seg.utf8).join(''),
+      duration: (event.dDurationMs || 0) / 1000,
+      offset: (event.tStartMs || 0) / 1000,
+      lang: track.languageCode || 'en',
+    }));
 }
 
 /** Group short transcript segments into readable paragraphs. */

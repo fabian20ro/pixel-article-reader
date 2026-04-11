@@ -57,7 +57,7 @@ describe('worker youtube parse', () => {
 
       if (url.startsWith('https://www.youtube.com/watch?v=dQw4w9WgXcQ')) {
         return new Response(
-          `<html><script>var ytInitialPlayerResponse = {"videoDetails":{"title":"Worker Video","shortDescription":"Transcript desc"}};</script>"INNERTUBE_API_KEY":"worker-key"</html>`,
+          `<html>"INNERTUBE_API_KEY":"worker-key"</html>`,
           { status: 200, headers: { 'content-type': 'text/html' } },
         );
       }
@@ -65,6 +65,10 @@ describe('worker youtube parse', () => {
       if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=worker-key')) {
         expect(init?.method).toBe('POST');
         return new Response(JSON.stringify({
+          videoDetails: {
+            title: "Worker Video",
+            shortDescription: "Transcript desc"
+          },
           captions: {
             playerCaptionsTracklistRenderer: {
               captionTracks: [
@@ -80,10 +84,12 @@ describe('worker youtube parse', () => {
       }
 
       if (url.startsWith('https://www.youtube.com/api/timedtext')) {
-        return new Response(
-          '<transcript><text start="0" dur="1">Hello.</text><text start="1" dur="1">Worker path transcript.</text></transcript>',
-          { status: 200, headers: { 'content-type': 'text/xml' } },
-        );
+        return new Response(JSON.stringify({
+          events: [
+            { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello.' }] },
+            { tStartMs: 1000, dDurationMs: 1000, segs: [{ utf8: 'Worker path transcript.' }] }
+          ]
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
 
       throw new Error(`Unexpected worker fetch: ${url}`);

@@ -26,13 +26,13 @@ describe('extractYoutubeVideoId', () => {
 describe('extractArticleFromYoutube', () => {
   const YT_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 
-  it('fetches metadata, player info, and transcript XML', async () => {
+  it('fetches metadata, player info, and transcript JSON', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
 
       if (url.startsWith('https://www.youtube.com/watch?v=')) {
         return new Response(
-          `<html><script>var ytInitialPlayerResponse = {"videoDetails":{"title":"Test Video","shortDescription":"Line one\\nLine two"}};</script>"INNERTUBE_API_KEY":"abc123"</html>`,
+          `<html>"INNERTUBE_API_KEY":"abc123"</html>`,
           { status: 200, headers: { 'content-type': 'text/html' } },
         );
       }
@@ -40,6 +40,10 @@ describe('extractArticleFromYoutube', () => {
       if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=abc123')) {
         expect(init?.method).toBe('POST');
         return new Response(JSON.stringify({
+          videoDetails: {
+            title: "Test Video",
+            shortDescription: "Line one\nLine two"
+          },
           captions: {
             playerCaptionsTracklistRenderer: {
               captionTracks: [
@@ -55,10 +59,12 @@ describe('extractArticleFromYoutube', () => {
       }
 
       if (url.startsWith('https://www.youtube.com/api/timedtext')) {
-        return new Response(
-          '<transcript><text start="0" dur="1">Hello world.</text><text start="1" dur="1">This is a test transcript.</text></transcript>',
-          { status: 200, headers: { 'content-type': 'text/xml' } },
-        );
+        return new Response(JSON.stringify({
+          events: [
+            { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello world.' }] },
+            { tStartMs: 1000, dDurationMs: 1000, segs: [{ utf8: 'This is a test transcript.' }] }
+          ]
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
 
       throw new Error(`Unexpected URL ${url}`);
@@ -74,12 +80,12 @@ describe('extractArticleFromYoutube', () => {
     expect(article.resolvedUrl).toBe(YT_URL);
   });
 
-  it('falls back to the page title when player metadata is missing', async () => {
+  it('defaults to "YouTube Video" when player title is missing', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
       if (url.startsWith('https://www.youtube.com/watch?v=')) {
         return new Response(
-          '<html><head><title>Fallback Title - YouTube</title></head>"INNERTUBE_API_KEY":"abc123"</html>',
+          '<html>"INNERTUBE_API_KEY":"abc123"</html>',
           { status: 200 },
         );
       }
@@ -93,11 +99,13 @@ describe('extractArticleFromYoutube', () => {
           playabilityStatus: { status: 'OK' },
         }), { status: 200 });
       }
-      return new Response('<transcript><text start="0" dur="1">Hello world.</text></transcript>', { status: 200 });
+      return new Response(JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello world.' }] }]
+      }), { status: 200 });
     });
 
     const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
-    expect(article.title).toBe('Transcript for: Fallback Title');
+    expect(article.title).toBe('Transcript for: YouTube Video');
   });
 
   it('throws if no transcript tracks are available', async () => {
