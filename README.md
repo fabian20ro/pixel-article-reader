@@ -46,7 +46,8 @@ The site will be available at `https://fabian20ro.github.io/pixel-article-reader
 
 ### 3. Deploy the Cloudflare Worker
 
-`deploy-worker.yml` deploys the Worker after the `CI` workflow succeeds on `main`.
+The `deploy-worker.yml` workflow deploys the Worker after the `CI` workflow succeeds on `main`. It uses the repository-locked `wrangler` version to ensure consistency.
+
 Add these repository secrets first:
 
 - `CLOUDFLARE_API_TOKEN`

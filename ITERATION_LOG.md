@@ -910,4 +910,21 @@ Each entry should follow this structure:
 
 ---
 
-<!-- New entries go above this line, most recent first -->
+### [2026-04-11] Fix `Deploy Worker` CI failure and upgrade GitHub Actions
+
+**Context:** The `Deploy Worker` workflow was failing due to environment drift and a lack of dependency installation. The `cloudflare/wrangler-action@v3` was using its own Wrangler version and hiding useful error output.
+
+**What happened:**
+- Removed `cloudflare/wrangler-action@v3` from `.github/workflows/deploy-worker.yml`.
+- Replaced it with a standard `actions/setup-node` + `npm ci` + `npm run worker:deploy` flow to use the repository-locked `wrangler` version.
+- Upgraded `actions/checkout` to `@v5` and `actions/setup-node` to `@v6` across all workflows (`ci.yml`, `deploy-pages.yml`, `deploy-worker.yml`) to use more secure and efficient versions.
+- Updated `README.md` to reflect the new Worker deployment path and clarify that it uses the repo-locked `wrangler`.
+- Verified the fix locally with `npm run worker:deploy -- --dry-run` and checked `npx wrangler --version` (matched lockfile `4.81.1`).
+
+**Outcome:** Success. The workflows are now more robust, consistent with the local environment, and easier to debug.
+
+**Insight:** Using official "wrapper" actions like `wrangler-action` can lead to version drift between your local environment (lockfile) and CI. For critical deployment tools, it's often safer to use the project-locked version via `npm ci` and direct CLI calls. This also ensures that any shared code or dependencies imported by the Worker are correctly resolved.
+
+**Promoted to Lessons Learned:** No
+
+---
