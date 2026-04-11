@@ -40,7 +40,7 @@ Converts fetched content into `Article` with markdown and TTS paragraphs.
 
 | Function | Purpose |
 |----------|---------|
-| `extractArticle(url, proxyBase, proxySecret?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
+| `extractArticle(url, proxyBase, proxySecret?, options?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
 | `createArticleFromText(text)` | Creates article from pasted text without fetching |
 
 **Pipeline details:**
@@ -132,16 +132,17 @@ Language detection and translation gating heuristics.
 
 ---
 
-## worker/cors-proxy.js — Cloudflare Worker
+## worker/index.ts — Cloudflare Worker
 
 Endpoints:
 - `GET /?url=...` → fetch HTML/PDF/EPUB
 - `POST /?action=translate` → Google Translate API proxy
+- `POST /parse` → parse URL and return either markdown or a JSON `Article`
 
 Security and limits:
 - SSRF blocklist
 - Optional `X-Proxy-Key` auth via `PROXY_SECRET`
-- 20 req/min per IP
+- 60 req/min per IP
 - 2 MB max response
 - 10s upstream timeout
 
@@ -156,8 +157,8 @@ Security and limits:
 
 ---
 
-## vendor/* — Browser Globals
+## dist/sw.js — Built Service Worker
 
-- `Readability.js` → `Readability`
-- `turndown.js` → `TurndownService`
-- `marked.js` → `marked.parse`
+- Generated from repo-root `sw.js`
+- Precache list derived from emitted `dist/` assets
+- `SW_VERSION` still sourced manually from `sw.js`

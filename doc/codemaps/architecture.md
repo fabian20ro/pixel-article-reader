@@ -10,12 +10,13 @@ url-utils.ts ── extractUrl() / getUrlFromParams()
   │
   ├── URL found ────────────────────────────────────────────────────────┐
   │                                                                      ▼
-  │                      extractor.ts ── fetchViaProxy(mode=html)
+  │                      extractor.ts ── Worker raw fetch or `/parse`
   │                        │                         │
   │                        │                         ├── SSRF check
   │                        │                         ├── Auth (X-Proxy-Key)
-  │                        │                         ├── Rate limit (20 req/min)
-  │                        │                         └── Fetch target HTML
+  │                        │                         ├── Rate limit (60 req/min)
+  │                        │                         ├── Fetch target HTML/PDF/EPUB
+  │                        │                         └── Fetch YouTube transcript server-side
   │                        │
   │                        ▼
   │            parseArticleFromHtml()
@@ -68,11 +69,10 @@ app.ts
 
 ## Runtime Loading Order
 
-1. `vendor/Readability.js` — global `Readability`
-2. `vendor/turndown.js` — global `TurndownService`
-3. `vendor/marked.js` — global `marked.parse`
-4. `app.js` — ES module entrypoint
-5. `sw.js` — registered by `pwa-update-manager`
+1. `index.html` loads `/src/app.ts` in dev or hashed `dist/assets/*.js` in production
+2. NPM dependencies are bundled by Vite into `dist/assets/*`
+3. `dist/sw.js` is generated from repo-root `sw.js`
+4. `sw.js` is registered by `pwa-update-manager`
 
 ## Deployment Targets
 

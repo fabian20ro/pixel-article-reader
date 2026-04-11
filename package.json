@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/update-precache.mjs",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "generate-icons": "node scripts/generate-icons.mjs",

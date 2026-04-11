@@ -208,7 +208,9 @@ export class ArticleController {
         url,
         this.options.proxyBase,
         this.options.proxySecret,
-        (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+        {
+          onProgress: (msg: string) => { this.options.refs.loadingMessage.textContent = msg; },
+        },
       );
       this.currentArticle = article;
       this.currentArticleUrl = article.resolvedUrl;

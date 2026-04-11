@@ -1,66 +1,65 @@
 /**
- * Auto-generate the PRECACHE array and SW_VERSION in sw.js from actual files.
+ * Emit a Vite-aware service worker into `dist/`.
  *
- * Scans lib/, vendor/, and root static assets, then replaces the PRECACHE
- * constant and bumps SW_VERSION so the service worker invalidates stale caches.
- *
- * Usage: node scripts/update-precache.mjs        (runs as part of `npm run build`)
+ * Source of truth stays in the repo-root `sw.js`.
+ * `SW_VERSION` remains manual there. This script only rewrites `PRECACHE`
+ * against the actual emitted `dist/` files, then writes `dist/sw.js`.
  */
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const swPath = join(root, 'sw.js');
+const templateSwPath = join(root, 'sw.js');
+const distDir = join(root, 'dist');
+const outputSwPath = join(distDir, 'sw.js');
 
-// ── Collect files ────────────────────────────────────────────────────
-/** Recursively collect file paths under `dir` relative to project root. */
-function collectFiles(dir) {
+export function collectDistFiles(dir, rootDir = dir) {
   const results = [];
+
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
+    const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      results.push(...collectFiles(full));
-    } else {
-      results.push('./' + relative(root, full));
+      results.push(...collectDistFiles(fullPath, rootDir));
+      continue;
     }
+    const relPath = relative(rootDir, fullPath).replace(/\\/g, '/');
+    if (relPath === 'sw.js') continue;
+    results.push(`./${relPath}`);
   }
+
   return results;
 }
 
-// Static root assets (always precached)
-const rootAssets = ['./', './index.html', './style.css', './app.js', './manifest.json'];
+export function renderServiceWorker(template, precacheEntries) {
+  const precacheRe = /const PRECACHE = \[[\s\S]*?\];/;
+  if (!precacheRe.test(template)) {
+    throw new Error('PRECACHE pattern not found in sw.js');
+  }
 
-// Scan lib/ and vendor/ for all files
-const libFiles = collectFiles(join(root, 'lib')).sort();
-const vendorFiles = collectFiles(join(root, 'vendor')).sort();
+  const escapedEntries = precacheEntries
+    .map((entry) => entry.replace(/\\/g, '\\\\').replace(/'/g, "\\'"))
+    .map((entry) => `  '${entry}',`)
+    .join('\n');
 
-const precacheEntries = [...rootAssets, ...vendorFiles, ...libFiles];
+  return template.replace(precacheRe, `const PRECACHE = [\n${escapedEntries}\n];`);
+}
 
-// ── Generate SW_VERSION ──────────────────────────────────────────────
-const now = new Date();
-const pad = (n) => String(n).padStart(2, '0');
-const version = `${now.getUTCFullYear()}.${pad(now.getUTCMonth() + 1)}.${pad(now.getUTCDate())}.${pad(now.getUTCHours())}`;
+export function syncDistServiceWorker() {
+  if (!existsSync(distDir) || !statSync(distDir).isDirectory()) {
+    throw new Error('dist/ does not exist. Run `vite build` before update-precache.');
+  }
 
-// ── Update sw.js ─────────────────────────────────────────────────────
-const original = readFileSync(swPath, 'utf8');
-let sw = original;
+  const template = readFileSync(templateSwPath, 'utf8');
+  const precacheEntries = ['./', ...collectDistFiles(distDir).sort()];
+  const rendered = renderServiceWorker(template, precacheEntries);
+  writeFileSync(outputSwPath, rendered);
+  return { outputSwPath, precacheEntries };
+}
 
-// Replace SW_VERSION
-const versionRe = /^const SW_VERSION = '[^']*';/m;
-if (!versionRe.test(sw)) throw new Error('SW_VERSION pattern not found in sw.js');
-sw = sw.replace(versionRe, `const SW_VERSION = '${version}';`);
-
-// Replace PRECACHE array (match from `const PRECACHE = [` to `];`)
-const precacheRe = /const PRECACHE = \[[\s\S]*?\];/;
-if (!precacheRe.test(sw)) throw new Error('PRECACHE pattern not found in sw.js');
-const escape = (s) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-const precacheStr = 'const PRECACHE = [\n'
-  + precacheEntries.map((e) => `  '${escape(e)}',`).join('\n')
-  + '\n];';
-sw = sw.replace(precacheRe, precacheStr);
-
-writeFileSync(swPath, sw);
-
-console.log(`sw.js updated: SW_VERSION=${version}, ${precacheEntries.length} precache entries`);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const { outputSwPath, precacheEntries } = syncDistServiceWorker();
+  console.log(`wrote ${outputSwPath} with ${precacheEntries.length} precache entries`);
+}

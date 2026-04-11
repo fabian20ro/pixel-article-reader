@@ -6,13 +6,13 @@ PWA that turns any article into audio using on-device TTS with a queue-based pla
 
 ## How It Works
 
-1. **Share, paste, or upload** an article URL, text, or file (PDF/TXT/MD/EPUB)
+1. **Share, paste, or upload** an article URL, text, file, or YouTube link (PDF/TXT/MD/EPUB/YouTube)
 2. The app fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
 3. Articles are added to a **queue** — play now or add to queue for later
 4. Press **Play** — TTS reads the article aloud using your device's voices (Web Speech API for foreground, Google Translate TTS audio for background playback)
 5. When an article finishes, the next one in the queue auto-advances after a countdown
 
-The entire app runs client-side. The only server component is a lightweight Cloudflare Worker that proxies article fetches, Google Translate TTS audio, and text translation.
+The app runs mostly client-side. The Cloudflare Worker proxies article fetches, Google Translate TTS audio, text translation, and YouTube transcript extraction.
 
 ## Quick Start
 
@@ -57,10 +57,10 @@ If Worker `PROXY_SECRET` is set but the client secret is missing/mismatched, pro
 
 GitHub Actions handles this automatically. On every push to `main`:
 
-1. TypeScript is compiled
+1. Typecheck runs
 2. Tests are run
 3. `PROXY_SECRET` is injected into the client config when the GitHub secret is set
-4. The app shell is deployed to GitHub Pages
+4. Vite builds `dist/`, emits `dist/sw.js`, and the built app shell is deployed to GitHub Pages
 
 To enable: go to **Settings > Pages > Source** and select **GitHub Actions**.
 
@@ -191,11 +191,12 @@ npm install
 ### Build
 
 ```sh
-npm run build    # compile TypeScript once
-npm run watch    # compile on file changes
+npm run typecheck
+npm test
+npm run build
 ```
 
-TypeScript source lives in `src/`. Compiled JS output goes to the project root (`app.js`, `lib/*.js`) and is generated during build/deploy (not tracked in git).
+TypeScript source lives in `src/`. Production output is emitted to `dist/` by Vite. `scripts/update-precache.mjs` then renders `dist/sw.js` from the emitted asset list while keeping `sw.js` in the repo as the manual version source.
 
 ### Test
 
@@ -207,61 +208,27 @@ npm test
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `deploy-pages.yml` | Push to `main` | Builds TS, runs tests, deploys to GitHub Pages |
+| `ci.yml` | Push / PR | Runs typecheck, tests, and production build |
+| `deploy-pages.yml` | Push to `main` | Injects release secrets, rebuilds `dist/`, deploys to GitHub Pages |
 
 ### Project Structure
 
 ```
-├── index.html              # App shell
-├── style.css               # Mobile-first dark theme
-├── manifest.json           # PWA manifest with Share Target
-├── sw.js                   # Service Worker (network-first nav + stale-while-revalidate assets)
-├── app.js                  # Generated at build time (gitignored)
-├── lib/                    # Generated JS at build time (gitignored)
-│   ├── url-utils.js
-│   ├── lang-detect.js
-│   ├── extractor.js
-│   ├── translator.js
-│   ├── settings-store.js
-│   ├── dom-refs.js
-│   ├── pwa-update-manager.js
-│   ├── article-controller.js
-│   ├── article-content-store.js
-│   ├── queue-store.js
-│   ├── queue-controller.js
-│   ├── media-session.js
-│   ├── tts-audio-fetcher.js
-│   ├── release.js
-│   └── tts-engine.js
+├── index.html              # App shell template
+├── style.css               # Global app styles
+├── manifest.json           # PWA manifest source
+├── sw.js                   # Service Worker template + manual SW_VERSION
+├── dist/                   # Vite build output (generated)
 ├── src/                    # TypeScript source
-│   ├── app.ts
-│   └── lib/
-│       ├── url-utils.ts
-│       ├── lang-detect.ts
-│       ├── extractor.ts
-│       ├── translator.ts
-│       ├── settings-store.ts
-│       ├── dom-refs.ts
-│       ├── pwa-update-manager.ts
-│       ├── article-controller.ts
-│       ├── article-content-store.ts
-│       ├── queue-store.ts
-│       ├── queue-controller.ts
-│       ├── media-session.ts
-│       ├── tts-audio-fetcher.ts
-│       ├── release.ts
-│       └── tts-engine.ts
-├── vendor/
-│   ├── Readability.js      # Mozilla Readability (vendored)
-│   ├── turndown.js         # Markdown conversion adapter (global TurndownService)
-│   └── marked.js           # Markdown renderer adapter (global marked.parse)
 ├── worker/
-│   ├── cors-proxy.js       # Cloudflare Worker CORS proxy
+│   ├── index.ts            # Cloudflare Worker
 │   └── wrangler.toml       # Wrangler deployment config
 ├── .github/workflows/
-│   ├── deploy-pages.yml    # GitHub Pages CI/CD
+│   ├── ci.yml              # Typecheck/test/build gate
+│   └── deploy-pages.yml    # GitHub Pages deploy
 ├── icons/                  # PWA icons (192px, 512px)
 ├── tsconfig.json
+├── tsconfig.worker.json
 └── package.json
 ```
 
@@ -276,7 +243,7 @@ npm test
 | Queue with IndexedDB | Queue metadata in localStorage, file/pasted content in IndexedDB. URL-based articles are re-fetched from network; local content is preserved because files can't be re-read after the picker closes. |
 | Silent audio media session | A looping silent WAV keeps the PWA alive in background on Android Chrome and enables lock-screen media controls. |
 | Mozilla Readability.js | Battle-tested article extraction — same engine as Firefox Reader View. |
-| No bundler | Vanilla TypeScript compiled with `tsc`. ES modules loaded directly by the browser. Keeps deployment simple — just static files. |
+| Vite build + generated SW | The app now ships as hashed `dist/assets/*` bundles. `sw.js` stays human-edited for `SW_VERSION`, then `scripts/update-precache.mjs` renders the final `dist/sw.js` from emitted assets. |
 | GitHub Pages | Free HTTPS hosting (required for PWA + Share Target). |
 
 ### Language Detection

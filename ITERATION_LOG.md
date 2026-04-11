@@ -868,4 +868,24 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-11] Remediate PR 55 build, worker, and YouTube regressions
+
+**Context:** PR review found four merge blockers: broken Vite build output handling, extractor API misuse in the browser caller, browser-owned YouTube transcript fetching, and worker SSRF hardening regressions.
+
+**What happened:**
+- Reworked `extractArticle()` to take an options object for `domParserCtor`, `onProgress`, and `fetcher`, then updated the browser caller and regression coverage.
+- Moved YouTube transcript extraction to a worker-first path: browser YouTube URLs now call `POST /parse` with `format: "article"`, while the worker performs watch-page fetch, Innertube player lookup, and transcript XML fetch server-side.
+- Replaced the old precache generator with a Vite-aware `dist/sw.js` emitter that derives PRECACHE entries from actual `dist/` assets while leaving repo-root `sw.js` as the manual `SW_VERSION` source.
+- Hardened `worker/index.ts`: restored initial URL validation, timeout-backed fetches, body-size enforcement, binary magic-byte checks, rate-limit cleanup, and response headers.
+- Added CI/build gates (`typecheck`, `test`, `build`) plus targeted tests for browser load-call regression, worker SSRF rejection, worker YouTube parse flow, and precache generation.
+- Updated README and codemap docs for Vite output, `worker/index.ts`, and the generated service-worker flow.
+
+**Outcome:** Success. `npm run typecheck`, `npm test`, and `npm run build` all pass; `dist/sw.js` is emitted from built assets and YouTube extraction no longer depends on browser-side direct YouTube fetches.
+
+**Insight:** When a shared API grows environment-specific optional parameters, positional arguments become a footgun fast. An options object prevents browser/worker call-site drift and makes test coverage target the behavior instead of placeholder argument ordering.
+
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->

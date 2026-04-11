@@ -615,7 +615,7 @@ describe('extractArticle PDF URL detection', () => {
     mockFetch('%PDF-1.4');
 
     const progressMessages: string[] = [];
-    await extractArticle(pdfUrl, PROXY, undefined, undefined, (msg) => progressMessages.push(msg));
+    await extractArticle(pdfUrl, PROXY, undefined, { onProgress: (msg) => progressMessages.push(msg) });
 
     expect(progressMessages).toContain('Downloading PDF...');
     expect(progressMessages.some((m) => m.includes('Extracting text'))).toBe(true);

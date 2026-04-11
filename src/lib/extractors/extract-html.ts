@@ -46,11 +46,11 @@ export function parseArticleFromHtml(
   let excerpt: string;
 
   if (parsed) {
-    title = parsed.title;
-    textContent = parsed.textContent;
-    content = parsed.content;
+    title = parsed.title || 'Untitled';
+    textContent = parsed.textContent || '';
+    content = parsed.content || '';
     siteName = parsed.siteName || new URL(sourceUrl).hostname;
-    excerpt = parsed.excerpt;
+    excerpt = parsed.excerpt || '';
   } else {
     const pElements = doc.querySelectorAll('p');
     const paragraphs = Array.from(pElements).map((p) => p.textContent?.trim() ?? '');

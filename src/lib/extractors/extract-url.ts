@@ -12,7 +12,12 @@ import {
 import { parsePdfFromArrayBuffer } from './extract-pdf.js';
 import { parseEpubFromArrayBuffer } from './extract-epub.js';
 import { parseArticleFromHtml } from './extract-html.js';
-import { extractArticleFromYoutube, extractYoutubeVideoId } from './extract-youtube.js';
+
+export interface ExtractArticleOptions {
+  domParserCtor?: new () => { parseFromString(html: string, type: string): Document };
+  onProgress?: (message: string) => void;
+  fetcher?: typeof fetch;
+}
 
 /**
  * Handle non-OK proxy responses with detailed error messages.
@@ -58,7 +63,56 @@ function isEpubUrl(url: string): boolean {
 
 /** Check if a URL is a YouTube URL. */
 function isYoutubeUrl(url: string): boolean {
-  return extractYoutubeVideoId(url) !== null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) {
+      return parsed.pathname.length > 1;
+    }
+    if (!parsed.hostname.includes('youtube.com')) {
+      return false;
+    }
+    return parsed.pathname.startsWith('/watch')
+      || parsed.pathname.startsWith('/embed/')
+      || parsed.pathname.startsWith('/shorts/');
+  } catch {
+    return false;
+  }
+}
+
+function buildProxyHeaders(proxySecret?: string, extra: Record<string, string> = {}): Record<string, string> {
+  return proxySecret ? { ...extra, 'X-Proxy-Key': proxySecret } : extra;
+}
+
+function buildWorkerParseUrl(proxyBase: string): string {
+  return `${proxyBase.replace(/\/$/, '')}/parse`;
+}
+
+async function extractArticleViaWorkerParse(
+  url: string,
+  proxyBase: string,
+  proxySecret?: string,
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<Article> {
+  let resp: Response;
+
+  try {
+    resp = await fetcher(buildWorkerParseUrl(proxyBase), {
+      method: 'POST',
+      headers: buildProxyHeaders(proxySecret, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ url, format: 'article' }),
+    });
+  } catch (err: unknown) {
+    if (err instanceof TypeError) {
+      throw new Error('Could not reach the article proxy. Check your internet connection or try again later.');
+    }
+    throw err;
+  }
+
+  if (!resp.ok) {
+    await handleProxyError(resp);
+  }
+
+  return await resp.json() as Article;
 }
 
 /**
@@ -122,23 +176,22 @@ export async function extractArticle(
   url: string,
   proxyBase: string,
   proxySecret?: string,
-  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document } = globalThis.DOMParser,
-  onProgress?: (message: string) => void,
-  fetcher: typeof fetch = globalThis.fetch,
+  options: ExtractArticleOptions = {},
 ): Promise<Article> {
+  const {
+    domParserCtor: DOMParserConstructor = globalThis.DOMParser,
+    onProgress,
+    fetcher = globalThis.fetch,
+  } = options;
   const useProxy = proxyBase !== '';
 
   // YouTube path
   if (isYoutubeUrl(url)) {
     onProgress?.('Fetching YouTube transcript...');
-    const youtubeFetcher = useProxy ? (input: RequestInfo | URL, init?: RequestInit) => {
-      const targetUrl = input.toString();
-      const proxyUrl = `${proxyBase}?url=${encodeURIComponent(targetUrl)}`;
-      const headers: Record<string, string> = { ...(init?.headers as Record<string, string>) };
-      if (proxySecret) headers['X-Proxy-Key'] = proxySecret;
-      return fetcher(proxyUrl, { ...init, headers });
-    } : fetcher;
-    return extractArticleFromYoutube(url, youtubeFetcher);
+    if (!useProxy) {
+      throw new Error('Direct YouTube extraction is only supported through the worker parse API.');
+    }
+    return extractArticleViaWorkerParse(url, proxyBase, proxySecret, fetcher);
   }
 
   // Fast path: URL clearly ends in .pdf
@@ -158,10 +211,7 @@ export async function extractArticle(
   onProgress?.('Fetching content...');
 
   const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(url)}` : url;
-  const headers: Record<string, string> = {};
-  if (useProxy && proxySecret) {
-    headers['X-Proxy-Key'] = proxySecret;
-  }
+  const headers = useProxy ? buildProxyHeaders(proxySecret) : {};
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
