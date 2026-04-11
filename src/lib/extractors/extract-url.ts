@@ -65,10 +65,12 @@ function isEpubUrl(url: string): boolean {
 function isYoutubeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    if (parsed.hostname.includes('youtu.be')) {
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === 'youtu.be') {
       return parsed.pathname.length > 1;
     }
-    if (!parsed.hostname.includes('youtube.com')) {
+    const isYoutubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+    if (!isYoutubeHost) {
       return false;
     }
     return parsed.pathname.startsWith('/watch')
