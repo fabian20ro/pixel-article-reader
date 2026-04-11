@@ -910,6 +910,23 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-11] Fix `DOMMatrix` ReferenceError in Cloudflare Worker
+
+**Context:** The Worker was failing to deploy with `ReferenceError: DOMMatrix is not defined`. This occurred because `pdfjs-dist` (statically imported by the extractor) references browser-only APIs at top-level.
+
+**What happened:**
+- Converted the static import of `pdfjs-dist` in `src/lib/extractors/extract-pdf.ts` to a dynamic import wrapped in a lazy-loader.
+- This defers the evaluation of the heavy/browser-only PDF library until it's actually needed, allowing the Worker to pass Cloudflare's script validation during deployment.
+- Verified that the Worker's `POST /parse` path for standard HTML/YouTube URLs remains lightweight and unaffected.
+
+**Outcome:** Success. Worker deployment validation passed.
+
+**Insight:** In shared library architectures, statically importing browser-only libraries at the top level is a "deployment footgun" for non-browser environments like Cloudflare Workers. Always use dynamic imports for platform-specific heavy lifting to ensure your entry points stay lightweight and environment-agnostic.
+
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-04-11] Fix `Deploy Worker` CI failure and upgrade GitHub Actions
 
 **Context:** The `Deploy Worker` workflow was failing due to environment drift and a lack of dependency installation. The `cloudflare/wrangler-action@v3` was using its own Wrangler version and hiding useful error output.

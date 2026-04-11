@@ -1,4 +1,3 @@
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
@@ -38,6 +37,17 @@ export type PdfJsDocument = {
   getDestination(dest: string): Promise<unknown[] | null>;
   getPageIndex(ref: unknown): Promise<number>;
 };
+
+let cachedPdfjsLib: any = null;
+async function getPdfjsLib() {
+  if (!cachedPdfjsLib) {
+    cachedPdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    if (typeof window !== 'undefined' && !cachedPdfjsLib.GlobalWorkerOptions.workerSrc) {
+      cachedPdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', document.baseURI).href;
+    }
+  }
+  return cachedPdfjsLib;
+}
 
 /**
  * Create an Article from a local PDF file.
@@ -121,13 +131,7 @@ export async function parsePdfFromArrayBuffer(
   sourceUrl: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  // Phase 1: Extract raw text from each page
-  // Note: we assume pdfjsLib is available via import (Worker or Browser bundle)
-  // We need to set the workerSrc for the browser environment.
-  // In Worker, we don't necessarily need a separate worker thread if we use the legacy build.
-  if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', document.baseURI).href;
-  }
+  const pdfjsLib = await getPdfjsLib();
 
   const pdf = await (pdfjsLib as any).getDocument({ data: buffer }).promise;
   const { paragraphs: rawParagraphs, pageMap } = await extractPdfRawText(pdf, onProgress);
