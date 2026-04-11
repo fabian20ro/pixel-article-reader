@@ -21,12 +21,11 @@ export async function translateParagraphs(
   sourceLang: string,
   targetLang: string,
   proxyBase: string,
-  proxySecret?: string,
 ): Promise<string[]> {
   if (paragraphs.length === 0) return [];
 
   const batches = buildBatches(paragraphs);
-  const translated = await translateBatches(batches, sourceLang, targetLang, proxyBase, proxySecret);
+  const translated = await translateBatches(batches, sourceLang, targetLang, proxyBase);
 
   // Flatten translated batches back into individual paragraphs
   const result: string[] = [];
@@ -81,7 +80,6 @@ async function translateBatches(
   sourceLang: string,
   targetLang: string,
   proxyBase: string,
-  proxySecret?: string,
 ): Promise<string[]> {
   const results: string[] = new Array(batches.length);
   let nextIndex = 0;
@@ -89,7 +87,7 @@ async function translateBatches(
   async function worker(): Promise<void> {
     while (nextIndex < batches.length) {
       const idx = nextIndex++;
-      results[idx] = await translateSingle(batches[idx], sourceLang, targetLang, proxyBase, proxySecret, idx, batches.length);
+      results[idx] = await translateSingle(batches[idx], sourceLang, targetLang, proxyBase, idx, batches.length);
     }
   }
 
@@ -108,7 +106,6 @@ async function translateSingle(
   sourceLang: string,
   targetLang: string,
   proxyBase: string,
-  proxySecret?: string,
   batchIndex?: number,
   batchTotal?: number,
 ): Promise<string> {
@@ -120,7 +117,7 @@ async function translateSingle(
   try {
     resp = await fetch(`${proxyBase}?action=translate`, {
       method: 'POST',
-      headers: buildProxyHeaders(proxySecret, true),
+      headers: buildProxyHeaders(true),
       body: JSON.stringify({ text, from: sourceLang, to: targetLang }),
     });
   } catch (err: unknown) {
@@ -138,13 +135,7 @@ async function translateSingle(
     }
     if (resp.status === 405) {
       try {
-        return await translateSingleGet(
-          text,
-          sourceLang,
-          targetLang,
-          proxyBase,
-          proxySecret,
-        );
+        return await translateSingleGet(text, sourceLang, targetLang, proxyBase);
       } catch (fallbackErr: unknown) {
         const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
         throw new Error(
@@ -162,10 +153,9 @@ async function translateSingle(
   return data.translatedText;
 }
 
-function buildProxyHeaders(proxySecret?: string, includeJsonContentType = false): Record<string, string> {
+function buildProxyHeaders(includeJsonContentType = false): Record<string, string> {
   const headers: Record<string, string> = {};
   if (includeJsonContentType) headers['Content-Type'] = 'application/json';
-  if (proxySecret) headers['X-Proxy-Key'] = proxySecret;
   return headers;
 }
 
@@ -183,7 +173,6 @@ async function translateSingleGet(
   sourceLang: string,
   targetLang: string,
   proxyBase: string,
-  proxySecret?: string,
 ): Promise<string> {
   const params = new URLSearchParams({
     action: 'translate',
@@ -194,7 +183,7 @@ async function translateSingleGet(
 
   const resp = await fetch(`${proxyBase}?${params.toString()}`, {
     method: 'GET',
-    headers: buildProxyHeaders(proxySecret),
+    headers: buildProxyHeaders(),
   });
 
   if (!resp.ok) {

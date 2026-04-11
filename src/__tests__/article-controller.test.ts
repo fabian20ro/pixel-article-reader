@@ -102,7 +102,6 @@ describe('ArticleController', () => {
         stop: vi.fn(),
       } as any,
       proxyBase: 'https://proxy.example.workers.dev',
-      proxySecret: 'secret',
       initialLangOverride: 'auto',
     });
 
@@ -111,7 +110,6 @@ describe('ArticleController', () => {
     expect(extractArticle).toHaveBeenCalledWith(
       'https://example.com/article',
       'https://proxy.example.workers.dev',
-      'secret',
       expect.objectContaining({
         onProgress: expect.any(Function),
       }),

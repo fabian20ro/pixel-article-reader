@@ -5,7 +5,6 @@ import worker from '../../worker/index.ts';
 
 const env = {
   ALLOWED_ORIGIN: 'https://app.example',
-  PROXY_SECRET: '',
 };
 
 const ctx = {} as ExecutionContext;

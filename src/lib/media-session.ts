@@ -16,6 +16,8 @@
 import { createLogger } from './logger.js';
 
 const log = createLogger('MediaSession');
+const ICON_192_URL = new URL('./icons/icon-192.png', document.baseURI).href;
+const ICON_512_URL = new URL('./icons/icon-512.png', document.baseURI).href;
 
 export interface MediaSessionActions {
   play: () => void;
@@ -144,8 +146,8 @@ export class MediaSessionController {
       title: title || 'Article Local Reader',
       artist: subtitle || 'Article Local Reader',
       artwork: [
-        { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+        { src: ICON_192_URL, sizes: '192x192', type: 'image/png' },
+        { src: ICON_512_URL, sizes: '512x512', type: 'image/png' },
       ],
     });
   }

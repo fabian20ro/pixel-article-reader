@@ -126,8 +126,7 @@ export async function parsePdfFromArrayBuffer(
   // We need to set the workerSrc for the browser environment.
   // In Worker, we don't necessarily need a separate worker thread if we use the legacy build.
   if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    // Vite will handle this URL correctly
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.mjs', document.baseURI).href;
   }
 
   const pdf = await (pdfjsLib as any).getDocument({ data: buffer }).promise;

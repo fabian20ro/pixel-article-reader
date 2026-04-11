@@ -90,7 +90,7 @@ describe('translateParagraphs', () => {
       mockTranslateResponse('Translated text'),
     );
 
-    await translateParagraphs(['Original text'], 'de', 'en', PROXY, 'my-secret');
+    await translateParagraphs(['Original text'], 'de', 'en', PROXY);
 
     expect(fetchSpy).toHaveBeenCalledWith(
       `${PROXY}?action=translate`,
@@ -98,7 +98,6 @@ describe('translateParagraphs', () => {
         method: 'POST',
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
-          'X-Proxy-Key': 'my-secret',
         }),
         body: JSON.stringify({ text: 'Original text', from: 'de', to: 'en' }),
       }),
@@ -135,7 +134,7 @@ describe('translateParagraphs', () => {
       .mockResolvedValueOnce(mockErrorResponse(405, 'Only GET requests are allowed.'))
       .mockResolvedValueOnce(mockTranslateResponse('Hello from GET fallback'));
 
-    const result = await translateParagraphs(['Salut'], 'ro', 'en', PROXY, 'my-secret');
+    const result = await translateParagraphs(['Salut'], 'ro', 'en', PROXY);
 
     expect(result).toEqual(['Hello from GET fallback']);
     expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -170,7 +169,7 @@ describe('translateParagraphs', () => {
     ).rejects.toThrow(/Could not reach translation service/);
   });
 
-  it('does not include X-Proxy-Key header when no secret', async () => {
+  it('does not include any auth header', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockTranslateResponse('Translated'),
     );

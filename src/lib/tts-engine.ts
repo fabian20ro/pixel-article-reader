@@ -40,7 +40,6 @@ export interface TTSCallbacks {
 
 export interface TTSConfig {
   proxyBase: string;
-  proxySecret: string;
   callbacks?: TTSCallbacks;
 }
 
@@ -178,7 +177,6 @@ export class TTSEngine {
     if (config.proxyBase) {
       this.audioBackend = new AudioTTSBackend({
         proxyBase: config.proxyBase,
-        proxySecret: config.proxySecret,
       });
     }
 

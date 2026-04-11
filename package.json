@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "generate-icons": "node scripts/generate-icons.mjs",
     "worker:dev": "wrangler dev worker/index.ts",
-    "worker:deploy": "wrangler deploy worker/index.ts"
+    "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },
   "devDependencies": {
     "jsdom": "^28.1.0",

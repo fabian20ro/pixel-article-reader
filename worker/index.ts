@@ -11,7 +11,6 @@ import type { Article } from '../src/lib/extractors/types.js';
 
 export interface Env {
   ALLOWED_ORIGIN: string;
-  PROXY_SECRET: string;
 }
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB (HTML articles)
@@ -44,14 +43,6 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return handleOptions(origin, env.ALLOWED_ORIGIN);
-    }
-
-    // Auth check
-    if (env.PROXY_SECRET) {
-      const key = request.headers.get('X-Proxy-Key') || url.searchParams.get('key');
-      if (key !== env.PROXY_SECRET) {
-        return errorResponse(403, 'Forbidden: Invalid proxy key.', env.ALLOWED_ORIGIN);
-      }
     }
 
     // Rate limiting
@@ -323,7 +314,7 @@ function handleOptions(origin: string | null, allowed: string) {
     headers: {
       'Access-Control-Allow-Origin': allowed || '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
+      'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
     }
   });
@@ -364,7 +355,7 @@ async function parseArticleFromUrl(url: string, fetcher: typeof fetch): Promise<
     return extractArticleFromYoutube(url, fetcher);
   }
 
-  return extractArticle(url, '', undefined, {
+  return extractArticle(url, '', {
     domParserCtor: LinkedomDOMParser as any,
     fetcher,
   });

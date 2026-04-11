@@ -40,7 +40,7 @@ Converts fetched content into `Article` with markdown and TTS paragraphs.
 
 | Function | Purpose |
 |----------|---------|
-| `extractArticle(url, proxyBase, proxySecret?, options?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
+| `extractArticle(url, proxyBase, options?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
 | `createArticleFromText(text)` | Creates article from pasted text without fetching |
 
 **Pipeline details:**
@@ -141,7 +141,7 @@ Endpoints:
 
 Security and limits:
 - SSRF blocklist
-- Optional `X-Proxy-Key` auth via `PROXY_SECRET`
+- Public browser Worker API; no client-side shared secret
 - 60 req/min per IP
 - 2 MB max response
 - 10s upstream timeout

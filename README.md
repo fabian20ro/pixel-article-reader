@@ -18,40 +18,19 @@ The app runs mostly client-side. The Cloudflare Worker proxies article fetches, 
 
 ### 1. Set up the Cloudflare Worker (CORS proxy)
 
-The worker deploys via **Cloudflare Git integration** (not GitHub Actions). Connect this repo in Cloudflare so pushes to `main` that change `worker/**` trigger a redeploy.
-
-#### Step-by-step: Choose a Proxy Secret
-
-Pick any random string to use as a shared secret between the app and the worker. This prevents unauthorized use of your proxy. Example:
-
-```sh
-openssl rand -hex 32
-```
+The worker deploys from this repo via **GitHub Actions + Wrangler**.
 
 #### Step-by-step: Configure Worker bindings in Cloudflare
 
 In Cloudflare Worker settings:
 
 1. Set `ALLOWED_ORIGIN` to `https://fabian20ro.github.io`
-2. Add secret `PROXY_SECRET` (optional)
 
-You can also set secrets with Wrangler:
+You can also set the origin via Wrangler-managed config:
 
 ```sh
-cd worker
-npx wrangler secret put PROXY_SECRET
+npx wrangler deploy --config worker/wrangler.toml
 ```
-
-#### Step-by-step: Set `PROXY_SECRET` for the client build (optional)
-
-For GitHub Pages deployments, add repository secret `PROXY_SECRET` in:
-`Settings -> Secrets and variables -> Actions`.
-
-`deploy-pages.yml` injects this value into `src/app.ts` at CI build time.
-For local/manual builds, set `CONFIG.PROXY_SECRET` directly in `src/app.ts` before running `npm run build`.
-If Worker `PROXY_SECRET` is set but the client secret is missing/mismatched, proxy calls fail with HTTP 403.
-
-> **Note:** `PROXY_SECRET` is visible in client-side JS. It prevents casual abuse, not determined attackers. If you don't need it, leave it empty in both app and worker.
 
 ### 2. Deploy to GitHub Pages
 
@@ -59,8 +38,7 @@ GitHub Actions handles this automatically. On every push to `main`:
 
 1. Typecheck runs
 2. Tests are run
-3. `PROXY_SECRET` is injected into the client config when the GitHub secret is set
-4. Vite builds `dist/`, emits `dist/sw.js`, and the built app shell is deployed to GitHub Pages
+3. Vite builds `dist/`, rewrites stable PWA assets (`manifest.webmanifest`, icons, pdf worker), emits `dist/sw.js`, and deploys the app shell to GitHub Pages
 
 To enable: go to **Settings > Pages > Source** and select **GitHub Actions**.
 
@@ -68,21 +46,20 @@ The site will be available at `https://fabian20ro.github.io/pixel-article-reader
 
 ### 3. Deploy the Cloudflare Worker
 
-Cloudflare redeploys the worker automatically from Git when changes land in `worker/` on `main`.
-No GitHub Action or GitHub Cloudflare API credentials are required for this path.
-If Worker auth is enabled, keep `PROXY_SECRET` configured for Pages builds so the browser can send `X-Proxy-Key`.
+`deploy-worker.yml` deploys the Worker after the `CI` workflow succeeds on `main`.
+Add these repository secrets first:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
 
 The worker URL will be: `https://pixel-article-reader.fabian20ro.workers.dev`
 
 #### Manual first deploy (alternative)
 
-If you prefer to deploy manually the first time:
+If you prefer a one-off manual deploy:
 
 ```sh
-cd worker
-npx wrangler deploy
-npx wrangler secret put PROXY_SECRET
-# paste your secret when prompted
+npm run worker:deploy
 ```
 
 ### 4. Install the PWA
@@ -209,14 +186,15 @@ npm test
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | Push / PR | Runs typecheck, tests, and production build |
-| `deploy-pages.yml` | Push to `main` | Injects release secrets, rebuilds `dist/`, deploys to GitHub Pages |
+| `deploy-pages.yml` | Push to `main` | Stamps release metadata, rebuilds `dist/`, deploys to GitHub Pages |
+| `deploy-worker.yml` | `CI` success on `main` | Deploys the Cloudflare Worker from `worker/wrangler.toml` |
 
 ### Project Structure
 
 ```
 ├── index.html              # App shell template
 ├── style.css               # Global app styles
-├── manifest.json           # PWA manifest source
+├── manifest.json           # PWA manifest source (rewritten to dist/manifest.webmanifest)
 ├── sw.js                   # Service Worker template + manual SW_VERSION
 ├── dist/                   # Vite build output (generated)
 ├── src/                    # TypeScript source
@@ -225,7 +203,8 @@ npm test
 │   └── wrangler.toml       # Wrangler deployment config
 ├── .github/workflows/
 │   ├── ci.yml              # Typecheck/test/build gate
-│   └── deploy-pages.yml    # GitHub Pages deploy
+│   ├── deploy-pages.yml    # GitHub Pages deploy
+│   └── deploy-worker.yml   # Cloudflare Worker deploy
 ├── icons/                  # PWA icons (192px, 512px)
 ├── tsconfig.json
 ├── tsconfig.worker.json
@@ -255,3 +234,7 @@ The app auto-detects English vs Romanian using character-based heuristics (Roman
 After the first load, the Service Worker caches the app shell. Navigations use network-first with cache fallback, while same-origin static assets use stale-while-revalidate. The app itself loads offline; article fetching still requires network.
 
 `sw.js` includes `SW_VERSION`. Bump it when release changes affect cache behavior or app-shell wiring.
+
+## CSP note
+
+GitHub Pages cannot send a response-header CSP for this app, so the app uses a `<meta http-equiv="Content-Security-Policy">` policy for browser-side restrictions. That means directives such as `frame-ancestors` cannot be enforced here; enforcing them would require moving the frontend behind infrastructure that can emit real HTTP CSP headers.

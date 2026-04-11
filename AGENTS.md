@@ -31,7 +31,6 @@ work style: telegraph; noun-phrases ok; drop grammar; min tokens.
 
 ## Constraints
 
-- `PROXY_SECRET`: Injected by CI into `src/app.ts`. Local dev requires manual set in `CONFIG`.
 - `SW_VERSION`: Bump in `sw.js` on cache/file-list changes to avoid stale PWA versions.
 
 ## Legacy & Deprecated

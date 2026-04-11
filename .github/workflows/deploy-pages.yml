@@ -34,14 +34,6 @@ jobs:
           find dist -type f ! -name 'sw.js' -print0 | sort -z | xargs -0 shasum > /tmp/dist-hash-2.txt
           diff -u /tmp/dist-hash-1.txt /tmp/dist-hash-2.txt
 
-      - name: Inject PROXY_SECRET into client config
-        env:
-          PROXY_SECRET: ${{ secrets.PROXY_SECRET }}
-        run: |
-          if [ -n "${PROXY_SECRET}" ]; then
-            sed -i "s|PROXY_SECRET: ''|PROXY_SECRET: '${PROXY_SECRET}'|" src/app.ts
-          fi
-
       - name: Stamp app release metadata
         run: |
           RELEASE="$(date -u '+%y-%m-%d %H:%M')"

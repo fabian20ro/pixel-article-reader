@@ -13,7 +13,7 @@ url-utils.ts ── extractUrl() / getUrlFromParams()
   │                      extractor.ts ── Worker raw fetch or `/parse`
   │                        │                         │
   │                        │                         ├── SSRF check
-  │                        │                         ├── Auth (X-Proxy-Key)
+  │                        │                         ├── Rate limit + SSRF validation
   │                        │                         ├── Rate limit (60 req/min)
   │                        │                         ├── Fetch target HTML/PDF/EPUB
   │                        │                         └── Fetch YouTube transcript server-side

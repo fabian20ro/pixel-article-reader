@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { collectDistFiles, renderServiceWorker } from './update-precache.mjs';
+import {
+  collectDistFiles,
+  renderServiceWorker,
+  renderStableManifest,
+  rewriteIndexHtmlForStableAssets,
+} from './update-precache.mjs';
 
 describe('update-precache', () => {
   it('collects emitted dist assets and renders them into PRECACHE', () => {
@@ -36,5 +41,23 @@ describe('update-precache', () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it('rewrites the built index and manifest to stable app-root asset paths', () => {
+    const html = `
+      <link rel="manifest" href="./assets/manifest-abc123.json">
+      <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192-def456.png">
+      <link rel="apple-touch-icon" href="./assets/icon-192-def456.png">
+    `;
+    const manifest = renderStableManifest(JSON.stringify({
+      name: 'App',
+      icons: [{ src: 'icons/icon-192.png' }],
+    }));
+
+    expect(rewriteIndexHtmlForStableAssets(html)).toContain('href="./manifest.webmanifest"');
+    expect(rewriteIndexHtmlForStableAssets(html)).not.toContain('./assets/manifest-abc123.json');
+    expect(manifest).toContain('"src": "./icons/icon-192.png"');
+    expect(manifest).toContain('"src": "./icons/icon-512.png"');
+    expect(manifest).not.toContain('"src": "icons/icon-192.png"');
   });
 });

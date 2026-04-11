@@ -19,7 +19,6 @@ export interface ArticleControllerOptions {
   refs: AppDomRefs;
   tts: TTSEngine;
   proxyBase: string;
-  proxySecret: string;
   initialLangOverride: 'auto' | Language;
   onArticleRendered?: (totalParagraphs: number) => void;
 }
@@ -207,7 +206,6 @@ export class ArticleController {
       const article = await extractArticle(
         url,
         this.options.proxyBase,
-        this.options.proxySecret,
         {
           onProgress: (msg: string) => { this.options.refs.loadingMessage.textContent = msg; },
         },
@@ -278,7 +276,6 @@ export class ArticleController {
         sourceLang,
         DEFAULT_TRANSLATION_TARGET,
         this.options.proxyBase,
-        this.options.proxySecret,
       );
 
       this.currentArticle = {

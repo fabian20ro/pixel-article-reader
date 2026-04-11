@@ -11,7 +11,6 @@ const RETRY_DELAY_MS = 1_000;
 
 export interface TtsAudioFetcherConfig {
   proxyBase: string;
-  proxySecret: string;
 }
 
 /**
@@ -46,12 +45,7 @@ async function attemptFetch(
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const headers: Record<string, string> = {};
-    if (config.proxySecret) {
-      headers['X-Proxy-Key'] = config.proxySecret;
-    }
-
-    const resp = await fetch(url, { signal: controller.signal, headers });
+    const resp = await fetch(url, { signal: controller.signal });
     if (!resp.ok) return null;
 
     const blob = await resp.blob();

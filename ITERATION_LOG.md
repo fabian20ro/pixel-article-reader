@@ -888,4 +888,26 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-11] Fix stale Worker drift, stable PWA assets, and PDF CSP/runtime issues
+
+**Context:** Production had multiple regressions at once: GitHub Pages served a manifest/icon path combo that produced `assets/icons/...` 404s, the meta CSP blocked pdf.js worker loading and logged an ignored `frame-ancestors` directive, and the live Cloudflare Worker was still an old deployment that rejected `POST /parse` with `Only GET requests are allowed.` for YouTube extraction.
+
+**What happened:**
+- Confirmed the repo and production had diverged: local `worker/index.ts` supported `POST /parse`, but the live `pixel-article-reader` Worker in Cloudflare still served an older `cors-proxy.js` bundle with proxy-key auth and no `/parse` route. Root cause: `.github/workflows/deploy-worker.yml` had been removed, so Worker deploys drifted from the repo.
+- Removed the client/Worker `PROXY_SECRET` flow end-to-end from runtime code, app wiring, worker auth checks, Wrangler config comments, and deploy-pages CI injection. Kept a backward-compatible `extractArticle()` shim only for older call sites/tests that still pass a third positional argument.
+- Restored repo-owned Worker deploy automation with a dedicated `.github/workflows/deploy-worker.yml` that runs after `CI` succeeds on `main`, deploying via `wrangler` with `worker/wrangler.toml`. Also fixed `npm run worker:deploy` to use that explicit config.
+- Tightened the app CSP in `index.html`: removed the ineffective `frame-ancestors` meta directive, dropped unused CDN allowances, added explicit `worker-src`, and allowed same-origin/Worker media and image sources needed by the PWA.
+- Switched pdf.js worker loading from `cdnjs` to a same-origin file resolved from `document.baseURI` (`vendor/pdfjs/pdf.worker.min.mjs`). Updated Media Session artwork URLs the same way so icon resolution is stable under the app subpath.
+- Extended `scripts/update-precache.mjs` to post-process `dist/`: rewrite `index.html` to use a stable root manifest/icon path, emit `dist/manifest.webmanifest`, copy stable icons and the pdf.js worker into `dist/`, prune Vite’s hashed manifest/icon artifacts, and then regenerate `dist/sw.js` precache from the final emitted files. Bumped `SW_VERSION` to `2026.04.11.01`.
+- Updated README, AGENTS.md, and codemap docs to match the new deploy ownership and CSP/PWA behavior.
+- Verification: `npm run typecheck`, `npm test`, and `npm run build` all passed. Built output now contains only stable PWA runtime assets (`dist/manifest.webmanifest`, `dist/icons/*`, `dist/vendor/pdfjs/pdf.worker.min.mjs`) and `dist/index.html` references them directly.
+
+**Outcome:** Partial success. Repo/runtime code and build output are fixed locally, and the restored workflow will keep future Worker deploys in sync. Production is still serving the old GitHub Pages build and stale Worker until a push or authenticated deploy happens. A direct shell deploy was blocked because `wrangler` has no `CLOUDFLARE_API_TOKEN` in this non-interactive environment, even though local dry-run bundling worked.
+
+**Insight:** For split-hosted PWAs, “build fixed locally” is not enough if deploy ownership is ambiguous. When the frontend and Worker ship through different mechanisms, drift becomes a product bug. Keep both deploy paths repo-owned and continuously exercised, and post-process Vite output when stable PWA asset URLs matter more than hashed asset defaults.
+
+**Promoted to Lessons Learned:** No
+
+---
+
 <!-- New entries go above this line, most recent first -->

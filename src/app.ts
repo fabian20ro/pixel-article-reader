@@ -22,7 +22,6 @@ import { buildChaptersList } from './lib/chapter-renderer.js';
 
 const CONFIG = {
   PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
-  PROXY_SECRET: '', // Set at build time or leave empty if secret is not configured
   DEFAULT_RATE: 1.0,
   DEFAULT_LANG: 'auto' as 'auto' | Language,
 };
@@ -81,7 +80,6 @@ async function main(): Promise<void> {
 
   const tts = new TTSEngine({
     proxyBase: CONFIG.PROXY_BASE,
-    proxySecret: CONFIG.PROXY_SECRET,
     callbacks: {
       onStateChange(state) {
         updatePlayButton(state.isPlaying, state.isPaused);
@@ -147,7 +145,6 @@ async function main(): Promise<void> {
     refs,
     tts,
     proxyBase: CONFIG.PROXY_BASE,
-    proxySecret: CONFIG.PROXY_SECRET,
     initialLangOverride: settings.lang,
     onArticleRendered(totalParagraphs) {
       updateProgress(0, totalParagraphs);

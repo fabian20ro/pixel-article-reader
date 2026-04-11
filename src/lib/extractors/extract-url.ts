@@ -35,7 +35,7 @@ async function handleProxyError(resp: Response): Promise<never> {
     throw new Error(detail || `Rate limit exceeded — too many requests.${waitMsg}`);
   }
   if (resp.status === 403) {
-    throw new Error(detail || 'Proxy rejected the request — check that PROXY_SECRET is configured in the app.');
+    throw new Error(detail || 'Proxy rejected the request.');
   }
   throw new Error(detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
 }
@@ -81,10 +81,6 @@ function isYoutubeUrl(url: string): boolean {
   }
 }
 
-function buildProxyHeaders(proxySecret?: string, extra: Record<string, string> = {}): Record<string, string> {
-  return proxySecret ? { ...extra, 'X-Proxy-Key': proxySecret } : extra;
-}
-
 function buildWorkerParseUrl(proxyBase: string): string {
   return `${proxyBase.replace(/\/$/, '')}/parse`;
 }
@@ -92,7 +88,6 @@ function buildWorkerParseUrl(proxyBase: string): string {
 async function extractArticleViaWorkerParse(
   url: string,
   proxyBase: string,
-  proxySecret?: string,
   fetcher: typeof fetch = globalThis.fetch,
 ): Promise<Article> {
   let resp: Response;
@@ -100,7 +95,7 @@ async function extractArticleViaWorkerParse(
   try {
     resp = await fetcher(buildWorkerParseUrl(proxyBase), {
       method: 'POST',
-      headers: buildProxyHeaders(proxySecret, { 'Content-Type': 'application/json' }),
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, format: 'article' }),
     });
   } catch (err: unknown) {
@@ -124,7 +119,6 @@ async function extractArticleViaWorkerParse(
 async function fetchBinaryViaProxy(
   url: string,
   proxyBase: string,
-  proxySecret?: string,
   onProgress?: (message: string) => void,
   label = 'file',
 ): Promise<{ buffer: ArrayBuffer; finalUrl: string }> {
@@ -134,13 +128,8 @@ async function fetchBinaryViaProxy(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
 
-  const headers: Record<string, string> = {};
-  if (proxySecret) {
-    headers['X-Proxy-Key'] = proxySecret;
-  }
-
   try {
-    const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
+    const resp = await fetch(proxyUrl, { signal: controller.signal });
     if (!resp.ok) {
       await handleProxyError(resp);
     }
@@ -177,9 +166,11 @@ async function fetchBinaryViaProxy(
 export async function extractArticle(
   url: string,
   proxyBase: string,
-  proxySecret?: string,
-  options: ExtractArticleOptions = {},
+  legacySecretOrOptions: string | ExtractArticleOptions = {},
+  optionsArg?: ExtractArticleOptions,
 ): Promise<Article> {
+  const options = optionsArg
+    ?? (typeof legacySecretOrOptions === 'string' ? {} : legacySecretOrOptions);
   const {
     domParserCtor: DOMParserConstructor = globalThis.DOMParser,
     onProgress,
@@ -193,33 +184,31 @@ export async function extractArticle(
     if (!useProxy) {
       throw new Error('Direct YouTube extraction is only supported through the worker parse API.');
     }
-    return extractArticleViaWorkerParse(url, proxyBase, proxySecret, fetcher);
+    return extractArticleViaWorkerParse(url, proxyBase, fetcher);
   }
 
   // Fast path: URL clearly ends in .pdf
   if (isPdfUrl(url)) {
     return useProxy 
-      ? extractArticleFromPdfUrl(url, proxyBase, proxySecret, onProgress)
+      ? extractArticleFromPdfUrl(url, proxyBase, onProgress)
       : extractArticleFromPdfDirect(url, onProgress, fetcher);
   }
 
   // Fast path: URL clearly points to an EPUB
   if (isEpubUrl(url)) {
     return useProxy
-      ? extractArticleFromEpubUrl(url, proxyBase, proxySecret, DOMParserConstructor, onProgress)
+      ? extractArticleFromEpubUrl(url, proxyBase, DOMParserConstructor, onProgress)
       : extractArticleFromEpubDirect(url, DOMParserConstructor, onProgress, fetcher);
   }
 
   onProgress?.('Fetching content...');
 
   const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(url)}` : url;
-  const headers = useProxy ? buildProxyHeaders(proxySecret) : {};
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
 
   try {
-    const resp = await fetcher(fetchUrl, { signal: controller.signal, headers, redirect: 'follow' });
+    const resp = await fetcher(fetchUrl, { signal: controller.signal, redirect: 'follow' });
     if (!resp.ok) {
       if (useProxy) await handleProxyError(resp);
       throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
@@ -289,10 +278,9 @@ async function extractArticleFromEpubDirect(url: string, DOMParserConstructor: n
 export async function extractArticleFromPdfUrl(
   url: string,
   proxyBase: string,
-  proxySecret?: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  const { buffer, finalUrl } = await fetchBinaryViaProxy(url, proxyBase, proxySecret, onProgress, 'PDF');
+  const { buffer, finalUrl } = await fetchBinaryViaProxy(url, proxyBase, onProgress, 'PDF');
   onProgress?.('Extracting text from PDF...');
   return parsePdfFromArrayBuffer(buffer, finalUrl, onProgress);
 }
@@ -303,11 +291,10 @@ export async function extractArticleFromPdfUrl(
 export async function extractArticleFromEpubUrl(
   url: string,
   proxyBase: string,
-  proxySecret?: string,
   DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document } = globalThis.DOMParser,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  const { buffer, finalUrl } = await fetchBinaryViaProxy(url, proxyBase, proxySecret, onProgress, 'EPUB');
+  const { buffer, finalUrl } = await fetchBinaryViaProxy(url, proxyBase, onProgress, 'EPUB');
   onProgress?.('Extracting text from EPUB...');
   return parseEpubFromArrayBuffer(buffer, finalUrl, DOMParserConstructor, onProgress);
 }
