@@ -15,11 +15,11 @@ Thin entrypoint that wires modules together.
 
 ## src/lib/article-controller.ts — Article UI + Flow
 
-Coordinates URL submit, extraction, rendering, translation, markdown export, and Jina retry.
+Coordinates URL submit, extraction, rendering, translation, and markdown export.
 
 | Method | Purpose |
 |--------|---------|
-| `init()` | Binds UI event listeners (go, translate, Jina retry, copy markdown, retry) |
+| `init()` | Binds UI event listeners (go, translate, copy markdown, retry) |
 | `handleInitialSharedUrl()` | Handles share-target query params |
 | `setLangOverride(lang)` | Updates language override and active article playback language |
 | `displayArticle(article)` | Renders metadata + markdown/paragraphs, loads TTS |
@@ -28,7 +28,6 @@ Coordinates URL submit, extraction, rendering, translation, markdown export, and
 - Markdown render path: `marked.parse()` + sanitizer
 - TTS alignment: maps rendered top-level blocks to paragraph indices
 - Copy action: writes `article.markdown` to clipboard
-- Jina retry: calls `extractArticleWithJina()` using current URL
 
 ---
 
@@ -41,8 +40,7 @@ Converts fetched content into `Article` with markdown and TTS paragraphs.
 
 | Function | Purpose |
 |----------|---------|
-| `extractArticle(url, proxyBase, proxySecret?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
-| `extractArticleWithJina(url, proxyBase, proxySecret?)` | Worker markdown mode (`mode=markdown`) via Jina; falls back to default extractor |
+| `extractArticle(url, proxyBase, proxySecret?, options?)` | Default path: Worker HTML fetch + Readability parse + Turndown markdown |
 | `createArticleFromText(text)` | Creates article from pasted text without fetching |
 
 **Pipeline details:**
@@ -134,17 +132,17 @@ Language detection and translation gating heuristics.
 
 ---
 
-## worker/cors-proxy.js — Cloudflare Worker
+## worker/index.ts — Cloudflare Worker
 
 Endpoints:
-- `GET /?url=...` → fetch HTML
-- `GET /?url=...&mode=markdown` → fetch markdown through Jina Reader
+- `GET /?url=...` → fetch HTML/PDF/EPUB
 - `POST /?action=translate` → Google Translate API proxy
+- `POST /parse` → parse URL and return either markdown or a JSON `Article`
 
 Security and limits:
 - SSRF blocklist
 - Optional `X-Proxy-Key` auth via `PROXY_SECRET`
-- 20 req/min per IP
+- 60 req/min per IP
 - 2 MB max response
 - 10s upstream timeout
 
@@ -159,8 +157,8 @@ Security and limits:
 
 ---
 
-## vendor/* — Browser Globals
+## dist/sw.js — Built Service Worker
 
-- `Readability.js` → `Readability`
-- `turndown.js` → `TurndownService`
-- `marked.js` → `marked.parse`
+- Generated from repo-root `sw.js`
+- Precache list derived from emitted `dist/` assets
+- `SW_VERSION` still sourced manually from `sw.js`

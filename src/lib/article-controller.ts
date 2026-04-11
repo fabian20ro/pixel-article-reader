@@ -1,7 +1,6 @@
 import { getUrlFromParams, extractUrl, clearQueryParams } from './url-utils.js';
 import {
   extractArticle,
-  extractArticleWithJina,
   createArticleFromText,
   createArticleFromTextFile,
   createArticleFromPdf,
@@ -59,10 +58,6 @@ export class ArticleController {
 
     refs.translateBtn.addEventListener('click', () => {
       void this.translateCurrentArticle();
-    });
-
-    refs.jinaRetryBtn.addEventListener('click', () => {
-      void this.retryWithJina();
     });
 
     refs.copyMdBtn.addEventListener('click', () => {
@@ -187,6 +182,7 @@ export class ArticleController {
         this.options.refs.loadingMessage.textContent = 'Processing EPUB...';
         article = await createArticleFromEpub(
           file,
+          globalThis.DOMParser,
           (msg) => { this.options.refs.loadingMessage.textContent = msg; },
         );
       } else {
@@ -212,7 +208,9 @@ export class ArticleController {
         url,
         this.options.proxyBase,
         this.options.proxySecret,
-        (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+        {
+          onProgress: (msg: string) => { this.options.refs.loadingMessage.textContent = msg; },
+        },
       );
       this.currentArticle = article;
       this.currentArticleUrl = article.resolvedUrl;
@@ -235,10 +233,6 @@ export class ArticleController {
     refs.translateBtn.disabled = false;
     refs.translateBtn.textContent = 'Translate to English';
 
-    refs.jinaRetryBtn.classList.toggle('hidden', !this.currentArticleUrl);
-    refs.jinaRetryBtn.disabled = false;
-    refs.jinaRetryBtn.textContent = 'Try with Jina Reader';
-
     refs.copyMdBtn.classList.toggle('hidden', !article.markdown);
     refs.copyMdBtn.disabled = false;
     refs.copyMdBtn.textContent = 'Copy as Markdown';
@@ -251,30 +245,6 @@ export class ArticleController {
     this.showView('article');
     refs.playerControls.classList.remove('hidden');
     this.options.onArticleRendered?.(this.currentTtsParagraphs.length);
-  }
-
-  private async retryWithJina(): Promise<void> {
-    const { refs } = this.options;
-    if (!this.currentArticleUrl) return;
-
-    refs.jinaRetryBtn.disabled = true;
-    refs.jinaRetryBtn.textContent = 'Re-parsing...';
-
-    try {
-      const article = await extractArticleWithJina(
-        this.currentArticleUrl,
-        this.options.proxyBase,
-        this.options.proxySecret,
-      );
-      this.currentArticle = article;
-      this.currentArticleUrl = article.resolvedUrl;
-      this.displayArticle(article);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Jina extraction failed.';
-      this.showError(msg);
-      refs.jinaRetryBtn.disabled = false;
-      refs.jinaRetryBtn.textContent = 'Try with Jina Reader';
-    }
   }
 
   private async copyMarkdown(): Promise<void> {

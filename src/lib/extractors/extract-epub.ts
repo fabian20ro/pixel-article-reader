@@ -1,53 +1,14 @@
-/**
- * EPUB extraction via JSZip (loaded lazily from CDN or local vendor).
- * EPUB is a ZIP archive containing XHTML chapters, a manifest, and metadata.
- */
-
+import JSZip from 'jszip';
 import { type Article, MAX_PDF_SIZE } from './types.js';
 import { buildArticleFromParagraphs, stripNonTextContent, isSpeakableText } from './utils.js';
 
 // ── JSZip types ───────────────────────────────────────────────────────
 
-interface JSZipInstance {
+type JSZipInstance = {
   files: Record<string, { async(type: 'string'): Promise<string>; async(type: 'arraybuffer'): Promise<ArrayBuffer> }>;
   loadAsync(data: ArrayBuffer): Promise<JSZipInstance>;
   file(name: string): { async(type: 'string'): Promise<string> } | null;
-}
-interface JSZipConstructor {
-  new(): JSZipInstance;
-}
-
-// Local vendored path (relative to the page URL root).
-const JSZIP_PATH = './vendor/jszip.min.js';
-
-let _JSZip: JSZipConstructor | null = null;
-
-/** Load JSZip lazily from vendored local file. */
-async function loadJSZip(): Promise<JSZipConstructor> {
-  const global = globalThis as Record<string, unknown>;
-  if (global.JSZip && typeof global.JSZip === 'function') {
-    return global.JSZip as unknown as JSZipConstructor;
-  }
-  if (_JSZip) return _JSZip;
-
-  try {
-    // Load via script tag since JSZip uses UMD (not pure ESM)
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = JSZIP_PATH;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load JSZip'));
-      document.head.appendChild(script);
-    });
-
-    const loaded = (globalThis as Record<string, unknown>).JSZip as unknown as JSZipConstructor;
-    if (!loaded) throw new Error('JSZip not available after load');
-    _JSZip = loaded;
-    return loaded;
-  } catch {
-    throw new Error('Could not load EPUB support. The vendor file may be missing.');
-  }
-}
+};
 
 /**
  * Core EPUB parsing: unzips buffer, reads OPF, extracts chapters → Article.
@@ -55,15 +16,15 @@ async function loadJSZip(): Promise<JSZipConstructor> {
 async function parseEpubCore(
   buffer: ArrayBuffer,
   titleFallback: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   onProgress?.('Loading EPUB...');
-  const JSZip = await loadJSZip();
 
   const zip = await new JSZip().loadAsync(buffer);
 
   // Parse container.xml to find the OPF file
-  const containerXml = await readZipFile(zip, 'META-INF/container.xml');
+  const containerXml = await readZipFile(zip as unknown as JSZipInstance, 'META-INF/container.xml');
   if (!containerXml) {
     throw new Error('Invalid EPUB: missing container.xml');
   }
@@ -73,13 +34,13 @@ async function parseEpubCore(
     throw new Error('Invalid EPUB: cannot find content.opf path');
   }
 
-  const opfContent = await readZipFile(zip, opfPath);
+  const opfContent = await readZipFile(zip as unknown as JSZipInstance, opfPath);
   if (!opfContent) {
     throw new Error('Invalid EPUB: cannot read content.opf');
   }
 
   const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
-  const { title: epubTitle, chapterPaths } = parseOpf(opfContent, opfDir);
+  const { title: epubTitle, chapterPaths } = parseOpf(opfContent, opfDir, DOMParserConstructor);
 
   if (chapterPaths.length === 0) {
     throw new Error('Could not find any chapters in this EPUB.');
@@ -96,7 +57,7 @@ async function parseEpubCore(
     if (chapterPaths.length > 5 && i % 3 === 0) {
       onProgress?.(`Processing chapter ${i + 1} of ${chapterPaths.length}...`);
     }
-    const html = await readZipFile(zip, chapterPaths[i]);
+    const html = await readZipFile(zip as unknown as JSZipInstance, chapterPaths[i]);
     if (!html) continue;
 
     totalExtracted += html.length;
@@ -104,7 +65,7 @@ async function parseEpubCore(
       throw new Error('EPUB content is too large after decompression. The file may be corrupted.');
     }
 
-    const chapterParagraphs = extractTextFromXhtml(html);
+    const chapterParagraphs = extractTextFromXhtml(html, DOMParserConstructor);
     allParagraphs.push(...chapterParagraphs);
   }
 
@@ -127,7 +88,8 @@ async function parseEpubCore(
  * Create an Article from a local EPUB file.
  */
 export async function createArticleFromEpub(
-  file: File,
+  file: File | { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   if (file.size > MAX_PDF_SIZE) {
@@ -135,7 +97,7 @@ export async function createArticleFromEpub(
   }
 
   const buffer = await file.arrayBuffer();
-  return parseEpubCore(buffer, file.name.replace(/\.epub$/i, ''), onProgress);
+  return parseEpubCore(buffer, file.name.replace(/\.epub$/i, ''), DOMParserConstructor, onProgress);
 }
 
 /**
@@ -144,6 +106,7 @@ export async function createArticleFromEpub(
 export async function parseEpubFromArrayBuffer(
   buffer: ArrayBuffer,
   sourceUrl: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   // Derive a fallback title from the URL filename
@@ -154,7 +117,7 @@ export async function parseEpubFromArrayBuffer(
     titleFallback = filename.replace(/\.epub(?:\.\w+)?$/i, '');
   } catch { /* ignore invalid URLs */ }
 
-  const article = await parseEpubCore(buffer, titleFallback, onProgress);
+  const article = await parseEpubCore(buffer, titleFallback, DOMParserConstructor, onProgress);
   article.resolvedUrl = sourceUrl;
   return article;
 }
@@ -197,8 +160,12 @@ function sanitizeHref(href: string): string {
 }
 
 /** Parse OPF (Open Packaging Format) to get title and ordered chapter paths. */
-function parseOpf(opfXml: string, opfDir: string): { title: string; chapterPaths: string[] } {
-  const doc = new DOMParser().parseFromString(opfXml, 'application/xml');
+function parseOpf(
+  opfXml: string,
+  opfDir: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
+): { title: string; chapterPaths: string[] } {
+  const doc = new DOMParserConstructor().parseFromString(opfXml, 'application/xml');
 
   // Extract title from <dc:title>
   const titleEl = doc.querySelector('title');
@@ -232,8 +199,11 @@ function parseOpf(opfXml: string, opfDir: string): { title: string; chapterPaths
 }
 
 /** Extract readable text paragraphs from an XHTML chapter. */
-function extractTextFromXhtml(html: string): string[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+function extractTextFromXhtml(
+  html: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
+): string[] {
+  const doc = new DOMParserConstructor().parseFromString(html, 'text/html');
 
   // Remove non-content elements
   doc.querySelectorAll('script, style, nav, head, meta, link').forEach((el) => el.remove());

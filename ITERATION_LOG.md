@@ -824,6 +824,30 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-04-10] Native YouTube Support + REST API + Modern Bundling
+
+**Context:** User wants to support YouTube transcripts and expose a `/parse` endpoint for AI agents.
+**Happened:**
+- Removed Jina Reader fallback (UI, proxy, tests).
+- Refactored extractors to be environment-agnostic (Shared Library architecture).
+- Implemented native YouTube support (title, description, transcripts).
+- Migrated to Vite/Wrangler bundling for both Frontend and Worker.
+- Exposed `POST /parse` and `GET /parse` in Cloudflare Worker.
+- Updated all mocks to use modular `vi.mock` instead of global globals.
+**Outcome:** Success. All 224 tests passing. App now natively supports YouTube and exposes an AI-friendly Markdown API.
+**Promoted to Lessons Learned:** Yes (Modular mocking and Bundling transitions).
+
+---
+
+### [2026-04-10] Periodic maintenance — audit and clean all config files
+
+**Context:** Periodic hygiene task to keep agent context focused and lean.
+**What happened:** Audited `AGENTS.md`, `LESSONS_LEARNED.md`, and sub-agents. Condensed `AGENTS.md` and consolidated visibility lessons.
+**Outcome:** Success. Files are leaner and more focused.
+**Promoted to Lessons Learned:** No
+
+---
+
 ### [2026-03-01] Fix vendor.js loading failure + auto-generate PRECACHE
 
 **Context:** PDF loading was completely broken — users reported "Could not load PDF support. The vendor file may be missing." when opening any PDF (e.g. arxiv URLs like `https://arxiv.org/pdf/2602.22010`). Previous fix attempt (PR #45) addressed reading from `globalThis` after import but didn't fix the underlying path resolution bug.
@@ -841,6 +865,26 @@ Each entry should follow this structure:
 **Insight:** Dynamic `import()` resolves relative paths from the *calling module's URL*, not the page URL. This is different from `<script src="...">` which resolves from the page. When loading vendored files from deeply nested modules, use `new URL(relativePath, document.baseURI).href` to get page-relative resolution. The EPUB extractor happened to avoid this bug by using a script tag approach.
 
 **Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-04-11] Remediate PR 55 build, worker, and YouTube regressions
+
+**Context:** PR review found four merge blockers: broken Vite build output handling, extractor API misuse in the browser caller, browser-owned YouTube transcript fetching, and worker SSRF hardening regressions.
+
+**What happened:**
+- Reworked `extractArticle()` to take an options object for `domParserCtor`, `onProgress`, and `fetcher`, then updated the browser caller and regression coverage.
+- Moved YouTube transcript extraction to a worker-first path: browser YouTube URLs now call `POST /parse` with `format: "article"`, while the worker performs watch-page fetch, Innertube player lookup, and transcript XML fetch server-side.
+- Replaced the old precache generator with a Vite-aware `dist/sw.js` emitter that derives PRECACHE entries from actual `dist/` assets while leaving repo-root `sw.js` as the manual `SW_VERSION` source.
+- Hardened `worker/index.ts`: restored initial URL validation, timeout-backed fetches, body-size enforcement, binary magic-byte checks, rate-limit cleanup, and response headers.
+- Added CI/build gates (`typecheck`, `test`, `build`) plus targeted tests for browser load-call regression, worker SSRF rejection, worker YouTube parse flow, and precache generation.
+- Updated README and codemap docs for Vite output, `worker/index.ts`, and the generated service-worker flow.
+
+**Outcome:** Success. `npm run typecheck`, `npm test`, and `npm run build` all pass; `dist/sw.js` is emitted from built assets and YouTube extraction no longer depends on browser-side direct YouTube fetches.
+
+**Insight:** When a shared API grows environment-specific optional parameters, positional arguments become a footgun fast. An options object prevents browser/worker call-site drift and makes test coverage target the behavior instead of placeholder argument ordering.
+
+**Promoted to Lessons Learned:** No
 
 ---
 

@@ -11,7 +11,6 @@ export interface AppDomRefs {
   articleTitle: HTMLElement;
   articleInfo: HTMLElement;
   translateBtn: HTMLButtonElement;
-  jinaRetryBtn: HTMLButtonElement;
   copyMdBtn: HTMLButtonElement;
   articleText: HTMLElement;
   playerControls: HTMLElement;
@@ -93,7 +92,6 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     articleTitle: requireElement('article-title', root),
     articleInfo: requireElement('article-info', root),
     translateBtn: requireElement<HTMLButtonElement>('translate-btn', root),
-    jinaRetryBtn: requireElement<HTMLButtonElement>('jina-retry-btn', root),
     copyMdBtn: requireElement<HTMLButtonElement>('copy-md-btn', root),
     articleText: requireElement('article-text', root),
     playerControls: requireElement('player-controls', root),

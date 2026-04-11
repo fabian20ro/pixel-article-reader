@@ -1,6 +1,6 @@
 /**
- * URL fetch orchestration — detects format (HTML, PDF, EPUB) and dispatches
- * to the correct parser.  Split from extract-html.ts for maintainability.
+ * URL fetch orchestration — detects format (HTML, PDF, EPUB, YouTube) and
+ * dispatches to the correct parser.
  */
 
 import {
@@ -8,11 +8,16 @@ import {
   MAX_ARTICLE_SIZE,
   MAX_PDF_SIZE,
   PDF_FETCH_TIMEOUT,
-  FETCH_TIMEOUT,
 } from './types.js';
 import { parsePdfFromArrayBuffer } from './extract-pdf.js';
 import { parseEpubFromArrayBuffer } from './extract-epub.js';
-import { parseArticleFromHtml, parseArticleFromMarkdown } from './extract-html.js';
+import { parseArticleFromHtml } from './extract-html.js';
+
+export interface ExtractArticleOptions {
+  domParserCtor?: new () => { parseFromString(html: string, type: string): Document };
+  onProgress?: (message: string) => void;
+  fetcher?: typeof fetch;
+}
 
 /**
  * Handle non-OK proxy responses with detailed error messages.
@@ -56,51 +61,60 @@ function isEpubUrl(url: string): boolean {
   }
 }
 
-async function fetchViaProxy(
+/** Check if a URL is a YouTube URL. */
+function isYoutubeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === 'youtu.be') {
+      return parsed.pathname.length > 1;
+    }
+    const isYoutubeHost = hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+    if (!isYoutubeHost) {
+      return false;
+    }
+    return parsed.pathname.startsWith('/watch')
+      || parsed.pathname.startsWith('/embed/')
+      || parsed.pathname.startsWith('/shorts/');
+  } catch {
+    return false;
+  }
+}
+
+function buildProxyHeaders(proxySecret?: string, extra: Record<string, string> = {}): Record<string, string> {
+  return proxySecret ? { ...extra, 'X-Proxy-Key': proxySecret } : extra;
+}
+
+function buildWorkerParseUrl(proxyBase: string): string {
+  return `${proxyBase.replace(/\/$/, '')}/parse`;
+}
+
+async function extractArticleViaWorkerParse(
   url: string,
   proxyBase: string,
   proxySecret?: string,
-  mode: 'html' | 'markdown' = 'html',
-): Promise<{ body: string; finalUrl: string }> {
-  const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}${mode === 'markdown' ? '&mode=markdown' : ''}`;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-
-  const headers: Record<string, string> = {};
-  if (proxySecret) {
-    headers['X-Proxy-Key'] = proxySecret;
-  }
+  fetcher: typeof fetch = globalThis.fetch,
+): Promise<Article> {
+  let resp: Response;
 
   try {
-    const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
-    if (!resp.ok) {
-      await handleProxyError(resp);
-    }
-
-    const contentLength = resp.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_ARTICLE_SIZE) {
-      throw new Error('Article is too large (>2 MB).');
-    }
-
-    const body = await resp.text();
-    if (body.length > MAX_ARTICLE_SIZE) {
-      throw new Error('Article is too large (>2 MB).');
-    }
-
-    const finalUrl = resp.headers.get('X-Final-URL') || url;
-    return { body, finalUrl };
+    resp = await fetcher(buildWorkerParseUrl(proxyBase), {
+      method: 'POST',
+      headers: buildProxyHeaders(proxySecret, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ url, format: 'article' }),
+    });
   } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Timed out fetching the article. Try again later.');
-    }
     if (err instanceof TypeError) {
       throw new Error('Could not reach the article proxy. Check your internet connection or try again later.');
     }
     throw err;
-  } finally {
-    clearTimeout(timer);
   }
+
+  if (!resp.ok) {
+    await handleProxyError(resp);
+  }
+
+  return await resp.json() as Article;
 }
 
 /**
@@ -156,125 +170,117 @@ async function fetchBinaryViaProxy(
   }
 }
 
-/** Check first bytes to detect binary format when content-type is unreliable. */
-function detectBinaryFormat(firstBytes: string): 'pdf' | 'epub' | null {
-  if (firstBytes.startsWith('%PDF-')) return 'pdf';
-  // ZIP local file header: PK\x03\x04 (not just PK, to avoid false matches on .docx etc.)
-  if (firstBytes.length >= 4 &&
-      firstBytes.charCodeAt(0) === 0x50 &&
-      firstBytes.charCodeAt(1) === 0x4B &&
-      firstBytes.charCodeAt(2) === 0x03 &&
-      firstBytes.charCodeAt(3) === 0x04) return 'epub';
-  return null;
-}
-
 /**
- * Fetch an article URL via the CORS proxy and extract readable content.
- * Automatically detects PDF/EPUB by URL extension or response content-type,
- * applying the correct size limits for each type.
+ * Fetch an article URL and extract readable content.
+ * Supports both CORS proxy path (browser) and direct path (worker/AI).
  */
 export async function extractArticle(
   url: string,
   proxyBase: string,
   proxySecret?: string,
-  onProgress?: (message: string) => void,
+  options: ExtractArticleOptions = {},
 ): Promise<Article> {
+  const {
+    domParserCtor: DOMParserConstructor = globalThis.DOMParser,
+    onProgress,
+    fetcher = globalThis.fetch,
+  } = options;
+  const useProxy = proxyBase !== '';
+
+  // YouTube path
+  if (isYoutubeUrl(url)) {
+    onProgress?.('Fetching YouTube transcript...');
+    if (!useProxy) {
+      throw new Error('Direct YouTube extraction is only supported through the worker parse API.');
+    }
+    return extractArticleViaWorkerParse(url, proxyBase, proxySecret, fetcher);
+  }
+
   // Fast path: URL clearly ends in .pdf
   if (isPdfUrl(url)) {
-    return extractArticleFromPdfUrl(url, proxyBase, proxySecret, onProgress);
+    return useProxy 
+      ? extractArticleFromPdfUrl(url, proxyBase, proxySecret, onProgress)
+      : extractArticleFromPdfDirect(url, onProgress, fetcher);
   }
 
   // Fast path: URL clearly points to an EPUB
   if (isEpubUrl(url)) {
-    return extractArticleFromEpubUrl(url, proxyBase, proxySecret, onProgress);
+    return useProxy
+      ? extractArticleFromEpubUrl(url, proxyBase, proxySecret, DOMParserConstructor, onProgress)
+      : extractArticleFromEpubDirect(url, DOMParserConstructor, onProgress, fetcher);
   }
 
-  onProgress?.('Fetching article...');
+  onProgress?.('Fetching content...');
 
-  const proxyUrl = `${proxyBase}?url=${encodeURIComponent(url)}`;
-  const headers: Record<string, string> = {};
-  if (proxySecret) {
-    headers['X-Proxy-Key'] = proxySecret;
-  }
+  const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(url)}` : url;
+  const headers = useProxy ? buildProxyHeaders(proxySecret) : {};
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
 
   try {
-    const resp = await fetch(proxyUrl, { signal: controller.signal, headers });
+    const resp = await fetcher(fetchUrl, { signal: controller.signal, headers, redirect: 'follow' });
     if (!resp.ok) {
-      await handleProxyError(resp);
+      if (useProxy) await handleProxyError(resp);
+      throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
     }
 
     const ct = resp.headers.get('content-type') || '';
 
     // PDF detected by content-type
     if (ct.includes('application/pdf')) {
-      const contentLength = resp.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_PDF_SIZE) {
-        throw new Error('PDF is too large (>10 MB).');
-      }
       const buffer = await resp.arrayBuffer();
-      if (buffer.byteLength > MAX_PDF_SIZE) {
-        throw new Error('PDF is too large (>10 MB).');
-      }
-      const finalUrl = resp.headers.get('X-Final-URL') || url;
+      if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('PDF is too large (>10 MB).');
+      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
       onProgress?.('Extracting text from PDF...');
       return parsePdfFromArrayBuffer(buffer, finalUrl, onProgress);
     }
 
     // EPUB detected by content-type
     if (ct.includes('application/epub')) {
-      const contentLength = resp.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_PDF_SIZE) {
-        throw new Error('EPUB is too large (>10 MB).');
-      }
       const buffer = await resp.arrayBuffer();
-      if (buffer.byteLength > MAX_PDF_SIZE) {
-        throw new Error('EPUB is too large (>10 MB).');
-      }
-      const finalUrl = resp.headers.get('X-Final-URL') || url;
+      if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('EPUB is too large (>10 MB).');
+      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
       onProgress?.('Extracting text from EPUB...');
-      return parseEpubFromArrayBuffer(buffer, finalUrl, onProgress);
+      return parseEpubFromArrayBuffer(buffer, finalUrl, DOMParserConstructor, onProgress);
     }
 
-    // HTML path — article size limit
-    const contentLength = resp.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_ARTICLE_SIZE) {
-      throw new Error('Article is too large (>2 MB).');
-    }
+    // HTML path
     const body = await resp.text();
-    if (body.length > MAX_ARTICLE_SIZE) {
-      throw new Error('Article is too large (>2 MB).');
-    }
+    if (body.length > MAX_ARTICLE_SIZE) throw new Error('Article is too large (>2 MB).');
 
-    // Fallback: detect PDF by magic bytes when content-type was wrong.
-    // Note: resp.text() + TextEncoder round-trip can corrupt bytes > 0x7F,
-    // but %PDF- is pure ASCII so the header check is reliable. pdf.js is
-    // tolerant of minor byte corruption in practice. EPUB is not handled here
-    // because ZIP headers are binary-sensitive and would be corrupted.
+    // Fallback: detect PDF by magic bytes
     if (body.startsWith('%PDF-')) {
       onProgress?.('Extracting text from PDF...');
-      return parsePdfFromArrayBuffer(
-        new TextEncoder().encode(body).buffer as ArrayBuffer,
-        resp.headers.get('X-Final-URL') || url,
-        onProgress,
-      );
+      return parsePdfFromArrayBuffer(new TextEncoder().encode(body).buffer as ArrayBuffer, resp.url || url, onProgress);
     }
 
-    const finalUrl = resp.headers.get('X-Final-URL') || url;
-    return parseArticleFromHtml(body, finalUrl);
+    const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
+    return parseArticleFromHtml(body, finalUrl, DOMParserConstructor);
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Timed out fetching the article. Try again later.');
-    }
-    if (err instanceof TypeError) {
-      throw new Error('Could not reach the article proxy. Check your internet connection or try again later.');
+      throw new Error('Timed out fetching the content. Try again later.');
     }
     throw err;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Fetch PDF directly (no proxy). */
+async function extractArticleFromPdfDirect(url: string, onProgress?: (message: string) => void, fetcher: typeof fetch = globalThis.fetch): Promise<Article> {
+  const resp = await fetcher(url, { redirect: 'follow' });
+  if (!resp.ok) throw new Error(`PDF fetch failed: ${resp.status}`);
+  const buffer = await resp.arrayBuffer();
+  return parsePdfFromArrayBuffer(buffer, resp.url || url, onProgress);
+}
+
+/** Fetch EPUB directly (no proxy). */
+async function extractArticleFromEpubDirect(url: string, DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document }, onProgress?: (message: string) => void, fetcher: typeof fetch = globalThis.fetch): Promise<Article> {
+  const resp = await fetcher(url, { redirect: 'follow' });
+  if (!resp.ok) throw new Error(`EPUB fetch failed: ${resp.status}`);
+  const buffer = await resp.arrayBuffer();
+  return parseEpubFromArrayBuffer(buffer, resp.url || url, DOMParserConstructor, onProgress);
 }
 
 /**
@@ -298,22 +304,10 @@ export async function extractArticleFromEpubUrl(
   url: string,
   proxyBase: string,
   proxySecret?: string,
+  DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document } = globalThis.DOMParser,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   const { buffer, finalUrl } = await fetchBinaryViaProxy(url, proxyBase, proxySecret, onProgress, 'EPUB');
   onProgress?.('Extracting text from EPUB...');
-  return parseEpubFromArrayBuffer(buffer, finalUrl, onProgress);
-}
-
-/**
- * Fetch markdown using Jina Reader via worker `mode=markdown`.
- * Falls back to Readability path if any step fails.
- */
-export async function extractArticleWithJina(url: string, proxyBase: string, proxySecret?: string): Promise<Article> {
-  try {
-    const { body, finalUrl } = await fetchViaProxy(url, proxyBase, proxySecret, 'markdown');
-    return parseArticleFromMarkdown(body, finalUrl);
-  } catch {
-    return extractArticle(url, proxyBase, proxySecret);
-  }
+  return parseEpubFromArrayBuffer(buffer, finalUrl, DOMParserConstructor, onProgress);
 }

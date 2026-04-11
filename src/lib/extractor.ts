@@ -8,7 +8,7 @@
 
 // Types & shared constants
 export type { Article } from './extractors/types.js';
-export { IMAGE_MD_RE, IMAGE_JINA_RE, IMAGE_HTML_RE } from './extractors/types.js';
+export { IMAGE_MD_RE, IMAGE_HTML_RE } from './extractors/types.js';
 
 // Shared utilities (re-exported for test access)
 export { splitTextBySentences } from './extractors/utils.js';
@@ -16,10 +16,11 @@ export { splitTextBySentences } from './extractors/utils.js';
 // URL fetch orchestration (detects format and dispatches to the right parser)
 export {
   extractArticle,
-  extractArticleWithJina,
   extractArticleFromPdfUrl,
   extractArticleFromEpubUrl,
 } from './extractors/extract-url.js';
+
+export { extractArticleFromYoutube } from './extractors/extract-youtube.js';
 
 // HTML parsing
 export { sanitizeRenderedHtml } from './extractors/extract-html.js';

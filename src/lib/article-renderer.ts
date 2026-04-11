@@ -7,17 +7,14 @@
  * ArticleRenderer handles DOM rendering and TTS paragraph building.
  */
 
+import { marked } from 'marked';
 import {
   sanitizeRenderedHtml,
   IMAGE_MD_RE,
-  IMAGE_JINA_RE,
   IMAGE_HTML_RE,
   type Article,
 } from './extractor.js';
 import type { TTSEngine } from './tts-engine.js';
-
-// marked is loaded as a global via <script> tag (vendor/marked.js)
-declare const marked: { parse(md: string): string };
 
 /**
  * TTS paragraph minimum length.  Blocks whose normalised text is shorter
@@ -76,10 +73,9 @@ function renderMarkdownHtml(markdown: string): string {
   try {
     const cleaned = markdown
       .replace(IMAGE_HTML_RE, '')
-      .replace(IMAGE_MD_RE, '')
-      .replace(IMAGE_JINA_RE, '');
+      .replace(IMAGE_MD_RE, '');
     const html = marked.parse(cleaned);
-    return sanitizeRenderedHtml(String(html));
+    return sanitizeRenderedHtml(String(html), globalThis.DOMParser);
   } catch {
     return '';
   }

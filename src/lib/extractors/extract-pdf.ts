@@ -1,7 +1,4 @@
-/**
- * PDF extraction via pdf.js (loaded lazily from CDN or local vendor).
- */
-
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
@@ -18,19 +15,19 @@ import {
 
 // ── pdf.js types ──────────────────────────────────────────────────────
 
-export interface PdfJsTextItem {
+export type PdfJsTextItem = {
   str: string;
   transform: number[];
   height: number;
-}
+};
 
-interface PdfJsOutlineItem {
+export type PdfJsOutlineItem = {
   title: string;
   dest: string | unknown[] | null;
   items?: PdfJsOutlineItem[];
-}
+};
 
-interface PdfJsDocument {
+export type PdfJsDocument = {
   numPages: number;
   getPage(num: number): Promise<{
     getTextContent(): Promise<{
@@ -40,59 +37,13 @@ interface PdfJsDocument {
   getOutline(): Promise<PdfJsOutlineItem[] | null>;
   getDestination(dest: string): Promise<unknown[] | null>;
   getPageIndex(ref: unknown): Promise<number>;
-}
-
-interface PdfJsLib {
-  GlobalWorkerOptions: { workerSrc: string };
-  getDocument(src: { data: ArrayBuffer }): {
-    promise: Promise<PdfJsDocument>;
-  };
-}
-
-// Vendored paths relative to the page root. Resolved via document.baseURI
-// before use — dynamic import() resolves relative to the *module*, not the
-// page, so a bare './vendor/...' path would break from lib/extractors/.
-const PDF_JS_PATH = './vendor/pdfjs/pdf.min.mjs';
-const PDF_JS_WORKER_PATH = './vendor/pdfjs/pdf.worker.min.mjs';
-
-let _pdfjsLib: PdfJsLib | null = null;
-
-/** Load pdf.js library lazily from vendored local files on first use. */
-async function loadPdfJs(): Promise<PdfJsLib> {
-  // Check for globally-available pdfjsLib (e.g. loaded via <script> tag or test mock)
-  const global = globalThis as Record<string, unknown>;
-  if (global.pdfjsLib && typeof (global.pdfjsLib as PdfJsLib).getDocument === 'function') {
-    return global.pdfjsLib as PdfJsLib;
-  }
-
-  if (_pdfjsLib) return _pdfjsLib;
-
-  try {
-    // The vendored pdf.min.mjs is a webpack bundle that assigns exports to
-    // globalThis.pdfjsLib rather than using ES module exports. Dynamic import()
-    // executes the script (populating globalThis.pdfjsLib) but returns an empty
-    // module namespace. Read the library from globalThis after import.
-    const url = new URL(PDF_JS_PATH, document.baseURI).href;
-    await import(/* webpackIgnore: true */ url);
-    const lib = (globalThis as Record<string, unknown>).pdfjsLib as PdfJsLib | undefined;
-    if (!lib || typeof lib.getDocument !== 'function') {
-      throw new Error('pdfjsLib not available after import');
-    }
-    lib.GlobalWorkerOptions.workerSrc = new URL(PDF_JS_WORKER_PATH, document.baseURI).href;
-    _pdfjsLib = lib;
-    return lib;
-  } catch (err) {
-    throw new Error(
-      `Could not load PDF support. The vendor file may be missing. (${err instanceof Error ? err.message : String(err)})`,
-    );
-  }
-}
+};
 
 /**
  * Create an Article from a local PDF file.
  */
 export async function createArticleFromPdf(
-  file: File,
+  file: File | { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   if (file.size > MAX_PDF_SIZE) {
@@ -171,8 +122,15 @@ export async function parsePdfFromArrayBuffer(
   onProgress?: (message: string) => void,
 ): Promise<Article> {
   // Phase 1: Extract raw text from each page
-  const pdfjsLib = await loadPdfJs();
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  // Note: we assume pdfjsLib is available via import (Worker or Browser bundle)
+  // We need to set the workerSrc for the browser environment.
+  // In Worker, we don't necessarily need a separate worker thread if we use the legacy build.
+  if (typeof window !== 'undefined' && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    // Vite will handle this URL correctly
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  }
+
+  const pdf = await (pdfjsLib as any).getDocument({ data: buffer }).promise;
   const { paragraphs: rawParagraphs, pageMap } = await extractPdfRawText(pdf, onProgress);
 
   // Phase 2: Filter and assemble speakable paragraphs
@@ -201,7 +159,7 @@ async function extractPdfRawText(
     }
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    for (const p of extractParagraphsFromTextItems(content.items)) {
+    for (const p of extractParagraphsFromTextItems(content.items as PdfJsTextItem[])) {
       pageMap.push(i);
       paragraphs.push(p);
     }
