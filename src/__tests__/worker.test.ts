@@ -55,14 +55,7 @@ describe('worker youtube parse', () => {
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
 
-      if (url.startsWith('https://www.youtube.com/watch?v=dQw4w9WgXcQ')) {
-        return new Response(
-          `<html>"INNERTUBE_API_KEY":"worker-key"</html>`,
-          { status: 200, headers: { 'content-type': 'text/html' } },
-        );
-      }
-
-      if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=worker-key')) {
+      if (url.includes('https://www.youtube.com/youtubei/v1/player')) {
         expect(init?.method).toBe('POST');
         return new Response(JSON.stringify({
           videoDetails: {
@@ -115,6 +108,7 @@ describe('worker youtube parse', () => {
     expect(article.siteName).toBe('YouTube');
     expect(article.title).toBe('Transcript for: Worker Video');
     expect(article.paragraphs.join(' ')).toContain('Worker path transcript.');
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    // Should be 2 calls: Player API (direct with static key) + Transcript
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
