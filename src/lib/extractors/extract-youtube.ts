@@ -21,6 +21,9 @@ const DESKTOP_USER_AGENT =
 const ANDROID_USER_AGENT =
   'com.google.android.youtube/21.14.48 (Linux; U; Android 14; en_US)';
 
+/** Constant API key for Android InnerTube client to bypass blocked watch page. */
+const ANDROID_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
 async function handleYoutubeResponse(response: Response, label: string): Promise<Response> {
   if (response.status === 429) {
     throw new UpstreamResponseError(429, `YouTube rate limit exceeded (upstream) when ${label}. The Worker IP may be blocked.`);
@@ -76,10 +79,17 @@ export async function extractArticleFromYoutube(
   }
 
   try {
-    const watchResponse = await fetchYoutubePage(videoId, fetcher);
-    const html = await watchResponse.text();
-    const apiKey = extractInnertubeApiKey(html);
-    const playerJson = await fetchPlayerJson(videoId, apiKey, fetcher);
+    let playerJson: any;
+    try {
+      // Step 1: Attempt direct Player API call with static key (bypasses blocked watch page)
+      playerJson = await fetchPlayerJson(videoId, ANDROID_API_KEY, fetcher);
+    } catch (apiErr: unknown) {
+      // Step 2: Fallback to watch page extraction if direct call fails
+      const watchResponse = await fetchYoutubePage(videoId, fetcher);
+      const html = await watchResponse.text();
+      const apiKey = extractInnertubeApiKey(html);
+      playerJson = await fetchPlayerJson(videoId, apiKey, fetcher);
+    }
 
     const title = playerJson.videoDetails?.title || 'YouTube Video';
     

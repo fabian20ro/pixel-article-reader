@@ -966,14 +966,16 @@ Each entry should follow this structure:
 
 ### [2026-04-13] Fix YouTube extraction 429s and metadata (description)
 
-**Context:** User reported 429 errors on YouTube and missing full descriptions.
+**Context:** User reported 429 errors on YouTube and missing full descriptions. Cloudflare Worker IPs are frequently blocked for the initial YouTube watch page fetch.
 **What happened:**
+- Implemented **Direct Player API Call**: Now uses a static Android InnerTube API key (`AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8`) to call `v1/player` directly, bypassing the initial blocked watch page fetch.
+- Added **Extraction Fallback**: Keeps the original watch page extraction flow as a fallback if the direct API call fails (e.g., due to key changes).
 - Updated YouTube stealth headers: moved to modern Android client version `21.14.48` (April 2026) and SDK 34.
 - Fixed typo in `Referer` headers (removed trailing space).
 - Improved description extraction: now prioritizes the full description from `playerJson.microformat.playerMicroformatRenderer.description` (both `simpleText` and `runs`) over the truncated `shortDescription`.
 - Enhanced 429 error reporting: now explicitly mentions "upstream" blocking to distinguish between Worker limits and YouTube blocks.
 - Bumped `SW_VERSION` to `2026.04.13.01` for PWA update.
-- Added 2 new unit tests for microformat description parsing. All 10 YouTube tests pass.
-**Outcome:** Success. YouTube extraction is more robust, has better metadata, and better error reporting.
-**Insight:** YouTube's `videoDetails.shortDescription` is often truncated; the full text lives in the `microformat` block or engagement panels.
-**Promoted to Lessons Learned:** Yes (YouTube description path).
+- Updated unit tests to verify the direct API flow and fallback logic. All 11 YouTube tests pass.
+**Outcome:** Success. YouTube extraction is much more robust against 429s, has better metadata, and clean error reporting.
+**Insight:** Bypassing the initial watch page fetch via a static API key is a highly effective way to avoid IP-based bot detection on Cloudflare Workers.
+**Promoted to Lessons Learned:** Yes (YouTube direct API bypass).
