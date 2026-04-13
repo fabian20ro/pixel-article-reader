@@ -80,6 +80,69 @@ describe('extractArticleFromYoutube', () => {
     expect(article.resolvedUrl).toBe(YT_URL);
   });
 
+  it('extracts full description from microformat.simpleText', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response('<html>"INNERTUBE_API_KEY":"abc123"</html>', { status: 200 });
+      }
+      if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=abc123')) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: "Test", shortDescription: "short" },
+          microformat: {
+            playerMicroformatRenderer: {
+              description: { simpleText: "Full long description from microformat" }
+            }
+          },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext' }],
+            },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello.' }] }]
+      }), { status: 200 });
+    });
+
+    const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
+    expect(article.markdown).toContain('Full long description from microformat');
+    expect(article.excerpt).toBe('Full long description from microformat'.slice(0, 200));
+  });
+
+  it('extracts full description from microformat.runs', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response('<html>"INNERTUBE_API_KEY":"abc123"</html>', { status: 200 });
+      }
+      if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=abc123')) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: "Test" },
+          microformat: {
+            playerMicroformatRenderer: {
+              description: { runs: [{ text: "Part 1 " }, { text: "Part 2" }] }
+            }
+          },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext' }],
+            },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello.' }] }]
+      }), { status: 200 });
+    });
+
+    const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
+    expect(article.markdown).toContain('Part 1 Part 2');
+  });
+
   it('defaults to "YouTube Video" when player title is missing', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();

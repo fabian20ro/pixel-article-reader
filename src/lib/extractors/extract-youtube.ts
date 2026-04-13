@@ -19,11 +19,11 @@ const DESKTOP_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
 
 const ANDROID_USER_AGENT =
-  'com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US)';
+  'com.google.android.youtube/21.14.48 (Linux; U; Android 14; en_US)';
 
 async function handleYoutubeResponse(response: Response, label: string): Promise<Response> {
   if (response.status === 429) {
-    throw new UpstreamResponseError(429, `YouTube rate limit exceeded when ${label}.`);
+    throw new UpstreamResponseError(429, `YouTube rate limit exceeded (upstream) when ${label}. The Worker IP may be blocked.`);
   }
   if (!response.ok) {
     throw new Error(`YouTube returned ${response.status} when ${label}.`);
@@ -82,7 +82,18 @@ export async function extractArticleFromYoutube(
     const playerJson = await fetchPlayerJson(videoId, apiKey, fetcher);
 
     const title = playerJson.videoDetails?.title || 'YouTube Video';
-    const description = (playerJson.videoDetails?.shortDescription || '').trim();
+    
+    // Prioritize full description from microformat (if available)
+    const microDescription = playerJson.microformat?.playerMicroformatRenderer?.description;
+    let description = '';
+    if (typeof microDescription?.simpleText === 'string') {
+      description = microDescription.simpleText;
+    } else if (Array.isArray(microDescription?.runs)) {
+      description = microDescription.runs.map((r: any) => r.text || '').join('');
+    } else {
+      description = playerJson.videoDetails?.shortDescription || '';
+    }
+    description = description.trim();
 
     const track = pickTranscriptTrack(playerJson);
     const transcriptItems = await fetchTranscriptSegments(track, fetcher);
@@ -118,7 +129,7 @@ async function fetchYoutubePage(videoId: string, fetcher: typeof fetch): Promise
   const response = await fetcher(`https://www.youtube.com/watch?v=${videoId}`, {
     headers: {
       'User-Agent': DESKTOP_USER_AGENT,
-      'Referer': 'https://www.youtube.com/ ',
+      'Referer': 'https://www.youtube.com/',
     },
   });
   return handleYoutubeResponse(response, 'fetching video page');
@@ -140,14 +151,14 @@ async function fetchPlayerJson(videoId: string, apiKey: string, fetcher: typeof 
       'Content-Type': 'application/json',
       'User-Agent': ANDROID_USER_AGENT,
       'X-Goog-Api-Format-Version': '2',
-      'Referer': 'https://www.youtube.com/ ',
+      'Referer': 'https://www.youtube.com/',
     },
     body: JSON.stringify({
       context: {
         client: {
           clientName: 'ANDROID',
-          clientVersion: '20.10.38',
-          androidSdkVersion: 32,
+          clientVersion: '21.14.48',
+          androidSdkVersion: 34,
           hl: 'en',
           gl: 'US',
         },
@@ -190,7 +201,7 @@ async function fetchTranscriptSegments(track: TranscriptTrack, fetcher: typeof f
   const response = await fetcher(transcriptUrl, {
     headers: {
       'User-Agent': ANDROID_USER_AGENT,
-      'Referer': 'https://www.youtube.com/ ',
+      'Referer': 'https://www.youtube.com/',
     },
   });
   await handleYoutubeResponse(response, 'fetching transcript data');
