@@ -47,6 +47,9 @@ article-controller.ts
   └── call tts-engine.ts
 
 tts-engine.ts ── sentence chunking ── SpeechSynthesisUtterance per sentence
+
+Offline fallback:
+- ArticleController restores last rendered article snapshot from localStorage when startup occurs offline.
 ```
 
 ## Module Dependency Graph

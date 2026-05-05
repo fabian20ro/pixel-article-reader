@@ -115,4 +115,53 @@ describe('ArticleController', () => {
       }),
     );
   });
+
+  it('ignores stale URL load results when a newer load starts', async () => {
+    let resolveFirst: ((v: any) => void) | null = null;
+    vi.mocked(extractArticle)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }) as any)
+      .mockResolvedValueOnce({
+        title: 'Second',
+        content: '<p>second</p>',
+        textContent: 'second',
+        markdown: 'second',
+        paragraphs: ['second paragraph is long enough for rendering'],
+        lang: 'en',
+        htmlLang: 'en',
+        siteName: 'Site',
+        excerpt: '',
+        wordCount: 10,
+        estimatedMinutes: 1,
+        resolvedUrl: 'https://example.com/second',
+      } as any);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const first = (controller as any).loadArticle('https://example.com/first');
+    const second = (controller as any).loadArticle('https://example.com/second');
+    await second;
+    resolveFirst?.({
+      title: 'First',
+      content: '<p>first</p>',
+      textContent: 'first',
+      markdown: 'first',
+      paragraphs: ['first paragraph is long enough for rendering'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 10,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/first',
+    });
+    await first;
+
+    expect(refs.articleTitle.textContent).toBe('Second');
+  });
 });

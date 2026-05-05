@@ -979,3 +979,24 @@ Each entry should follow this structure:
 **Outcome:** Success. YouTube extraction is much more robust against 429s, has better metadata, and clean error reporting.
 **Insight:** Bypassing the initial watch page fetch via a static API key is a highly effective way to avoid IP-based bot detection on Cloudflare Workers.
 **Promoted to Lessons Learned:** Yes (YouTube direct API bypass).
+
+---
+
+### [2026-05-05] Reliability + offline-first hardening pass (small changes)
+
+**Context:** Requested ordered implementation focused on small changes, offline priority, reliability first, maintainability second.
+
+**What happened:**
+- Added stale async result protection in `ArticleController` using a monotonic `loadToken` guard for URL load, file upload, and translate flows.
+- Added offline preflight in URL extraction path (`navigator.onLine === false`) with immediate actionable error and fallback restore.
+- Added last-session restore/persist via new `session-store.ts` (stores last successfully rendered article snapshot in `localStorage`).
+- Hooked startup behavior to restore last article when opening offline without share URL params.
+- Added regression test ensuring stale first request cannot overwrite a newer article load.
+- Externalized proxy base config to `VITE_PROXY_BASE` with existing production URL fallback.
+- Updated README + architecture codemap with explicit offline behavior notes.
+
+**Outcome:** Reliability improved for race-prone async flows; offline user path improved without architecture churn.
+
+**Insight:** For async UI flows, a tiny request-token guard gives disproportionate reliability gains and composes cleanly with offline fallback logic.
+
+**Promoted to Lessons Learned:** No
