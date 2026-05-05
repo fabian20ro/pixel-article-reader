@@ -14,6 +14,7 @@ import { translateParagraphs } from './translator.js';
 import { renderArticleBody } from './article-renderer.js';
 import type { TTSEngine } from './tts-engine.js';
 import type { AppDomRefs } from './dom-refs.js';
+import { loadLastArticle, saveLastArticle } from './session-store.js';
 
 export interface ArticleControllerOptions {
   refs: AppDomRefs;
@@ -28,6 +29,7 @@ export class ArticleController {
   private currentArticleUrl = '';
   private currentTtsParagraphs: string[] = [];
   private langOverride: 'auto' | Language;
+  private loadToken = 0;
 
   constructor(private readonly options: ArticleControllerOptions) {
     this.langOverride = options.initialLangOverride;
@@ -85,7 +87,12 @@ export class ArticleController {
 
   async handleInitialSharedUrl(): Promise<void> {
     const sharedUrl = getUrlFromParams();
-    if (!sharedUrl) return;
+    if (!sharedUrl) {
+      if (navigator.onLine === false) {
+        this.restoreLastArticle();
+      }
+      return;
+    }
 
     clearQueryParams();
     this.options.refs.urlInput.value = sharedUrl;
@@ -146,6 +153,7 @@ export class ArticleController {
   private static readonly SUPPORTED_EXTENSIONS = new Set(['pdf', 'txt', 'text', 'md', 'markdown', 'epub']);
 
   private async handleFileUpload(file: File): Promise<void> {
+    const token = ++this.loadToken;
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 
     if (file.size > ArticleController.MAX_FILE_SIZE) {
@@ -187,17 +195,25 @@ export class ArticleController {
       } else {
         throw new Error(`Unsupported file type: .${ext}. Supported: PDF, TXT, Markdown, EPUB.`);
       }
+      if (token !== this.loadToken) return;
 
       this.currentArticle = article;
       this.currentArticleUrl = '';
       this.displayArticle(article);
     } catch (err: unknown) {
+      if (token !== this.loadToken) return;
       const msg = err instanceof Error ? err.message : 'Could not process the file.';
       this.showError(msg);
     }
   }
 
   private async loadArticle(url: string): Promise<void> {
+    const token = ++this.loadToken;
+    if (navigator.onLine === false) {
+      this.showError('You appear to be offline. Open a saved local item from Queue or retry when connected.');
+      this.restoreLastArticle();
+      return;
+    }
     this.showView('loading');
     this.options.refs.loadingMessage.textContent = 'Extracting article...';
     this.options.tts.stop();
@@ -210,10 +226,12 @@ export class ArticleController {
           onProgress: (msg: string) => { this.options.refs.loadingMessage.textContent = msg; },
         },
       );
+      if (token !== this.loadToken) return;
       this.currentArticle = article;
       this.currentArticleUrl = article.resolvedUrl;
       this.displayArticle(article);
     } catch (err: unknown) {
+      if (token !== this.loadToken) return;
       const msg = err instanceof Error ? err.message : 'Unknown error occurred.';
       this.showError(msg);
     }
@@ -238,6 +256,7 @@ export class ArticleController {
     this.currentTtsParagraphs = renderArticleBody(article, refs.articleText, this.options.tts);
 
     this.options.tts.loadArticle(this.currentTtsParagraphs, resolvedLang, article.title);
+    saveLastArticle(article);
     this.syncLanguageControls();
 
     this.showView('article');
@@ -262,6 +281,7 @@ export class ArticleController {
 
   private async translateCurrentArticle(): Promise<void> {
     if (!this.currentArticle) return;
+    const token = ++this.loadToken;
 
     const { refs } = this.options;
     const savedLabel = refs.translateBtn.textContent;
@@ -277,6 +297,7 @@ export class ArticleController {
         DEFAULT_TRANSLATION_TARGET,
         this.options.proxyBase,
       );
+      if (token !== this.loadToken) return;
 
       this.currentArticle = {
         ...this.currentArticle,
@@ -290,6 +311,7 @@ export class ArticleController {
       this.displayArticle(this.currentArticle);
       refs.translateBtn.classList.add('hidden');
     } catch (err: unknown) {
+      if (token !== this.loadToken) return;
       const msg = err instanceof Error ? err.message : 'Translation failed.';
       refs.translateBtn.textContent = savedLabel;
       refs.translateBtn.disabled = false;
@@ -328,5 +350,13 @@ export class ArticleController {
     refs.settingsLangBtns.forEach((btn: HTMLButtonElement) => {
       btn.classList.toggle('active', btn.dataset.value === this.langOverride);
     });
+  }
+
+  private restoreLastArticle(): void {
+    const last = loadLastArticle();
+    if (!last) return;
+    this.currentArticle = last.article;
+    this.currentArticleUrl = last.article.resolvedUrl || '';
+    this.displayArticle(last.article);
   }
 }

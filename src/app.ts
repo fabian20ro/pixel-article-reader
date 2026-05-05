@@ -21,7 +21,7 @@ import { openDrawer, closeDrawer, showSnackbar, hideSnackbar, updateSegmentButto
 import { buildChaptersList } from './lib/chapter-renderer.js';
 
 const CONFIG = {
-  PROXY_BASE: 'https://pixel-article-reader.fabian20ro.workers.dev',
+  PROXY_BASE: import.meta.env.VITE_PROXY_BASE || 'https://pixel-article-reader.fabian20ro.workers.dev',
   DEFAULT_RATE: 1.0,
   DEFAULT_LANG: 'auto' as 'auto' | Language,
 };

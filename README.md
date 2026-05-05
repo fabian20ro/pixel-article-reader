@@ -120,6 +120,12 @@ Articles are managed in a playlist-style queue:
 
 Settings are persisted in `localStorage`. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
 
+### Offline behavior
+
+- If you lose connectivity, previously uploaded files and pasted-text articles in your queue still work offline.
+- URL extraction/translation requires network + Worker access.
+- When offline, the app attempts to restore the last successfully rendered article snapshot.
+
 ## PWA Recovery (stale install)
 
 If the installed app is stuck on an older UI (for example, missing the **Check for Updates** button), run this cleanup flow.
