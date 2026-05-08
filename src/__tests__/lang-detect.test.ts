@@ -54,6 +54,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage(text)).toBe('ro');
   });
 
+  it('detects Romanian via very short common words', () => {
+    const text = 'de un la o cu';
+    expect(detectLanguage(text)).toBe('ro');
+  });
+
   // ── Edge cases ────────────────────────────────────────────────
 
   it('only examines the first ~1000 characters', () => {

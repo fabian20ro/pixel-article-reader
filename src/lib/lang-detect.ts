@@ -16,7 +16,7 @@ const RO_WORDS = [
   'și', 'este', 'care', 'pentru', 'într', 'sunt',
   'acest', 'poate', 'prin', 'doar', 'mai', 'sau',
   'fost', 'avea', 'acesta', 'despre', 'când', 'toate',
-  'numai', 'după', 'foarte', 'acum', 'unde',
+  'numai', 'după', 'foarte', 'acum', 'unde', 'că', 'de', 'un', 'o', 'la', 'cu'
 ];
 
 /**
