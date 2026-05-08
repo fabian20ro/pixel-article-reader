@@ -1000,3 +1000,21 @@ Each entry should follow this structure:
 **Insight:** For async UI flows, a tiny request-token guard gives disproportionate reliability gains and composes cleanly with offline fallback logic.
 
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-08] Queue-load normalization for corrupt or oversized storage
+
+**Context:** Hourly maintenance pass on the article reader queue persistence path.
+**What happened:**
+- Updated `loadQueue()` to normalize stored queue data on read: invalid entries are dropped, and loaded queues are capped to the most recent 50 items.
+- Persisted the cleaned queue back to `localStorage` so old corrupt or oversized snapshots get repaired instead of being reprocessed on every startup.
+- Added regression coverage for two cases: mixed valid/invalid storage and oversized stored queues.
+- Ran focused queue-store tests, then the full Vitest suite, then TypeScript typecheck.
+
+**Outcome:** Success. Queue restoration is a little more self-healing, with no behavior change for normal queues.
+
+**Insight:** Loading code is a good place to repair old client-side state when the fix is deterministic and low risk.
+
+**Promoted to Lessons Learned:** No
+

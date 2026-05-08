@@ -81,7 +81,7 @@ describe('queue-store', () => {
       expect(loadQueue()).toEqual([]);
     });
 
-    it('drops invalid items and keeps valid ones', () => {
+    it('drops invalid items, keeps valid ones, and writes back the cleaned queue', () => {
       const valid = makeItem();
       const invalid = { id: '', url: 'not-a-url', title: 123 };
       localStorage.setItem('article-reader-queue', JSON.stringify([valid, invalid]));
@@ -89,6 +89,20 @@ describe('queue-store', () => {
       const loaded = loadQueue();
       expect(loaded).toHaveLength(1);
       expect(loaded[0].id).toBe(valid.id);
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([valid]);
+    });
+
+    it('caps loaded queues to the most recent 50 items', () => {
+      const items = Array.from({ length: 52 }, (_, index) =>
+        makeItem({ id: `item-${index}`, url: `https://example.com/${index}` }),
+      );
+      localStorage.setItem('article-reader-queue', JSON.stringify(items));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(50);
+      expect(loaded[0].id).toBe('item-2');
+      expect(loaded[49].id).toBe('item-51');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toHaveLength(50);
     });
 
     it('loads valid items from storage', () => {

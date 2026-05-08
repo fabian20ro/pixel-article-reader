@@ -51,7 +51,12 @@ export function loadQueue(): QueueItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidQueueItem);
+
+    const cleaned = parsed.filter(isValidQueueItem).slice(-MAX_QUEUE_SIZE);
+    if (cleaned.length !== parsed.length) {
+      saveQueue(cleaned);
+    }
+    return cleaned;
   } catch (err) {
     log.warn('Failed to load queue from localStorage', err);
     return [];
