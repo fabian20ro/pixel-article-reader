@@ -39,7 +39,7 @@ export function extractUrl(text: string): string | null {
     if (prefix.length <= 500) {
       let url = endMatch[0];
       // Strip trailing punctuation that might have been caught
-      url = url.replace(/[.,!?;:)\],}]+$/, '');
+      url = url.replace(/[.,!?;:()\[\]{},]+$/, '');
       if (isValidArticleUrl(url)) return url;
     }
   }
