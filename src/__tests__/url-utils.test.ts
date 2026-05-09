@@ -67,6 +67,11 @@ describe('extractUrl', () => {
     expect(extractUrl('Check this out: https://example.com/article — great read')).toBeNull();
   });
 
+  it('strips trailing punctuation from the extracted URL', () => {
+    expect(extractUrl('Check this out https://example.com/article.')).toBe('https://example.com/article');
+    expect(extractUrl('Check this out (https://example.com/article)')).toBe('https://example.com/article');
+  });
+
   it('returns null when multiple URLs are embedded in text', () => {
     const text = 'See https://first.com/a and https://second.com/b for details.';
     expect(extractUrl(text)).toBeNull();
