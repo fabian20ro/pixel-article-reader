@@ -47,7 +47,7 @@ describe('settings-store', () => {
     expect(settings).toEqual(createDefaultSettings(defaults));
   });
 
-  it('sanitizes invalid stored values', () => {
+  it('sanitizes invalid stored values and writes back the cleaned settings', () => {
     localStorage.setItem(
       'articlevoice-settings',
       JSON.stringify({
@@ -63,6 +63,7 @@ describe('settings-store', () => {
     expect(settings.lang).toBe('auto');
     expect(settings.voiceName).toBe('');
     expect(settings.wakeLock).toBe(true);
+    expect(JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}')).toEqual(settings);
   });
 
   it('persists and reloads valid settings', () => {

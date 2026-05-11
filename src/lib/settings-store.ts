@@ -61,7 +61,7 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
     if (!raw) return fallback;
 
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
+    const cleaned: AppSettings = {
       rate: clampRate(parsed.rate, fallback.rate),
       lang: toLang(parsed.lang, fallback.lang),
       voiceName: typeof parsed.voiceName === 'string' ? parsed.voiceName : '',
@@ -70,6 +70,12 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
       theme: isTheme(parsed.theme) ? parsed.theme : 'dark',
       deviceVoiceOnly: typeof parsed.deviceVoiceOnly === 'boolean' ? parsed.deviceVoiceOnly : false,
     };
+
+    if (JSON.stringify(cleaned) !== raw) {
+      saveSettings(cleaned);
+    }
+
+    return cleaned;
   } catch {
     return fallback;
   }

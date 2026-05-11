@@ -42,6 +42,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-25]** Reset `_stopped` flag after `loadArticle()` — When `stop()` is called, it sets `_stopped = true` to prevent any remaining async fetch/speak callbacks from triggering further action. This flag must be reset to `false` when a new article is loaded via `loadArticle()`, otherwise the engine will remain permanently stuck in "stopped" mode and refuse to speak the new content. (Promoted from iteration log: 2nd occurrence of TTS-DOM index mismatch.)
 
+**[2026-05-11]** When a localStorage loader sanitizes corrupt persisted state, write the cleaned value back during load — otherwise the app keeps re-reading the same bad blob and never heals the stale data.
+
 ## Testing & Quality
 
 **[2026-02-22]** Test data must match actual code behavior, not assumed behavior — When writing the extractor test for "single-newline fallback", the test assumed the fallback path would be triggered, but the code's double-newline split actually succeeds with a single large paragraph. Always trace through the actual splitting logic before asserting paragraph counts.

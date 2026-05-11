@@ -204,6 +204,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-11] Heal corrupted settings storage on load
+
+**Context:** Small local quality improvement in `pixel-article-reader`.
+**What happened:** Updated `src/lib/settings-store.ts` so sanitized settings are written back to `localStorage` during load, and added a regression test covering the self-healing path.
+**Outcome:** Success. Targeted Vitest and full test suite passed; typecheck passed.
+**Insight:** If a loader already normalizes corrupt browser storage, persist the cleaned value immediately so the app doesn't keep re-reading the same bad blob.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 ### [2026-02-22] Fix URL detection, translate button, sentence skip, and docs
 
 **Context:** User reported multiple issues: (1) pasting a full article that contains embedded URLs incorrectly extracts a URL and tries to fetch it, (2) translate button is invisible/hard to find, (3) sentence skip buttons don't work reliably, (4) console warnings about deprecated meta tags and manifest. Also requested AGENTS.md simplification and library updates.
