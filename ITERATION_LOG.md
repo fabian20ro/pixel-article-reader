@@ -214,6 +214,16 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-11] Self-heal invalid last-session storage on load
+
+**Context:** Small follow-up quality improvement in `pixel-article-reader`.
+**What happened:** Updated `src/lib/session-store.ts` so malformed or invalid last-article blobs are removed from `localStorage` during load, and added regression coverage for valid, malformed, and invalid-shape cases.
+**Outcome:** Success. Focused Vitest passed; TypeScript typecheck passed.
+**Insight:** Session restore should clean up invalid persisted blobs on read, not just ignore them, so startup doesn't keep paying the same validation cost.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 ### [2026-02-22] Fix URL detection, translate button, sentence skip, and docs
 
 **Context:** User reported multiple issues: (1) pasting a full article that contains embedded URLs incorrectly extracts a URL and tries to fetch it, (2) translate button is invisible/hard to find, (3) sentence skip buttons don't work reliably, (4) console warnings about deprecated meta tags and manifest. Also requested AGENTS.md simplification and library updates.

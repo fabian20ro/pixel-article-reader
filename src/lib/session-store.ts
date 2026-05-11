@@ -40,10 +40,12 @@ export function loadLastArticle(): LastSessionData | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LastSessionData>;
     if (!parsed || typeof parsed.savedAt !== 'number' || !isValidArticleShape(parsed.article)) {
+      localStorage.removeItem(LAST_ARTICLE_KEY);
       return null;
     }
     return { article: parsed.article, savedAt: parsed.savedAt };
   } catch {
+    localStorage.removeItem(LAST_ARTICLE_KEY);
     return null;
   }
 }

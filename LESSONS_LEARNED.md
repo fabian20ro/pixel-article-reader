@@ -44,6 +44,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-05-11]** When a localStorage loader sanitizes corrupt persisted state, write the cleaned value back during load — otherwise the app keeps re-reading the same bad blob and never heals the stale data.
 
+**[2026-05-11]** If a persisted session blob fails validation during startup, remove the bad entry before returning null — otherwise the app can keep paying the parse/validation cost on every boot.
+
 ## Testing & Quality
 
 **[2026-02-22]** Test data must match actual code behavior, not assumed behavior — When writing the extractor test for "single-newline fallback", the test assumed the fallback path would be triggered, but the code's double-newline split actually succeeds with a single large paragraph. Always trace through the actual splitting logic before asserting paragraph counts.
