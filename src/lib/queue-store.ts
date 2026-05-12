@@ -28,6 +28,14 @@ function sanitizeMetadata(value: string, maxLength: number): string {
   return value.replace(/[<>]/g, '').trim().slice(0, maxLength);
 }
 
+function normalizeQueueItem(item: QueueItem): QueueItem {
+  return {
+    ...item,
+    title: sanitizeMetadata(item.title, 300),
+    siteName: sanitizeMetadata(item.siteName, 100),
+  };
+}
+
 /** Type guard: validates every field of a QueueItem read from storage. */
 function isValidQueueItem(item: unknown): item is QueueItem {
   if (!item || typeof item !== 'object') return false;
@@ -53,10 +61,17 @@ export function loadQueue(): QueueItem[] {
     if (!Array.isArray(parsed)) return [];
 
     const cleaned = parsed.filter(isValidQueueItem).slice(-MAX_QUEUE_SIZE);
-    if (cleaned.length !== parsed.length) {
-      saveQueue(cleaned);
+    const normalized = cleaned.map(normalizeQueueItem);
+    const needsWriteback =
+      normalized.length !== parsed.length ||
+      normalized.some((item, index) =>
+        item.title !== cleaned[index].title || item.siteName !== cleaned[index].siteName,
+      );
+
+    if (needsWriteback) {
+      saveQueue(normalized);
     }
-    return cleaned;
+    return normalized;
   } catch (err) {
     log.warn('Failed to load queue from localStorage', err);
     return [];

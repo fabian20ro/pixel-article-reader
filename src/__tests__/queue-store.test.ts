@@ -81,17 +81,6 @@ describe('queue-store', () => {
       expect(loadQueue()).toEqual([]);
     });
 
-    it('drops invalid items, keeps valid ones, and writes back the cleaned queue', () => {
-      const valid = makeItem();
-      const invalid = { id: '', url: 'not-a-url', title: 123 };
-      localStorage.setItem('article-reader-queue', JSON.stringify([valid, invalid]));
-
-      const loaded = loadQueue();
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].id).toBe(valid.id);
-      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([valid]);
-    });
-
     it('caps loaded queues to the most recent 50 items', () => {
       const items = Array.from({ length: 52 }, (_, index) =>
         makeItem({ id: `item-${index}`, url: `https://example.com/${index}` }),
@@ -105,14 +94,31 @@ describe('queue-store', () => {
       expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toHaveLength(50);
     });
 
-    it('loads valid items from storage', () => {
-      const items = [makeItem({ id: 'a' }), makeItem({ id: 'b', url: 'https://other.com/x' })];
-      localStorage.setItem('article-reader-queue', JSON.stringify(items));
+    it('drops invalid items, keeps valid ones, and writes back the cleaned queue', () => {
+      const valid = makeItem();
+      const invalid = { id: '', url: 'not-a-url', title: 123 };
+      localStorage.setItem('article-reader-queue', JSON.stringify([valid, invalid]));
 
       const loaded = loadQueue();
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].id).toBe('a');
-      expect(loaded[1].id).toBe('b');
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe(valid.id);
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([valid]);
+    });
+
+    it('normalizes stored metadata and writes the sanitized queue back', () => {
+      const dirty = makeItem({
+        title: '  <Draft title>  ',
+        siteName: '  <Example site>  ',
+      });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].title).toBe('Draft title');
+      expect(loaded[0].siteName).toBe('Example site');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, title: 'Draft title', siteName: 'Example site' },
+      ]);
     });
   });
 
