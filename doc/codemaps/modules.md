@@ -135,9 +135,9 @@ Language detection and translation gating heuristics.
 ## worker/index.ts — Cloudflare Worker
 
 Endpoints:
-- `GET /?url=...` → fetch HTML/PDF/EPUB
+- `GET /?url=...` → fetch HTML/PDF/EPUB and return `X-Final-URL`
 - `POST /?action=translate` → Google Translate API proxy
-- `POST /parse` → parse URL and return either markdown or a JSON `Article`
+- `POST /parse` → parse URL and return either markdown or a JSON `Article`; response headers include `X-Resolved-Url`
 
 Security and limits:
 - SSRF blocklist

@@ -1038,3 +1038,13 @@ Each entry should follow this structure:
 
 **Promoted to Lessons Learned:** No
 
+
+### [2026-05-12] Document worker response headers for resolved URLs
+
+**Context:** Small maintenance pass on the article reader docs.
+**What happened:** Updated `README.md` and `doc/codemaps/modules.md` to distinguish the worker's `X-Final-URL` header on raw fetches from the `X-Resolved-Url` header exposed by `/parse`.
+**Outcome:** Success. Docs now match the current worker contract more precisely.
+**Insight:** When a backend exposes closely related response headers on different routes, name both explicitly in the docs so future readers don't have to infer the split.
+**Promoted to Lessons Learned:** No
+
+---

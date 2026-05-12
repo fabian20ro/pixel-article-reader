@@ -224,7 +224,7 @@ npm test
 |---|---|
 | Web Speech API + Google Translate TTS | Web Speech API for free on-device voices (foreground). Google Translate TTS audio via `<audio>` element for background playback on Android (speechSynthesis is suspended when backgrounded). |
 | Sentence-level chunking | Avoids Chrome Android's 15-second TTS cutoff bug. Each sentence is a separate `SpeechSynthesisUtterance`, chained via `onend`. |
-| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Returns `X-Final-URL` header for redirect resolution. |
+| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Raw fetches return `X-Final-URL` for redirect resolution, and `/parse` also returns `X-Resolved-Url` in its response headers. |
 | Markdown intermediate format | Extraction output is normalized to markdown so the app can render rich content, keep TTS chunks deterministic, and support clipboard export. |
 | Queue with IndexedDB | Queue metadata in localStorage, file/pasted content in IndexedDB. URL-based articles are re-fetched from network; local content is preserved because files can't be re-read after the picker closes. |
 | Silent audio media session | A looping silent WAV keeps the PWA alive in background on Android Chrome and enables lock-screen media controls. |
