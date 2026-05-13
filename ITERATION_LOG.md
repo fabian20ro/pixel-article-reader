@@ -1058,3 +1058,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+
+### [2026-05-13] Document queue duplicate handling in README
+
+**Context:** Small docs maintenance pass after queue-store normalization work.
+**What happened:** Updated `README.md` so the Article Queue section now says duplicate URLs collapse to the most recent entry when the same article is reloaded.
+**Outcome:** Success. User-facing docs now match the queue's current self-deduping behavior.
+**Insight:** When storage normalizes itself on load, surface the user-visible effect in the docs so the behavior is discoverable.
+**Promoted to Lessons Learned:** No
+
+---

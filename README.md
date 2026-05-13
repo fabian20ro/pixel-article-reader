@@ -86,6 +86,7 @@ Tap the file button to upload a local file. Supported formats: **PDF**, **TXT**,
 Articles are managed in a playlist-style queue:
 
 - **Play Now / Add to Queue** — when a new article is loaded, a snackbar offers to play immediately or add to the end of the queue
+- **Duplicate URLs** — reloading the same article replaces the older copy; the queue keeps the most recent entry for each URL
 - **Queue drawer** — tap the menu icon (top-left) to open the queue panel with all articles
 - **Drag to reorder** — use the grip handle on each queue item to rearrange order
 - **Delete** — remove individual articles from the queue (pasted and uploaded content is also cleaned from local storage)
