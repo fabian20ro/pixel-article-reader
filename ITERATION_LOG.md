@@ -1068,3 +1068,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+
+### [2026-05-13] Document queue load-time cleanup in README
+
+**Context:** Small docs maintenance pass after queue-store normalization work.
+**What happened:** Updated `README.md` so the Article Queue section now mentions that invalid stored entries are dropped on load, metadata is sanitized, and oversized snapshots are trimmed automatically.
+**Outcome:** Success. User-facing docs now describe the queue's current self-healing load behavior.
+**Insight:** When a store already normalizes itself on load, surface the cleanup contract in the README so the behavior is discoverable.
+**Promoted to Lessons Learned:** No
+
+---
