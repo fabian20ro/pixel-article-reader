@@ -44,6 +44,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-05-11]** When a localStorage loader sanitizes corrupt persisted state, write the cleaned value back during load — otherwise the app keeps re-reading the same bad blob and never heals the stale data.
 
+**[2026-05-13]** If a queue or list store already self-heals invalid/oversized snapshots on load, fold duplicate cleanup into the same normalization pass so stale state repairs in one read instead of one read per bug class.
+
 **[2026-05-11]** If a persisted session blob fails validation during startup, remove the bad entry before returning null — otherwise the app can keep paying the parse/validation cost on every boot.
 
 ## Testing & Quality

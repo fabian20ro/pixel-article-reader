@@ -1048,3 +1048,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+
+### [2026-05-13] Self-heal duplicate queue entries on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `loadQueue()` so stored queue snapshots are deduplicated by URL on read, keeping the most recent entry for each URL while still preserving local-file items without URLs. Added regression coverage for the duplicate-URL repair path, then ran the queue-store test file and the full Vitest suite.
+**Outcome:** Success. Old queue snapshots now self-heal duplicate URL entries instead of reloading them forever.
+**Insight:** When a store already repairs invalid or oversized snapshots, duplicate cleanup belongs in the same read-time normalization pass.
+**Promoted to Lessons Learned:** No
+
+---

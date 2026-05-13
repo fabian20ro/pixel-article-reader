@@ -120,6 +120,17 @@ describe('queue-store', () => {
         { ...dirty, title: 'Draft title', siteName: 'Example site' },
       ]);
     });
+
+    it('deduplicates stored items by URL and keeps the most recent entry', () => {
+      const older = makeItem({ id: 'older', url: 'https://example.com/shared', title: 'Older' });
+      const middle = makeItem({ id: 'middle', url: 'https://example.com/unique', title: 'Middle' });
+      const newer = makeItem({ id: 'newer', url: 'https://example.com/shared', title: 'Newer' });
+      localStorage.setItem('article-reader-queue', JSON.stringify([older, middle, newer]));
+
+      const loaded = loadQueue();
+      expect(loaded).toEqual([middle, newer]);
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([middle, newer]);
+    });
   });
 
   describe('addToQueue', () => {

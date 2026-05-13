@@ -36,6 +36,20 @@ function normalizeQueueItem(item: QueueItem): QueueItem {
   };
 }
 
+function dedupeQueueItems(items: QueueItem[]): QueueItem[] {
+  const seen = new Set<string>();
+  const dedupedReversed: QueueItem[] = [];
+
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.url && seen.has(item.url)) continue;
+    if (item.url) seen.add(item.url);
+    dedupedReversed.push(item);
+  }
+
+  return dedupedReversed.reverse();
+}
+
 /** Type guard: validates every field of a QueueItem read from storage. */
 function isValidQueueItem(item: unknown): item is QueueItem {
   if (!item || typeof item !== 'object') return false;
@@ -62,16 +76,17 @@ export function loadQueue(): QueueItem[] {
 
     const cleaned = parsed.filter(isValidQueueItem).slice(-MAX_QUEUE_SIZE);
     const normalized = cleaned.map(normalizeQueueItem);
+    const deduped = dedupeQueueItems(normalized);
     const needsWriteback =
-      normalized.length !== parsed.length ||
-      normalized.some((item, index) =>
+      deduped.length !== parsed.length ||
+      deduped.some((item, index) =>
         item.title !== cleaned[index].title || item.siteName !== cleaned[index].siteName,
       );
 
     if (needsWriteback) {
-      saveQueue(normalized);
+      saveQueue(deduped);
     }
-    return normalized;
+    return deduped;
   } catch (err) {
     log.warn('Failed to load queue from localStorage', err);
     return [];
