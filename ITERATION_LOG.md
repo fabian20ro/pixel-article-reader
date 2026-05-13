@@ -1078,3 +1078,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+
+### [2026-05-13] Harden last-article restore timestamps
+
+**Context:** Small correctness pass on the last-session restore path.
+**What happened:** Changed `loadLastArticle()` to reject non-finite `savedAt` values and added a regression test for `NaN` timestamps. Also updated the lessons log with the finite-timestamp restore rule.
+**Outcome:** Success. Corrupted last-article blobs now self-heal only when the restore metadata is truly valid.
+**Insight:** `typeof number` is not enough for persisted timestamps; finite validation closes the restore hole.
+**Promoted to Lessons Learned:** Yes
+
+---

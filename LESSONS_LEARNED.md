@@ -46,6 +46,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-05-13]** If a queue or list store already self-heals invalid/oversized snapshots on load, fold duplicate cleanup into the same normalization pass so stale state repairs in one read instead of one read per bug class.
 
+**[2026-05-13]** Persisted session timestamps should be finite, not just numeric, during restore — otherwise corrupted `NaN`/Infinity metadata can slip through the self-heal path.
+
 **[2026-05-11]** If a persisted session blob fails validation during startup, remove the bad entry before returning null — otherwise the app can keep paying the parse/validation cost on every boot.
 
 ## Testing & Quality

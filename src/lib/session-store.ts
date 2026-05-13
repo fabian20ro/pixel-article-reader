@@ -7,6 +7,10 @@ export interface LastSessionData {
   savedAt: number;
 }
 
+function isFiniteTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && value === value && value !== Infinity && value !== -Infinity;
+}
+
 function isValidArticleShape(value: unknown): value is Article {
   if (!value || typeof value !== 'object') return false;
   const a = value as Record<string, unknown>;
@@ -39,7 +43,8 @@ export function loadLastArticle(): LastSessionData | null {
     const raw = localStorage.getItem(LAST_ARTICLE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LastSessionData>;
-    if (!parsed || typeof parsed.savedAt !== 'number' || !isValidArticleShape(parsed.article)) {
+    const savedAt = parsed.savedAt;
+    if (!parsed || !isFiniteTimestamp(savedAt) || !isValidArticleShape(parsed.article)) {
       localStorage.removeItem(LAST_ARTICLE_KEY);
       return null;
     }

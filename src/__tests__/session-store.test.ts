@@ -72,6 +72,16 @@ describe('session-store', () => {
       expect(loadLastArticle()).toBeNull();
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
+
+    it('removes non-finite timestamps before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: makeArticle(), savedAt: Number.NaN }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
   });
 
   describe('saveLastArticle', () => {
