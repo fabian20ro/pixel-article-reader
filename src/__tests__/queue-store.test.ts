@@ -138,6 +138,18 @@ describe('queue-store', () => {
       ]);
     });
 
+    it('normalizes invalid stored language to English and writes it back', () => {
+      const dirty = makeItem({ lang: 'xx' });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].lang).toBe('en');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, lang: 'en' },
+      ]);
+    });
+
     it('deduplicates stored items by URL and keeps the most recent entry', () => {
       const older = makeItem({ id: 'older', url: 'https://example.com/shared', title: 'Older' });
       const middle = makeItem({ id: 'middle', url: 'https://example.com/unique', title: 'Middle' });

@@ -4,6 +4,7 @@
  */
 
 import { isValidArticleUrl } from './url-utils.js';
+import { isLanguage } from './language-config.js';
 import type { Article } from './extractor.js';
 import { createLogger } from './logger.js';
 
@@ -35,11 +36,16 @@ function sanitizeSiteName(value: string, url: string): string {
   return url && isValidArticleUrl(url) ? new URL(url).hostname : 'Unknown source';
 }
 
+function normalizeLang(value: string): string {
+  return isLanguage(value) ? value : 'en';
+}
+
 function normalizeQueueItem(item: QueueItem): QueueItem {
   return {
     ...item,
     title: sanitizeMetadata(item.title, 300, 'Untitled'),
     siteName: sanitizeSiteName(item.siteName, item.url),
+    lang: normalizeLang(item.lang),
   };
 }
 
@@ -87,7 +93,9 @@ export function loadQueue(): QueueItem[] {
     const needsWriteback =
       deduped.length !== parsed.length ||
       deduped.some((item, index) =>
-        item.title !== cleaned[index].title || item.siteName !== cleaned[index].siteName,
+        item.title !== cleaned[index].title ||
+        item.siteName !== cleaned[index].siteName ||
+        item.lang !== cleaned[index].lang,
       );
 
     if (needsWriteback) {

@@ -1098,3 +1098,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** No
 
 ---
+
+### [2026-05-14] Queue language fallback on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `src/lib/queue-store.ts` so restored queue items normalize invalid stored language values back to English on load, and added a regression test proving the cleaned queue is written back.
+**Outcome:** Success. Stale queue snapshots now recover a supported playback language instead of carrying arbitrary strings forward.
+**Insight:** Persistent queue repair should normalize the playback language field too; otherwise a self-healed item can still hold an unusable state.
+**Promoted to Lessons Learned:** Yes
+
+---
