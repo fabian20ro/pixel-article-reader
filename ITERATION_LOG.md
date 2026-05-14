@@ -1108,3 +1108,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** Yes
 
 ---
+
+---
+
+### [2026-05-14] Validate nested paragraph data on session restore
+
+**Context:** Small maintenance pass on the last-article persistence path.
+**What happened:** Updated `src/lib/session-store.ts` to reject restored articles whose `paragraphs` array contains non-string entries, and added regression coverage for the malformed nested-array case.
+**Outcome:** Success. Corrupt saved sessions now fail closed before malformed paragraph data reaches render/TTS paths.
+**Insight:** Top-level shape checks are not enough for persisted article blobs; nested arrays need element-level validation too.
+**Promoted to Lessons Learned:** Yes

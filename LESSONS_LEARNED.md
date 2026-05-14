@@ -48,6 +48,8 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-05-14]** Queue items restored from localStorage should normalize their language field back to a supported code (`en`/`ro`) instead of trusting arbitrary strings — otherwise stale queue entries can carry unsupported playback state forward.
 
+**[2026-05-14]** Restored Article blobs should validate nested paragraph entries as strings, not just the top-level array shape — otherwise corrupt localStorage can sneak malformed paragraph data into render/TTS paths.
+
 **[2026-05-13]** Persisted session timestamps should be finite, not just numeric, during restore — otherwise corrupted `NaN`/Infinity metadata can slip through the self-heal path.
 
 **[2026-05-11]** If a persisted session blob fails validation during startup, remove the bad entry before returning null — otherwise the app can keep paying the parse/validation cost on every boot.

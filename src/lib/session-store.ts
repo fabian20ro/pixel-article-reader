@@ -19,7 +19,7 @@ function isValidArticleShape(value: unknown): value is Article {
     typeof a.content === 'string' &&
     typeof a.textContent === 'string' &&
     typeof a.markdown === 'string' &&
-    Array.isArray(a.paragraphs) &&
+    Array.isArray(a.paragraphs) && a.paragraphs.every((paragraph) => typeof paragraph === 'string') &&
     typeof a.lang === 'string' &&
     typeof a.htmlLang === 'string' &&
     typeof a.siteName === 'string' &&
