@@ -121,6 +121,23 @@ describe('queue-store', () => {
       ]);
     });
 
+    it('falls back to readable defaults when stored metadata is blank', () => {
+      const dirty = makeItem({
+        title: '   ',
+        siteName: '   ',
+        url: 'https://example.com/article',
+      });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].title).toBe('Untitled');
+      expect(loaded[0].siteName).toBe('example.com');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, title: 'Untitled', siteName: 'example.com' },
+      ]);
+    });
+
     it('deduplicates stored items by URL and keeps the most recent entry', () => {
       const older = makeItem({ id: 'older', url: 'https://example.com/shared', title: 'Older' });
       const middle = makeItem({ id: 'middle', url: 'https://example.com/unique', title: 'Middle' });
@@ -205,6 +222,18 @@ describe('queue-store', () => {
       expect(item.lang).toBe('en');
       expect(item.id).toBeTruthy();
       expect(item.dateAdded).toBeGreaterThan(0);
+    });
+
+    it('falls back to readable defaults for blank article metadata', () => {
+      const article = makeArticle({
+        title: '   ',
+        siteName: '   ',
+        resolvedUrl: 'https://example.com/article',
+      });
+      const item = createQueueItem(article);
+
+      expect(item.title).toBe('Untitled');
+      expect(item.siteName).toBe('example.com');
     });
 
     it('sanitizes HTML in title', () => {

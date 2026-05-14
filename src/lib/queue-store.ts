@@ -23,16 +23,23 @@ export interface QueueItem {
 const STORAGE_KEY = 'article-reader-queue';
 const MAX_QUEUE_SIZE = 50;
 
-/** Strip angle brackets and cap string length — used for titles and site names. */
-function sanitizeMetadata(value: string, maxLength: number): string {
-  return value.replace(/[<>]/g, '').trim().slice(0, maxLength);
+/** Strip angle brackets, cap string length, and fall back when the result is blank. */
+function sanitizeMetadata(value: string, maxLength: number, fallback = ''): string {
+  const cleaned = value.replace(/[<>]/g, '').trim().slice(0, maxLength);
+  return cleaned || fallback;
+}
+
+function sanitizeSiteName(value: string, url: string): string {
+  const cleaned = sanitizeMetadata(value, 100);
+  if (cleaned) return cleaned;
+  return url && isValidArticleUrl(url) ? new URL(url).hostname : 'Unknown source';
 }
 
 function normalizeQueueItem(item: QueueItem): QueueItem {
   return {
     ...item,
-    title: sanitizeMetadata(item.title, 300),
-    siteName: sanitizeMetadata(item.siteName, 100),
+    title: sanitizeMetadata(item.title, 300, 'Untitled'),
+    siteName: sanitizeSiteName(item.siteName, item.url),
   };
 }
 
@@ -109,8 +116,8 @@ export function createQueueItem(article: Article): QueueItem {
   return {
     id: crypto.randomUUID(),
     url: article.resolvedUrl || '',
-    title: sanitizeMetadata(article.title, 300),
-    siteName: sanitizeMetadata(article.siteName, 100),
+    title: sanitizeMetadata(article.title, 300, 'Untitled'),
+    siteName: sanitizeSiteName(article.siteName, article.resolvedUrl || ''),
     wordCount: article.wordCount,
     estimatedMinutes: article.estimatedMinutes,
     lang: article.lang,

@@ -1088,3 +1088,13 @@ Each entry should follow this structure:
 **Promoted to Lessons Learned:** Yes
 
 ---
+
+### [2026-05-14] Queue metadata fallback on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `src/lib/queue-store.ts` so blank stored titles/site names normalize to readable defaults on load and when creating fresh queue items. Added focused regression coverage for blank metadata in both load and create paths, and synced the README queue-cleanup bullet to match.
+**Outcome:** Success. Queue labels now recover more gracefully from empty persisted metadata.
+**Insight:** Sanitizing persisted labels is better when blank results also get a predictable fallback; otherwise a self-heal pass can still leave empty UI text behind.
+**Promoted to Lessons Learned:** No
+
+---
