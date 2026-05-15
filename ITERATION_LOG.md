@@ -1138,3 +1138,13 @@ Each entry should follow this structure:
 **Outcome:** Success. User-facing docs now match the restore behavior.
 **Insight:** When load-time repair exists, surface it in the README so users know the app can recover from stale local storage.
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document theme and queue badge affordances in README
+
+**Context:** Small docs discoverability sync for visible UI affordances already present in the app.
+**What happened:** Updated the README queue section to mention the queue-count badge on the menu icon and updated the settings theme list to include the khaki theme option.
+**Outcome:** Success. README now matches the visible queue and theme controls in the current UI.
+**Insight:** When a control is visible in the app but omitted from the top-level docs, add it to the user-facing usage section so the affordance is easier to find later.
+**Promoted to Lessons Learned:** No

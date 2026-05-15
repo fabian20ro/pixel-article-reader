@@ -88,7 +88,7 @@ Articles are managed in a playlist-style queue:
 - **Play Now / Add to Queue** — when a new article is loaded, a snackbar offers to play immediately or add to the end of the queue
 - **Duplicate URLs** — reloading the same article replaces the older copy; the queue keeps the most recent entry for each URL
 - **Stored queue cleanup** — invalid entries are dropped on load, titles/site names are sanitized, blank metadata falls back to readable defaults, and oversized snapshots are trimmed automatically
-- **Queue drawer** — tap the menu icon (top-left) to open the queue panel with all articles
+- **Queue drawer** — tap the menu icon (top-left) to open the queue panel with all articles; the badge on the icon shows how many items are queued
 - **Drag to reorder** — use the grip handle on each queue item to rearrange order
 - **Delete** — remove individual articles from the queue (pasted and uploaded content is also cleaned from local storage)
 - **Clear all** — remove all articles at once
@@ -117,7 +117,7 @@ Articles are managed in a playlist-style queue:
 - **Default Speed** — 0.5x to 3.0x
 - **Preferred Language** — Auto (detected), English, or Romanian
 - **Voice** — pick from available system voices, filtered by gender
-- **Theme** — light or dark mode
+- **Theme** — light, dark, or khaki mode
 - **Keep screen on** — uses Wake Lock API to prevent screen timeout during playback
 
 Settings are persisted in `localStorage` and self-heal on load if a saved snapshot is malformed. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
