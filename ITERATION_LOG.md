@@ -1128,3 +1128,13 @@ Each entry should follow this structure:
 **Outcome:** Success. Settings restore now repairs unreadable storage instead of just ignoring it.
 **Insight:** If a persistence loader already has a safe fallback, malformed JSON should be replaced with that fallback immediately so the same parse error does not repeat on every boot.
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document settings self-heal in README
+
+**Context:** Small docs sync after the settings persistence hardening pass.
+**What happened:** Updated the README persistence note to say settings self-heal on load when a saved snapshot is malformed.
+**Outcome:** Success. User-facing docs now match the restore behavior.
+**Insight:** When load-time repair exists, surface it in the README so users know the app can recover from stale local storage.
+**Promoted to Lessons Learned:** No

@@ -120,7 +120,7 @@ Articles are managed in a playlist-style queue:
 - **Theme** — light or dark mode
 - **Keep screen on** — uses Wake Lock API to prevent screen timeout during playback
 
-Settings are persisted in `localStorage`. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
+Settings are persisted in `localStorage` and self-heal on load if a saved snapshot is malformed. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
 
 ### Offline behavior
 
