@@ -1148,3 +1148,13 @@ Each entry should follow this structure:
 **Outcome:** Success. README now matches the visible queue and theme controls in the current UI.
 **Insight:** When a control is visible in the app but omitted from the top-level docs, add it to the user-facing usage section so the affordance is easier to find later.
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document Android background playback affordance in README
+
+**Context:** Small docs discoverability sync for the media-session background playback behavior.
+**What happened:** Updated the README How It Works and Player Controls sections to say Android keeps a silent media session alive for background playback and that the media notification also covers background playback.
+**Outcome:** Success. User-facing docs now match the current Android background playback contract more clearly.
+**Insight:** When a background-only recovery mechanism is user-visible, name the actual affordance in the README so troubleshooting starts from the right model.
+**Promoted to Lessons Learned:** No
