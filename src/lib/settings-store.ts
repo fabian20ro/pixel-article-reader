@@ -77,6 +77,11 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
 
     return cleaned;
   } catch {
+    try {
+      saveSettings(fallback);
+    } catch {
+      // Ignore writeback failures; returning the default keeps the app usable.
+    }
     return fallback;
   }
 }

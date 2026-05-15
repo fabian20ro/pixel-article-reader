@@ -41,10 +41,11 @@ describe('settings-store', () => {
     expect(settings).toEqual(createDefaultSettings(defaults));
   });
 
-  it('returns default settings when JSON is malformed', () => {
+  it('returns default settings when JSON is malformed and writes them back', () => {
     localStorage.setItem('articlevoice-settings', '{not-valid-json');
     const settings = loadSettings(defaults);
     expect(settings).toEqual(createDefaultSettings(defaults));
+    expect(JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}')).toEqual(settings);
   });
 
   it('sanitizes invalid stored values and writes back the cleaned settings', () => {

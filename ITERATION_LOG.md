@@ -1118,3 +1118,13 @@ Each entry should follow this structure:
 **Outcome:** Success. Corrupt saved sessions now fail closed before malformed paragraph data reaches render/TTS paths.
 **Insight:** Top-level shape checks are not enough for persisted article blobs; nested arrays need element-level validation too.
 **Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-15] Self-heal malformed settings JSON on load
+
+**Context:** Small maintenance pass on the app settings persistence path.
+**What happened:** Updated `src/lib/settings-store.ts` so malformed persisted settings now fall back to defaults and write the cleaned defaults back to `localStorage` during load. Added regression coverage for the malformed-JSON case.
+**Outcome:** Success. Settings restore now repairs unreadable storage instead of just ignoring it.
+**Insight:** If a persistence loader already has a safe fallback, malformed JSON should be replaced with that fallback immediately so the same parse error does not repeat on every boot.
+**Promoted to Lessons Learned:** No
