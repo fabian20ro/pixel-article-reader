@@ -16,7 +16,7 @@ const RO_WORDS = [
   'și', 'este', 'care', 'pentru', 'într', 'sunt',
   'acest', 'poate', 'prin', 'doar', 'mai', 'sau',
   'fost', 'avea', 'acesta', 'despre', 'când', 'toate',
-  'numai', 'după', 'foarte', 'acum', 'unde',
+  'numai', 'după', 'foarte', 'acum', 'unde', 'că', 'de', 'un', 'o', 'la', 'cu'
 ];
 
 /**
@@ -106,8 +106,10 @@ export function needsTranslation(htmlLang: string, url: string, textLang?: Langu
   if (fromUrl && SUPPORTED_SET.has(fromUrl)) return false;
   if (fromUrl) return true; // known non-EN/RO language
 
-  // 3. Check text-based detection — only trust Romanian detection
-  if (textLang === 'ro') return false;
+  // 3. Check text-based detection.
+  // Trust the heuristic when we already have no stronger signal from HTML/URL.
+  // English here means the article is already in the target language.
+  if (textLang === 'ro' || textLang === 'en') return false;
 
   // 4. Default: assume it's not English → needs translation
   return true;

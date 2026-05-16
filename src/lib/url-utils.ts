@@ -36,11 +36,16 @@ export function extractUrl(text: string): string | null {
   const endMatch = trimmed.match(/https?:\/\/[^\s"'<>]+$/i);
   if (endMatch && isValidArticleUrl(endMatch[0])) {
     const prefix = trimmed.slice(0, endMatch.index!).trim();
-    if (prefix.length <= 500) return endMatch[0];
+    if (prefix.length <= 500) {
+      let url = endMatch[0];
+      // Strip trailing punctuation that might have been caught
+      url = url.replace(/[.,!?;:()\[\]{},]+$/, '');
+      if (isValidArticleUrl(url)) return url;
+    }
   }
 
   return null;
-}
+};
 
 /** Basic validation: must be http or https and have a hostname with a dot. */
 export function isValidArticleUrl(input: string): boolean {

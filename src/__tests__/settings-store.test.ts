@@ -41,13 +41,14 @@ describe('settings-store', () => {
     expect(settings).toEqual(createDefaultSettings(defaults));
   });
 
-  it('returns default settings when JSON is malformed', () => {
+  it('returns default settings when JSON is malformed and writes them back', () => {
     localStorage.setItem('articlevoice-settings', '{not-valid-json');
     const settings = loadSettings(defaults);
     expect(settings).toEqual(createDefaultSettings(defaults));
+    expect(JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}')).toEqual(settings);
   });
 
-  it('sanitizes invalid stored values', () => {
+  it('sanitizes invalid stored values and writes back the cleaned settings', () => {
     localStorage.setItem(
       'articlevoice-settings',
       JSON.stringify({
@@ -63,6 +64,7 @@ describe('settings-store', () => {
     expect(settings.lang).toBe('auto');
     expect(settings.voiceName).toBe('');
     expect(settings.wakeLock).toBe(true);
+    expect(JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}')).toEqual(settings);
   });
 
   it('persists and reloads valid settings', () => {

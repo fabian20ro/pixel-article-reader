@@ -9,7 +9,7 @@ PWA that turns any article into audio using on-device TTS with a queue-based pla
 1. **Share, paste, or upload** an article URL, text, file, or YouTube link (PDF/TXT/MD/EPUB/YouTube)
 2. The app fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
 3. Articles are added to a **queue** — play now or add to queue for later
-4. Press **Play** — TTS reads the article aloud using your device's voices (Web Speech API for foreground, Google Translate TTS audio for background playback)
+4. Press **Play** — TTS reads the article aloud using your device's voices; on Android, the app keeps a silent media session alive so playback can continue in the background
 5. When an article finishes, the next one in the queue auto-advances after a countdown
 
 The app runs mostly client-side. The Cloudflare Worker proxies article fetches, Google Translate TTS audio, text translation, and YouTube transcript extraction.
@@ -86,10 +86,12 @@ Tap the file button to upload a local file. Supported formats: **PDF**, **TXT**,
 Articles are managed in a playlist-style queue:
 
 - **Play Now / Add to Queue** — when a new article is loaded, a snackbar offers to play immediately or add to the end of the queue
-- **Queue drawer** — tap the menu icon (top-left) to open the queue panel with all articles
+- **Duplicate URLs** — reloading the same article replaces the older copy; the queue keeps the most recent entry for each URL
+- **Stored queue cleanup** — invalid entries are dropped on load, titles/site names are sanitized, blank metadata falls back to readable defaults, and oversized snapshots are trimmed automatically
+- **Queue drawer** — tap the **Queue** button (top-left) to open the queue panel with all articles; the badge on the button shows how many items are queued
 - **Drag to reorder** — use the grip handle on each queue item to rearrange order
 - **Delete** — remove individual articles from the queue (pasted and uploaded content is also cleaned from local storage)
-- **Clear all** — remove all articles at once
+- **Clear queue** — remove all articles at once
 - **Auto-advance** — when an article finishes, a countdown toast offers to play the next article or cancel
 
 ### Player Controls
@@ -104,7 +106,7 @@ Articles are managed in a playlist-style queue:
 | Translate | Translate extracted paragraphs via Worker + Google Translate API |
 | Tap a paragraph | Jump to that paragraph and start reading |
 | Progress bar | Click to seek to a position |
-| Media notification | Lock-screen controls and seekbar on Android |
+| Media notification | Lock-screen controls, seekbar, and background playback on Android |
 
 ### Reading View Actions
 
@@ -112,13 +114,14 @@ Articles are managed in a playlist-style queue:
 
 ### Settings (gear icon)
 
+- **Check for Updates** — forces the app to check for a fresh service worker, clears stale cached assets, and reloads when a new version is ready
 - **Default Speed** — 0.5x to 3.0x
 - **Preferred Language** — Auto (detected), English, or Romanian
 - **Voice** — pick from available system voices, filtered by gender
-- **Theme** — light or dark mode
+- **Theme** — light, dark, or khaki mode
 - **Keep screen on** — uses Wake Lock API to prevent screen timeout during playback
 
-Settings are persisted in `localStorage`. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
+Settings are persisted in `localStorage` and self-heal on load if a saved snapshot is malformed. Queue metadata is stored in `localStorage`; content for local files and pasted text is stored in IndexedDB.
 
 ### Offline behavior
 
@@ -128,7 +131,7 @@ Settings are persisted in `localStorage`. Queue metadata is stored in `localStor
 
 ## PWA Recovery (stale install)
 
-If the installed app is stuck on an older UI (for example, missing the **Check for Updates** button), run this cleanup flow.
+If the installed app is stuck on an older UI, try **Settings → Check for Updates** first. If that button is missing or the refresh does not recover the app, run this cleanup flow.
 
 ### Desktop Chrome / Edge
 
@@ -224,7 +227,7 @@ npm test
 |---|---|
 | Web Speech API + Google Translate TTS | Web Speech API for free on-device voices (foreground). Google Translate TTS audio via `<audio>` element for background playback on Android (speechSynthesis is suspended when backgrounded). |
 | Sentence-level chunking | Avoids Chrome Android's 15-second TTS cutoff bug. Each sentence is a separate `SpeechSynthesisUtterance`, chained via `onend`. |
-| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Returns `X-Final-URL` header for redirect resolution. |
+| Cloudflare Worker proxy | Articles can't be fetched client-side due to CORS. CF free tier gives 100k req/day. Raw fetches return `X-Final-URL` for redirect resolution, and `/parse` also returns `X-Resolved-Url` in its response headers. |
 | Markdown intermediate format | Extraction output is normalized to markdown so the app can render rich content, keep TTS chunks deterministic, and support clipboard export. |
 | Queue with IndexedDB | Queue metadata in localStorage, file/pasted content in IndexedDB. URL-based articles are re-fetched from network; local content is preserved because files can't be re-read after the picker closes. |
 | Silent audio media session | A looping silent WAV keeps the PWA alive in background on Android Chrome and enables lock-screen media controls. |

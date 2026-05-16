@@ -81,7 +81,20 @@ describe('queue-store', () => {
       expect(loadQueue()).toEqual([]);
     });
 
-    it('drops invalid items and keeps valid ones', () => {
+    it('caps loaded queues to the most recent 50 items', () => {
+      const items = Array.from({ length: 52 }, (_, index) =>
+        makeItem({ id: `item-${index}`, url: `https://example.com/${index}` }),
+      );
+      localStorage.setItem('article-reader-queue', JSON.stringify(items));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(50);
+      expect(loaded[0].id).toBe('item-2');
+      expect(loaded[49].id).toBe('item-51');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toHaveLength(50);
+    });
+
+    it('drops invalid items, keeps valid ones, and writes back the cleaned queue', () => {
       const valid = makeItem();
       const invalid = { id: '', url: 'not-a-url', title: 123 };
       localStorage.setItem('article-reader-queue', JSON.stringify([valid, invalid]));
@@ -89,16 +102,63 @@ describe('queue-store', () => {
       const loaded = loadQueue();
       expect(loaded).toHaveLength(1);
       expect(loaded[0].id).toBe(valid.id);
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([valid]);
     });
 
-    it('loads valid items from storage', () => {
-      const items = [makeItem({ id: 'a' }), makeItem({ id: 'b', url: 'https://other.com/x' })];
-      localStorage.setItem('article-reader-queue', JSON.stringify(items));
+    it('normalizes stored metadata and writes the sanitized queue back', () => {
+      const dirty = makeItem({
+        title: '  <Draft title>  ',
+        siteName: '  <Example site>  ',
+      });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
 
       const loaded = loadQueue();
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].id).toBe('a');
-      expect(loaded[1].id).toBe('b');
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].title).toBe('Draft title');
+      expect(loaded[0].siteName).toBe('Example site');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, title: 'Draft title', siteName: 'Example site' },
+      ]);
+    });
+
+    it('falls back to readable defaults when stored metadata is blank', () => {
+      const dirty = makeItem({
+        title: '   ',
+        siteName: '   ',
+        url: 'https://example.com/article',
+      });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].title).toBe('Untitled');
+      expect(loaded[0].siteName).toBe('example.com');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, title: 'Untitled', siteName: 'example.com' },
+      ]);
+    });
+
+    it('normalizes invalid stored language to English and writes it back', () => {
+      const dirty = makeItem({ lang: 'xx' });
+      localStorage.setItem('article-reader-queue', JSON.stringify([dirty]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].lang).toBe('en');
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([
+        { ...dirty, lang: 'en' },
+      ]);
+    });
+
+    it('deduplicates stored items by URL and keeps the most recent entry', () => {
+      const older = makeItem({ id: 'older', url: 'https://example.com/shared', title: 'Older' });
+      const middle = makeItem({ id: 'middle', url: 'https://example.com/unique', title: 'Middle' });
+      const newer = makeItem({ id: 'newer', url: 'https://example.com/shared', title: 'Newer' });
+      localStorage.setItem('article-reader-queue', JSON.stringify([older, middle, newer]));
+
+      const loaded = loadQueue();
+      expect(loaded).toEqual([middle, newer]);
+      expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([middle, newer]);
     });
   });
 
@@ -174,6 +234,18 @@ describe('queue-store', () => {
       expect(item.lang).toBe('en');
       expect(item.id).toBeTruthy();
       expect(item.dateAdded).toBeGreaterThan(0);
+    });
+
+    it('falls back to readable defaults for blank article metadata', () => {
+      const article = makeArticle({
+        title: '   ',
+        siteName: '   ',
+        resolvedUrl: 'https://example.com/article',
+      });
+      const item = createQueueItem(article);
+
+      expect(item.title).toBe('Untitled');
+      expect(item.siteName).toBe('example.com');
     });
 
     it('sanitizes HTML in title', () => {

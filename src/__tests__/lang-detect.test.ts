@@ -54,6 +54,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage(text)).toBe('ro');
   });
 
+  it('detects Romanian via very short common words', () => {
+    const text = 'de un la o cu';
+    expect(detectLanguage(text)).toBe('ro');
+  });
+
   // ── Edge cases ────────────────────────────────────────────────
 
   it('only examines the first ~1000 characters', () => {
@@ -195,8 +200,8 @@ describe('needsTranslation', () => {
     expect(needsTranslation('', '', 'ro')).toBe(false);
   });
 
-  it('defaults to true (needs translation) with no signals', () => {
-    expect(needsTranslation('', '', 'en')).toBe(true);
+  it('returns false when textLang is en and no other signals', () => {
+    expect(needsTranslation('', '', 'en')).toBe(false);
   });
 
   it('defaults to true with no signals at all', () => {

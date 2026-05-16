@@ -204,6 +204,26 @@ Each entry should follow this structure:
 
 ---
 
+### [2026-05-11] Heal corrupted settings storage on load
+
+**Context:** Small local quality improvement in `pixel-article-reader`.
+**What happened:** Updated `src/lib/settings-store.ts` so sanitized settings are written back to `localStorage` during load, and added a regression test covering the self-healing path.
+**Outcome:** Success. Targeted Vitest and full test suite passed; typecheck passed.
+**Insight:** If a loader already normalizes corrupt browser storage, persist the cleaned value immediately so the app doesn't keep re-reading the same bad blob.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-11] Self-heal invalid last-session storage on load
+
+**Context:** Small follow-up quality improvement in `pixel-article-reader`.
+**What happened:** Updated `src/lib/session-store.ts` so malformed or invalid last-article blobs are removed from `localStorage` during load, and added regression coverage for valid, malformed, and invalid-shape cases.
+**Outcome:** Success. Focused Vitest passed; TypeScript typecheck passed.
+**Insight:** Session restore should clean up invalid persisted blobs on read, not just ignore them, so startup doesn't keep paying the same validation cost.
+**Promoted to Lessons Learned:** Yes
+
+---
+
 ### [2026-02-22] Fix URL detection, translate button, sentence skip, and docs
 
 **Context:** User reported multiple issues: (1) pasting a full article that contains embedded URLs incorrectly extracts a URL and tries to fetch it, (2) translate button is invisible/hard to find, (3) sentence skip buttons don't work reliably, (4) console warnings about deprecated meta tags and manifest. Also requested AGENTS.md simplification and library updates.
@@ -999,4 +1019,161 @@ Each entry should follow this structure:
 
 **Insight:** For async UI flows, a tiny request-token guard gives disproportionate reliability gains and composes cleanly with offline fallback logic.
 
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-08] Queue-load normalization for corrupt or oversized storage
+
+**Context:** Hourly maintenance pass on the article reader queue persistence path.
+**What happened:**
+- Updated `loadQueue()` to normalize stored queue data on read: invalid entries are dropped, and loaded queues are capped to the most recent 50 items.
+- Persisted the cleaned queue back to `localStorage` so old corrupt or oversized snapshots get repaired instead of being reprocessed on every startup.
+- Added regression coverage for two cases: mixed valid/invalid storage and oversized stored queues.
+- Ran focused queue-store tests, then the full Vitest suite, then TypeScript typecheck.
+
+**Outcome:** Success. Queue restoration is a little more self-healing, with no behavior change for normal queues.
+
+**Insight:** Loading code is a good place to repair old client-side state when the fix is deterministic and low risk.
+
+**Promoted to Lessons Learned:** No
+
+
+### [2026-05-12] Document worker response headers for resolved URLs
+
+**Context:** Small maintenance pass on the article reader docs.
+**What happened:** Updated `README.md` and `doc/codemaps/modules.md` to distinguish the worker's `X-Final-URL` header on raw fetches from the `X-Resolved-Url` header exposed by `/parse`.
+**Outcome:** Success. Docs now match the current worker contract more precisely.
+**Insight:** When a backend exposes closely related response headers on different routes, name both explicitly in the docs so future readers don't have to infer the split.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Self-heal duplicate queue entries on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `loadQueue()` so stored queue snapshots are deduplicated by URL on read, keeping the most recent entry for each URL while still preserving local-file items without URLs. Added regression coverage for the duplicate-URL repair path, then ran the queue-store test file and the full Vitest suite.
+**Outcome:** Success. Old queue snapshots now self-heal duplicate URL entries instead of reloading them forever.
+**Insight:** When a store already repairs invalid or oversized snapshots, duplicate cleanup belongs in the same read-time normalization pass.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Document queue duplicate handling in README
+
+**Context:** Small docs maintenance pass after queue-store normalization work.
+**What happened:** Updated `README.md` so the Article Queue section now says duplicate URLs collapse to the most recent entry when the same article is reloaded.
+**Outcome:** Success. User-facing docs now match the queue's current self-deduping behavior.
+**Insight:** When storage normalizes itself on load, surface the user-visible effect in the docs so the behavior is discoverable.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Document queue load-time cleanup in README
+
+**Context:** Small docs maintenance pass after queue-store normalization work.
+**What happened:** Updated `README.md` so the Article Queue section now mentions that invalid stored entries are dropped on load, metadata is sanitized, and oversized snapshots are trimmed automatically.
+**Outcome:** Success. User-facing docs now describe the queue's current self-healing load behavior.
+**Insight:** When a store already normalizes itself on load, surface the cleanup contract in the README so the behavior is discoverable.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-13] Harden last-article restore timestamps
+
+**Context:** Small correctness pass on the last-session restore path.
+**What happened:** Changed `loadLastArticle()` to reject non-finite `savedAt` values and added a regression test for `NaN` timestamps. Also updated the lessons log with the finite-timestamp restore rule.
+**Outcome:** Success. Corrupted last-article blobs now self-heal only when the restore metadata is truly valid.
+**Insight:** `typeof number` is not enough for persisted timestamps; finite validation closes the restore hole.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-14] Queue metadata fallback on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `src/lib/queue-store.ts` so blank stored titles/site names normalize to readable defaults on load and when creating fresh queue items. Added focused regression coverage for blank metadata in both load and create paths, and synced the README queue-cleanup bullet to match.
+**Outcome:** Success. Queue labels now recover more gracefully from empty persisted metadata.
+**Insight:** Sanitizing persisted labels is better when blank results also get a predictable fallback; otherwise a self-heal pass can still leave empty UI text behind.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-14] Queue language fallback on load
+
+**Context:** Small maintenance pass on the article queue persistence path.
+**What happened:** Updated `src/lib/queue-store.ts` so restored queue items normalize invalid stored language values back to English on load, and added a regression test proving the cleaned queue is written back.
+**Outcome:** Success. Stale queue snapshots now recover a supported playback language instead of carrying arbitrary strings forward.
+**Insight:** Persistent queue repair should normalize the playback language field too; otherwise a self-healed item can still hold an unusable state.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+---
+
+### [2026-05-14] Validate nested paragraph data on session restore
+
+**Context:** Small maintenance pass on the last-article persistence path.
+**What happened:** Updated `src/lib/session-store.ts` to reject restored articles whose `paragraphs` array contains non-string entries, and added regression coverage for the malformed nested-array case.
+**Outcome:** Success. Corrupt saved sessions now fail closed before malformed paragraph data reaches render/TTS paths.
+**Insight:** Top-level shape checks are not enough for persisted article blobs; nested arrays need element-level validation too.
+**Promoted to Lessons Learned:** Yes
+
+---
+
+### [2026-05-15] Self-heal malformed settings JSON on load
+
+**Context:** Small maintenance pass on the app settings persistence path.
+**What happened:** Updated `src/lib/settings-store.ts` so malformed persisted settings now fall back to defaults and write the cleaned defaults back to `localStorage` during load. Added regression coverage for the malformed-JSON case.
+**Outcome:** Success. Settings restore now repairs unreadable storage instead of just ignoring it.
+**Insight:** If a persistence loader already has a safe fallback, malformed JSON should be replaced with that fallback immediately so the same parse error does not repeat on every boot.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document settings self-heal in README
+
+**Context:** Small docs sync after the settings persistence hardening pass.
+**What happened:** Updated the README persistence note to say settings self-heal on load when a saved snapshot is malformed.
+**Outcome:** Success. User-facing docs now match the restore behavior.
+**Insight:** When load-time repair exists, surface it in the README so users know the app can recover from stale local storage.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document theme and queue badge affordances in README
+
+**Context:** Small docs discoverability sync for visible UI affordances already present in the app.
+**What happened:** Updated the README queue section to mention the queue-count badge on the menu icon and updated the settings theme list to include the khaki theme option.
+**Outcome:** Success. README now matches the visible queue and theme controls in the current UI.
+**Insight:** When a control is visible in the app but omitted from the top-level docs, add it to the user-facing usage section so the affordance is easier to find later.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-15] Document Android background playback affordance in README
+
+**Context:** Small docs discoverability sync for the media-session background playback behavior.
+**What happened:** Updated the README How It Works and Player Controls sections to say Android keeps a silent media session alive for background playback and that the media notification also covers background playback.
+**Outcome:** Success. User-facing docs now match the current Android background playback contract more clearly.
+**Insight:** When a background-only recovery mechanism is user-visible, name the actual affordance in the README so troubleshooting starts from the right model.
+**Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-16] Document Check for Updates button in README
+
+**Context:** Small docs discoverability sync for a visible settings affordance that already exists in the app.
+**What happened:** Updated the README settings section to list the **Check for Updates** button and clarified the stale-install recovery flow to try that button before the full cache-clearing steps.
+**Outcome:** Success. README now matches the current manual update affordance and recovery guidance.
+**Insight:** When the app already exposes a recovery button in settings, document it where users expect to look first instead of hiding the path only in the recovery section.
+**Promoted to Lessons Learned:** No
+---
+
+### [2026-05-16] Sync README queue affordances with shipped labels
+
+**Context:** Small docs-only maintenance pass for `pixel-article-reader`.
+**What happened:** Updated `README.md` so the queue drawer docs use the exact shipped `Queue` label and `Clear queue` action instead of the older generic icon/menu wording.
+**Outcome:** Success. Documentation now mirrors the live control labels more closely.
+**Insight:** When a README mirrors visible UI chrome, use the exact shipped label or accessible name — generic icon wording ages into drift quickly.
 **Promoted to Lessons Learned:** No

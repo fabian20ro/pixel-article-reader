@@ -4,6 +4,7 @@
  */
 
 import { isValidArticleUrl } from './url-utils.js';
+import { isLanguage } from './language-config.js';
 import type { Article } from './extractor.js';
 import { createLogger } from './logger.js';
 
@@ -23,9 +24,43 @@ export interface QueueItem {
 const STORAGE_KEY = 'article-reader-queue';
 const MAX_QUEUE_SIZE = 50;
 
-/** Strip angle brackets and cap string length — used for titles and site names. */
-function sanitizeMetadata(value: string, maxLength: number): string {
-  return value.replace(/[<>]/g, '').trim().slice(0, maxLength);
+/** Strip angle brackets, cap string length, and fall back when the result is blank. */
+function sanitizeMetadata(value: string, maxLength: number, fallback = ''): string {
+  const cleaned = value.replace(/[<>]/g, '').trim().slice(0, maxLength);
+  return cleaned || fallback;
+}
+
+function sanitizeSiteName(value: string, url: string): string {
+  const cleaned = sanitizeMetadata(value, 100);
+  if (cleaned) return cleaned;
+  return url && isValidArticleUrl(url) ? new URL(url).hostname : 'Unknown source';
+}
+
+function normalizeLang(value: string): string {
+  return isLanguage(value) ? value : 'en';
+}
+
+function normalizeQueueItem(item: QueueItem): QueueItem {
+  return {
+    ...item,
+    title: sanitizeMetadata(item.title, 300, 'Untitled'),
+    siteName: sanitizeSiteName(item.siteName, item.url),
+    lang: normalizeLang(item.lang),
+  };
+}
+
+function dedupeQueueItems(items: QueueItem[]): QueueItem[] {
+  const seen = new Set<string>();
+  const dedupedReversed: QueueItem[] = [];
+
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.url && seen.has(item.url)) continue;
+    if (item.url) seen.add(item.url);
+    dedupedReversed.push(item);
+  }
+
+  return dedupedReversed.reverse();
 }
 
 /** Type guard: validates every field of a QueueItem read from storage. */
@@ -51,7 +86,22 @@ export function loadQueue(): QueueItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidQueueItem);
+
+    const cleaned = parsed.filter(isValidQueueItem).slice(-MAX_QUEUE_SIZE);
+    const normalized = cleaned.map(normalizeQueueItem);
+    const deduped = dedupeQueueItems(normalized);
+    const needsWriteback =
+      deduped.length !== parsed.length ||
+      deduped.some((item, index) =>
+        item.title !== cleaned[index].title ||
+        item.siteName !== cleaned[index].siteName ||
+        item.lang !== cleaned[index].lang,
+      );
+
+    if (needsWriteback) {
+      saveQueue(deduped);
+    }
+    return deduped;
   } catch (err) {
     log.warn('Failed to load queue from localStorage', err);
     return [];
@@ -74,8 +124,8 @@ export function createQueueItem(article: Article): QueueItem {
   return {
     id: crypto.randomUUID(),
     url: article.resolvedUrl || '',
-    title: sanitizeMetadata(article.title, 300),
-    siteName: sanitizeMetadata(article.siteName, 100),
+    title: sanitizeMetadata(article.title, 300, 'Untitled'),
+    siteName: sanitizeSiteName(article.siteName, article.resolvedUrl || ''),
     wordCount: article.wordCount,
     estimatedMinutes: article.estimatedMinutes,
     lang: article.lang,

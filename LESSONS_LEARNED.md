@@ -42,6 +42,18 @@ If a lesson becomes obsolete (e.g., a dependency was removed, an API changed), m
 
 **[2026-02-25]** Reset `_stopped` flag after `loadArticle()` — When `stop()` is called, it sets `_stopped = true` to prevent any remaining async fetch/speak callbacks from triggering further action. This flag must be reset to `false` when a new article is loaded via `loadArticle()`, otherwise the engine will remain permanently stuck in "stopped" mode and refuse to speak the new content. (Promoted from iteration log: 2nd occurrence of TTS-DOM index mismatch.)
 
+**[2026-05-11]** When a localStorage loader sanitizes corrupt persisted state, write the cleaned value back during load — otherwise the app keeps re-reading the same bad blob and never heals the stale data.
+
+**[2026-05-13]** If a queue or list store already self-heals invalid/oversized snapshots on load, fold duplicate cleanup into the same normalization pass so stale state repairs in one read instead of one read per bug class.
+
+**[2026-05-14]** Queue items restored from localStorage should normalize their language field back to a supported code (`en`/`ro`) instead of trusting arbitrary strings — otherwise stale queue entries can carry unsupported playback state forward.
+
+**[2026-05-14]** Restored Article blobs should validate nested paragraph entries as strings, not just the top-level array shape — otherwise corrupt localStorage can sneak malformed paragraph data into render/TTS paths.
+
+**[2026-05-13]** Persisted session timestamps should be finite, not just numeric, during restore — otherwise corrupted `NaN`/Infinity metadata can slip through the self-heal path.
+
+**[2026-05-11]** If a persisted session blob fails validation during startup, remove the bad entry before returning null — otherwise the app can keep paying the parse/validation cost on every boot.
+
 ## Testing & Quality
 
 **[2026-02-22]** Test data must match actual code behavior, not assumed behavior — When writing the extractor test for "single-newline fallback", the test assumed the fallback path would be triggered, but the code's double-newline split actually succeeds with a single large paragraph. Always trace through the actual splitting logic before asserting paragraph counts.
@@ -64,6 +76,8 @@ Guard against races: if `_isPaused` is true in `acquireWakeLock()`, release imme
 ## Dependencies & External Services
 
 ## Process & Workflow
+
+**[2026-05-16] Use exact shipped labels in docs-visible UI syncs** — When README/docs mirror a live control, prefer the literal button label or accessible name over generic icon/menu wording. It keeps docs aligned with the shipped surface and makes drift easier to spot.
 
 ---
 

@@ -7,6 +7,10 @@ export interface LastSessionData {
   savedAt: number;
 }
 
+function isFiniteTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && value === value && value !== Infinity && value !== -Infinity;
+}
+
 function isValidArticleShape(value: unknown): value is Article {
   if (!value || typeof value !== 'object') return false;
   const a = value as Record<string, unknown>;
@@ -15,7 +19,7 @@ function isValidArticleShape(value: unknown): value is Article {
     typeof a.content === 'string' &&
     typeof a.textContent === 'string' &&
     typeof a.markdown === 'string' &&
-    Array.isArray(a.paragraphs) &&
+    Array.isArray(a.paragraphs) && a.paragraphs.every((paragraph) => typeof paragraph === 'string') &&
     typeof a.lang === 'string' &&
     typeof a.htmlLang === 'string' &&
     typeof a.siteName === 'string' &&
@@ -39,11 +43,14 @@ export function loadLastArticle(): LastSessionData | null {
     const raw = localStorage.getItem(LAST_ARTICLE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LastSessionData>;
-    if (!parsed || typeof parsed.savedAt !== 'number' || !isValidArticleShape(parsed.article)) {
+    const savedAt = parsed.savedAt;
+    if (!parsed || !isFiniteTimestamp(savedAt) || !isValidArticleShape(parsed.article)) {
+      localStorage.removeItem(LAST_ARTICLE_KEY);
       return null;
     }
     return { article: parsed.article, savedAt: parsed.savedAt };
   } catch {
+    localStorage.removeItem(LAST_ARTICLE_KEY);
     return null;
   }
 }
