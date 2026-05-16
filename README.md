@@ -114,6 +114,7 @@ Articles are managed in a playlist-style queue:
 
 ### Settings (gear icon)
 
+- **Check for Updates** — forces the app to check for a fresh service worker, clears stale cached assets, and reloads when a new version is ready
 - **Default Speed** — 0.5x to 3.0x
 - **Preferred Language** — Auto (detected), English, or Romanian
 - **Voice** — pick from available system voices, filtered by gender
@@ -130,7 +131,7 @@ Settings are persisted in `localStorage` and self-heal on load if a saved snapsh
 
 ## PWA Recovery (stale install)
 
-If the installed app is stuck on an older UI (for example, missing the **Check for Updates** button), run this cleanup flow.
+If the installed app is stuck on an older UI, try **Settings → Check for Updates** first. If that button is missing or the refresh does not recover the app, run this cleanup flow.
 
 ### Desktop Chrome / Edge
 

@@ -1158,3 +1158,13 @@ Each entry should follow this structure:
 **Outcome:** Success. User-facing docs now match the current Android background playback contract more clearly.
 **Insight:** When a background-only recovery mechanism is user-visible, name the actual affordance in the README so troubleshooting starts from the right model.
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-16] Document Check for Updates button in README
+
+**Context:** Small docs discoverability sync for a visible settings affordance that already exists in the app.
+**What happened:** Updated the README settings section to list the **Check for Updates** button and clarified the stale-install recovery flow to try that button before the full cache-clearing steps.
+**Outcome:** Success. README now matches the current manual update affordance and recovery guidance.
+**Insight:** When the app already exposes a recovery button in settings, document it where users expect to look first instead of hiding the path only in the recovery section.
+**Promoted to Lessons Learned:** No
