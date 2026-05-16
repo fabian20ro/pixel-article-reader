@@ -77,6 +77,8 @@ Guard against races: if `_isPaused` is true in `acquireWakeLock()`, release imme
 
 ## Process & Workflow
 
+**[2026-05-16] Use exact shipped labels in docs-visible UI syncs** — When README/docs mirror a live control, prefer the literal button label or accessible name over generic icon/menu wording. It keeps docs aligned with the shipped surface and makes drift easier to spot.
+
 ---
 
 ## Archive

@@ -1168,3 +1168,12 @@ Each entry should follow this structure:
 **Outcome:** Success. README now matches the current manual update affordance and recovery guidance.
 **Insight:** When the app already exposes a recovery button in settings, document it where users expect to look first instead of hiding the path only in the recovery section.
 **Promoted to Lessons Learned:** No
+---
+
+### [2026-05-16] Sync README queue affordances with shipped labels
+
+**Context:** Small docs-only maintenance pass for `pixel-article-reader`.
+**What happened:** Updated `README.md` so the queue drawer docs use the exact shipped `Queue` label and `Clear queue` action instead of the older generic icon/menu wording.
+**Outcome:** Success. Documentation now mirrors the live control labels more closely.
+**Insight:** When a README mirrors visible UI chrome, use the exact shipped label or accessible name — generic icon wording ages into drift quickly.
+**Promoted to Lessons Learned:** No
