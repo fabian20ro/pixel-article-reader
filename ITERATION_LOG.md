@@ -1177,3 +1177,17 @@ Each entry should follow this structure:
 **Outcome:** Success. Documentation now mirrors the live control labels more closely.
 **Insight:** When a README mirrors visible UI chrome, use the exact shipped label or accessible name — generic icon wording ages into drift quickly.
 **Promoted to Lessons Learned:** No
+### [2026-05-16] Fix `session-store` type narrowing after latest pull
+
+**Context:** CI typecheck failed on `src/lib/session-store.ts` because `parsed.savedAt` remained `number | undefined` after validation.
+
+**What happened:**
+- Pulled latest `main` with a fast-forward update.
+- Returned the already-validated local `savedAt` value instead of re-reading the optional `parsed.savedAt` property.
+- Verified with `npm run typecheck`.
+
+**Outcome:** Success. Typecheck passes.
+
+**Insight:** No reusable pattern promoted; this was a local TypeScript narrowing fix.
+
+**Promoted to Lessons Learned:** No

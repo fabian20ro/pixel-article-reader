@@ -48,7 +48,7 @@ export function loadLastArticle(): LastSessionData | null {
       localStorage.removeItem(LAST_ARTICLE_KEY);
       return null;
     }
-    return { article: parsed.article, savedAt: parsed.savedAt };
+    return { article: parsed.article, savedAt };
   } catch {
     localStorage.removeItem(LAST_ARTICLE_KEY);
     return null;
