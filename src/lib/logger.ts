@@ -5,19 +5,20 @@
  * In development (?debug in URL) all levels are active.
  */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_PRIORITY: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
 };
 
 const isVerbose =
-  typeof location !== 'undefined' && location.search.includes('debug');
+  typeof location !== 'undefined' && (location.search.includes('debug') || location.search.includes('trace'));
 
-const minLevel: LogLevel = isVerbose ? 'debug' : 'warn';
+const minLevel: LogLevel = isVerbose ? 'trace' : 'warn';
 
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[minLevel];
@@ -28,6 +29,7 @@ function formatPrefix(module: string): string {
 }
 
 export interface Logger {
+  trace(msg: string, ...args: unknown[]): void;
   debug(msg: string, ...args: unknown[]): void;
   info(msg: string, ...args: unknown[]): void;
   warn(msg: string, ...args: unknown[]): void;
@@ -37,6 +39,9 @@ export interface Logger {
 export function createLogger(module: string): Logger {
   const prefix = formatPrefix(module);
   return {
+    trace(msg, ...args) {
+      if (shouldLog('trace')) console.debug(prefix, msg, ...args);
+    },
     debug(msg, ...args) {
       if (shouldLog('debug')) console.debug(prefix, msg, ...args);
     },
