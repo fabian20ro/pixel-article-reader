@@ -170,6 +170,7 @@ export async function extractArticle(
   legacySecretOrOptions: string | ExtractArticleOptions = {},
   optionsArg?: ExtractArticleOptions,
 ): Promise<Article> {
+  const targetUrl = url.trim();
   const options = optionsArg
     ?? (typeof legacySecretOrOptions === 'string' ? {} : legacySecretOrOptions);
   const {
@@ -180,31 +181,31 @@ export async function extractArticle(
   const useProxy = proxyBase !== '';
 
   // YouTube path
-  if (isYoutubeUrl(url)) {
+  if (isYoutubeUrl(targetUrl)) {
     onProgress?.('Fetching YouTube transcript...');
     if (!useProxy) {
       throw new Error('Direct YouTube extraction is only supported through the worker parse API.');
     }
-    return extractArticleViaWorkerParse(url, proxyBase, fetcher);
+    return extractArticleViaWorkerParse(targetUrl, proxyBase, fetcher);
   }
 
   // Fast path: URL clearly ends in .pdf
-  if (isPdfUrl(url)) {
+  if (isPdfUrl(targetUrl)) {
     return useProxy 
-      ? extractArticleFromPdfUrl(url, proxyBase, onProgress)
-      : extractArticleFromPdfDirect(url, onProgress, fetcher);
+      ? extractArticleFromPdfUrl(targetUrl, proxyBase, onProgress)
+      : extractArticleFromPdfDirect(targetUrl, onProgress, fetcher);
   }
 
   // Fast path: URL clearly points to an EPUB
-  if (isEpubUrl(url)) {
+  if (isEpubUrl(targetUrl)) {
     return useProxy
-      ? extractArticleFromEpubUrl(url, proxyBase, DOMParserConstructor, onProgress)
-      : extractArticleFromEpubDirect(url, DOMParserConstructor, onProgress, fetcher);
+      ? extractArticleFromEpubUrl(targetUrl, proxyBase, DOMParserConstructor, onProgress)
+      : extractArticleFromEpubDirect(targetUrl, DOMParserConstructor, onProgress, fetcher);
   }
 
   onProgress?.('Fetching content...');
 
-  const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(url)}` : url;
+  const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(targetUrl)}` : targetUrl;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
 
@@ -221,7 +222,7 @@ export async function extractArticle(
     if (ct.includes('application/pdf')) {
       const buffer = await resp.arrayBuffer();
       if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('PDF is too large (>10 MB).');
-      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
+      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
       onProgress?.('Extracting text from PDF...');
       return parsePdfFromArrayBuffer(buffer, finalUrl, onProgress);
     }
@@ -230,7 +231,7 @@ export async function extractArticle(
     if (ct.includes('application/epub')) {
       const buffer = await resp.arrayBuffer();
       if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('EPUB is too large (>10 MB).');
-      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
+      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
       onProgress?.('Extracting text from EPUB...');
       return parseEpubFromArrayBuffer(buffer, finalUrl, DOMParserConstructor, onProgress);
     }
@@ -242,10 +243,10 @@ export async function extractArticle(
     // Fallback: detect PDF by magic bytes
     if (body.startsWith('%PDF-')) {
       onProgress?.('Extracting text from PDF...');
-      return parsePdfFromArrayBuffer(new TextEncoder().encode(body).buffer as ArrayBuffer, resp.url || url, onProgress);
+      return parsePdfFromArrayBuffer(new TextEncoder().encode(body).buffer as ArrayBuffer, resp.url || targetUrl, onProgress);
     }
 
-    const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
+    const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
     return parseArticleFromHtml(body, finalUrl, DOMParserConstructor);
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
