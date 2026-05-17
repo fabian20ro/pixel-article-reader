@@ -217,4 +217,27 @@ describe('extractArticleFromYoutube', () => {
 
     await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch)).rejects.toThrow(/No transcript/);
   });
+
+  it('throws before fetching when a transcript track is missing its URL', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'Missing URL Video' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ languageCode: 'en' }],
+            },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/Transcript track is missing a fetch URL/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
 });

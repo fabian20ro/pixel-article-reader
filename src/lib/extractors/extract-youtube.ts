@@ -203,11 +203,12 @@ function pickTranscriptTrack(playerJson: any): TranscriptTrack {
 }
 
 async function fetchTranscriptSegments(track: TranscriptTrack, fetcher: typeof fetch): Promise<TranscriptSegment[]> {
-  const transcriptUrl = (track.baseUrl || track.url || '').replace(/&fmt=[^&]+/, '') + '&fmt=json3';
-  if (!transcriptUrl) {
+  const rawTranscriptUrl = track.baseUrl || track.url || '';
+  if (!rawTranscriptUrl) {
     throw new Error('Transcript track is missing a fetch URL.');
   }
 
+  const transcriptUrl = rawTranscriptUrl.replace(/&fmt=[^&]+/, '') + '&fmt=json3';
   const response = await fetcher(transcriptUrl, {
     headers: {
       'User-Agent': ANDROID_USER_AGENT,
