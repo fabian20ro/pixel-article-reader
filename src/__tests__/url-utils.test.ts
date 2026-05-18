@@ -70,6 +70,7 @@ describe('extractUrl', () => {
   it('strips trailing punctuation from the extracted URL', () => {
     expect(extractUrl('Check this out https://example.com/article.')).toBe('https://example.com/article');
     expect(extractUrl('Check this out (https://example.com/article)')).toBe('https://example.com/article');
+    expect(extractUrl('Check this out https://example.com/article!')).toBe('https://example.com/article');
   });
 
   it('returns null when multiple URLs are embedded in text', () => {
