@@ -1191,3 +1191,13 @@ Each entry should follow this structure:
 **Insight:** No reusable pattern promoted; this was a local TypeScript narrowing fix.
 
 **Promoted to Lessons Learned:** No
+
+---
+
+### [2026-05-17] Guard missing YouTube transcript track URLs
+
+**Context:** Small correctness pass on the YouTube transcript extraction path.
+**What happened:** Fixed `src/lib/extractors/extract-youtube.ts` so transcript tracks without `baseUrl`/`url` fail before appending `&fmt=json3` and accidentally fetching a malformed relative URL. Added regression coverage in `src/__tests__/youtube.test.ts`.
+**Outcome:** Success. Missing transcript URLs now produce the intended explicit error without an extra fetch.
+**Insight:** Validate raw upstream URL fields before decorating them with query parameters; otherwise an empty string can become a syntactically non-empty but wrong URL.
+**Promoted to Lessons Learned:** No

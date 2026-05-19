@@ -196,25 +196,43 @@ describe('extractArticleFromYoutube', () => {
     expect(article.title).toBe('Transcript for: YouTube Video');
   });
 
-  it('throws if no transcript tracks are available', async () => {
+  it('throws if YouTube API key is not found in the watch page HTML', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response('blocked', { status: 500 });
+      }
+      // Return HTML without the API key
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response('<html><body>No key here</body></html>', { status: 200 });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/YouTube extraction failed:.*Could not find YouTube API key/);
+  });
+
+  it('throws before fetching when a transcript track is missing its URL', async () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
       if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
         return new Response(JSON.stringify({
+          videoDetails: { title: 'Missing URL Video' },
           captions: {
             playerCaptionsTracklistRenderer: {
-              captionTracks: [],
+              captionTracks: [{ languageCode: 'en' }],
             },
           },
           playabilityStatus: { status: 'OK' },
         }), { status: 200 });
       }
 
-      return new Response(JSON.stringify({
-        events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello.' }] }]
-      }), { status: 200 });
+      throw new Error(`Unexpected URL ${url}`);
     });
 
-    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch)).rejects.toThrow(/No transcript/);
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/Transcript track is missing a fetch URL/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
