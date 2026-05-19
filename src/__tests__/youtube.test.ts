@@ -200,7 +200,7 @@ describe('extractArticleFromYoutube', () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
       if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
-        return new Response('{"videoDetails": {"title": "Test"}}', { status: 200 });
+        return new Response('blocked', { status: 500 });
       }
       // Return HTML without the API key
       if (url.startsWith('https://www.youtube.com/watch?v=')) {

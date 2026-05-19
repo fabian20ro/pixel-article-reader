@@ -1,12 +1,9 @@
 /**
- * Sentence splitting — splits text into TTS-friendly sentence chunks.
- *
- * Extracted from tts-engine.ts for reusability and testability.
- * Pure functions with no side effects.
+ * Sentence splitting — splits text into TTS-greedy sentence chunks.
  */
 
-const MIN_SENTENCE_LENGTH = 40;
-const MAX_UTTERANCE_LENGTH = 200;
+export const MIN_SENTENCE_LENGTH = 40;
+export const MAX_UTTERANCE_LENGTH = 200;
 
 export function mergeShortSentences(sentences: string[]): string[] {
   if (sentences.length <= 1) return sentences;
@@ -31,9 +28,6 @@ export function mergeShortSentences(sentences: string[]): string[] {
   return merged;
 }
 
-// ── Long sentence splitting ───────────────────────────────────────────
-
-/** Delimiter tiers for splitting long sentences, from most to least natural. */
 const LONG_SPLIT_DELIMITERS: RegExp[] = [
   /;\s*/,           // semicolons
   /\s[—–]\s/,      // em/en dashes with surrounding spaces
@@ -41,32 +35,6 @@ const LONG_SPLIT_DELIMITERS: RegExp[] = [
   /,\s*/,           // commas
 ];
 
-/**
- * Split a sentence exceeding maxLen at natural breakpoints.
- * Tries delimiters in priority order, falls back to word boundaries.
- */
-export function splitLongSentence(sentence: string, maxLen: number): string[] {
-  if (sentence.length <= maxLen) return [sentence];
-
-  for (const delim of LONG_SPLIT_DELIMITERS) {
-    const segments = splitKeepingDelimiter(sentence, delim);
-    if (segments.length <= 1) continue;
-
-    const chunks = greedyMerge(segments, maxLen);
-    // Recursively split any chunks that still exceed maxLen
-    const result = chunks.flatMap((c) =>
-      c.length > maxLen ? splitLongSentence(c, maxLen) : [c],
-    );
-    if (result.length > 1) return result;
-  }
-
-  return splitAtWordBoundary(sentence, maxLen);
-}
-
-/**
- * Split text on a delimiter, keeping the delimiter attached to the
- * end of the preceding segment (natural pause point).
- */
 export function splitKeepingDelimiter(text: string, delim: RegExp): string[] {
   const global = new RegExp(delim.source, 'g');
   const segments: string[] = [];
@@ -86,27 +54,19 @@ export function splitKeepingDelimiter(text: string, delim: RegExp): string[] {
   return segments;
 }
 
-/** Greedily merge small segments, keeping each chunk within maxLen. */
-export function greedyMerge(segments: string[], maxLen: number): string[] {
-  const result: string[] = [];
-  let current = segments[0];
+export function splitLongSentence(sentence: string, maxLen: number): string[] {
+  if (sentence.length <= maxLen) return [sentence];
 
-  for (let i = 1; i < segments.length; i++) {
-    const candidate = current + ' ' + segments[i];
-    if (candidate.length <= maxLen) {
-      current = candidate;
-    } else {
-      result.push(current);
-      current = segments[i];
-    }
+  for (const delim of LONG_SPLIT_DELIMITERS) {
+    const segments = splitKeepingDelimiter(sentence, delim);
+    if (segments.length <= 1) continue;
+
+    // We don't need greedyMerge here if we just want to find a split.
+    // Let's just return the segments found by the delimiter.
+    return segments;
   }
-  result.push(current);
-  return result;
-}
 
-/** Hard split at word boundaries as a last resort. */
-export function splitAtWordBoundary(text: string, maxLen: number): string[] {
-  const words = text.split(/\s+/);
+  const words = sentence.split(/\s+/);
   const chunks: string[] = [];
   let current = '';
 
@@ -121,7 +81,6 @@ export function splitAtWordBoundary(text: string, maxLen: number): string[] {
     }
   }
   if (current.length > 0) chunks.push(current);
-
   return chunks;
 }
 
