@@ -53,6 +53,10 @@ export function createDefaultSettings(defaults: SettingsDefaults): AppSettings {
   };
 }
 
+/**
+ * Loads settings from localStorage. 
+ * If retrieval fails or data is malformed, it resets to defaults and self-heals by saving them back.
+ */
 export function loadSettings(defaults: SettingsDefaults): AppSettings {
   const fallback = createDefaultSettings(defaults);
 
