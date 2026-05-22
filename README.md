@@ -1,5 +1,7 @@
 # Article Local Reader
 
+**Automated Maintenance:** This project is part of a continuous improvement loop using Compound Autopilot. Small, verified improvements are automatically applied via scheduled cron jobs.
+
 **Live app: https://fabian20ro.github.io/pixel-article-reader/**
 
 PWA that turns any article into audio using on-device TTS with a queue-based playlist system. Extracts readable content from URLs, renders it as formatted markdown, and reads it aloud with sentence-level controls. Also supports local files (PDF, TXT, Markdown, EPUB) and pasted text.
