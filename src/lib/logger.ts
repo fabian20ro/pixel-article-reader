@@ -37,22 +37,31 @@ export interface Logger {
 }
 
 export function createLogger(module: string): Logger {
-  const prefix = formatPrefix(module);
+  const getPrefix = () => {
+    const base = `[${module}]`;
+    if (isVerbose) {
+      const now = new Date();
+      const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      return `${base} ${ts}`;
+    }
+    return base;
+  };
+
   return {
     trace(msg, ...args) {
-      if (shouldLog('trace')) console.debug(prefix, msg, ...args);
+      if (shouldLog('trace')) console.debug(getPrefix(), msg, ...args);
     },
     debug(msg, ...args) {
-      if (shouldLog('debug')) console.debug(prefix, msg, ...args);
+      if (shouldLog('debug')) console.debug(getPrefix(), msg, ...args);
     },
     info(msg, ...args) {
-      if (shouldLog('info')) console.info(prefix, msg, ...args);
+      if (shouldLog('info')) console.info(getPrefix(), msg, ...args);
     },
     warn(msg, ...args) {
-      if (shouldLog('warn')) console.warn(prefix, msg, ...args);
+      if (shouldLog('warn')) console.warn(getPrefix(), msg, ...args);
     },
     error(msg, ...args) {
-      if (shouldLog('error')) console.error(prefix, msg, ...args);
+      if (shouldLog('error')) console.error(getPrefix(), msg, ...args);
     },
   };
 }
