@@ -7,7 +7,7 @@ PWA that turns any article into audio using on-device TTS with a queue-based pla
 ## How It Works
 
 1. **Share, paste, or upload** an article URL, text, file, or YouTube link (PDF/TXT/MD/EPUB/YouTube)
-2. The app fetches the page through a CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
+2. The app fetches the page through a Cloudflare Worker CORS proxy, extracts readable content with [Readability.js](https://github.com/mozilla/readability), converts it to markdown, and renders a formatted reading view
 3. Articles are added to a **queue** — play now or add to queue for later
 4. Press **Play** — TTS reads the article aloud using your device's voices; on Android, the app keeps a silent media session alive so playback can continue in the background
 5. When an article finishes, the next one in the queue auto-advances after a countdown
