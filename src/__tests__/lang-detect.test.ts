@@ -156,8 +156,12 @@ describe('detectLangFromUrl', () => {
     expect(detectLangFromUrl('not-a-url')).toBe('');
   });
 
-  it('detects Romanian from .ro TLD', () => {
-    expect(detectLangFromUrl('https://digi24.ro/stiri/test')).toBe('ro');
+  it('detects Spanish from .es TLD', () => {
+    expect(detectLangFromUrl('https://example.es/article')).toBe('es');
+  });
+
+  it('detects Italian from .it TLD', () => {
+    expect(detectLangFromUrl('https://example.it/article')).toBe('it');
   });
 });
 

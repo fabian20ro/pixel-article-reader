@@ -33,6 +33,10 @@ describe('isValidArticleUrl', () => {
   it('accepts URLs with subdomains', () => {
     expect(isValidArticleUrl('https://blog.sub.example.co.uk/post')).toBe(true);
   });
+
+  it('accepts naked domain URLs', () => {
+    expect(isValidArticleUrl('https://example.com')).toBe(true);
+  });
 });
 
 // ── extractUrl ──────────────────────────────────────────────────────
