@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import {
   extractArticle,
   extractArticleFromEpubUrl,
+  extractArticleFromYoutube,
   createArticleFromText,
   createArticleFromTextFile,
   createArticleFromPdf,
@@ -674,5 +675,63 @@ describe('extractArticleFromEpubUrl', () => {
 
     await expect(extractArticleFromEpubUrl('https://gutenberg.org/ebooks/49038.epub', PROXY))
       .rejects.toThrow(/too large/i);
+  });
+});
+
+describe('extractArticleFromYoutube', () => {
+  it('throws when video ID is invalid', async () => {
+    await expect(extractArticleFromYoutube('https://youtube.com/invalid', vi.fn())).rejects.toThrow('Invalid YouTube URL.');
+  });
+
+  it('extracts article from a valid YouTube URL', async () => {
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const mockPlayerJson = {
+      videoDetails: {
+        title: 'Test YouTube Video',
+        description: 'This is a test description.'
+      },
+      microformat: {
+        playerMicroformatRenderer: {
+          description: 'This is a test description.'
+        }
+      }
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockPlayerJson), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'content-length': '100' },
+    }));
+
+    const article = await extractArticleFromYoutube(url, mockFetch as any);
+    expect(article.title).toBe('Test YouTube Video');
+  });
+});
+
+describe('extractArticleFromYoutube', () => {
+  it('throws when video ID is invalid', async () => {
+    await expect(extractArticleFromYoutube('https://youtube.com/invalid', vi.fn())).rejects.toThrow('Invalid YouTube URL.');
+  });
+
+  it('extracts article from a valid YouTube URL', async () => {
+    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const mockPlayerJson = {
+      videoDetails: {
+        title: 'Test YouTube Video',
+        description: 'This is a test description.'
+      },
+      microformat: {
+        playerMicroformatRenderer: {
+          description: 'This is a test description.'
+        }
+      }
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockPlayerJson), {
+      status: 200,
+      headers: { 'content-type': 'application/json', 'content-length': '100' },
+    }));
+
+    const article = await extractArticleFromYoutube(url, mockFetch as any);
+    expect(article.title).toBe('Test YouTube Video');
   });
 });
