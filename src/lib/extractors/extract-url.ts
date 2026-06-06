@@ -145,7 +145,7 @@ async function fetchBinaryViaProxy(
       throw new Error(`${label} is too large (>10 MB).`);
     }
 
-    const finalUrl = resp.headers.get('X-Final-URL') || url;
+    const finalUrl = resp.headers.get('X-Final-URL') || resp.url || url;
     return { buffer, finalUrl };
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === 'AbortError') {
@@ -205,63 +205,36 @@ export async function extractArticle(
 
   onProgress?.('Fetching content...');
 
-  const fetchUrl = useProxy ? `${proxyBase}?url=${encodeURIComponent(targetUrl)}` : targetUrl;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PDF_FETCH_TIMEOUT);
+  const respBuffer = await resp.arrayBuffer();
+  const contentType = resp.headers.get('content-type') || '';
+  const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
 
-  try {
-    const resp = await fetcher(fetchUrl, { signal: controller.signal, redirect: 'follow' });
-    if (!resp.ok) {
-      if (useProxy) await handleProxyError(resp);
-      throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
-    }
+  // Check magic bytes for PDF fallback
+  const header = new Uint8Array(respBuffer.slice(0, 4));
+  const isActuallyPdf = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46; // %PDF
 
-    const ct = resp.headers.get('content-type') || '';
-
-    // PDF detected by content-type
-    if (ct.includes('application/pdf')) {
-      const buffer = await resp.arrayBuffer();
-      if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('PDF is too large (>10 MB).');
-      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
-      onProgress?.('Extracting text from PDF...');
-      return parsePdfFromArrayBuffer(buffer, finalUrl, onProgress);
-    }
-
-    // EPUB detected by content-type
-    if (ct.includes('application/epub')) {
-      const buffer = await resp.arrayBuffer();
-      if (buffer.byteLength > MAX_PDF_SIZE) throw new Error('EPUB is too large (>10 MB).');
-      const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
-      onProgress?.('Extracting text from EPUB...');
-      return parseEpubFromArrayBuffer(buffer, finalUrl, DOMParserConstructor, onProgress);
-    }
-
-    // HTML path
-    const body = await resp.text();
-    if (body.length > MAX_ARTICLE_SIZE) throw new Error('Article is too large (>2 MB).');
-
-    // Fallback: detect PDF by magic bytes
-    if (body.startsWith('%PDF-')) {
-      onProgress?.('Extracting text from PDF...');
-      return parsePdfFromArrayBuffer(new TextEncoder().encode(body).buffer as ArrayBuffer, resp.url || targetUrl, onProgress);
-    }
-
-    const finalUrl = resp.headers.get('X-Final-URL') || resp.url || targetUrl;
-    return parseArticleFromHtml(body, finalUrl, DOMParserConstructor);
-  } catch (err: unknown) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Timed out fetching the content. Try again later.');
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
+  if (contentType.includes('application/pdf') || isActuallyPdf) {
+    onProgress?.('Extracting text from PDF...');
+    return parsePdfFromArrayBuffer(respBuffer, finalUrl, onProgress);
   }
+
+  if (contentType.includes('application/epub+zip')) {
+    onProgress?.('Extracting text from EPUB...');
+    return parseEpubFromArrayBuffer(respBuffer, finalUrl, DOMParserConstructor, onProgress);
+  }
+
+  // Fallback to HTML
+  const body = new TextDecoder().decode(respBuffer);
+  if (body.length > MAX_ARTICLE_SIZE) throw new Error('Article is too large (>2 MB).');
+
+  return parseArticleFromHtml(body, finalUrl, DOMParserConstructor);
 }
 
 /** Fetch PDF directly (no proxy). */
 async function extractArticleFromPdfDirect(url: string, onProgress?: (message: string) => void, fetcher: typeof fetch = globalThis.fetch): Promise<Article> {
   const resp = await fetcher(url, { redirect: 'follow' });
   if (!resp.ok) throw new Error(`PDF fetch failed: ${resp.status}`);
+globalThis.console.log('Fetching direct PDF');
   const buffer = await resp.arrayBuffer();
   return parsePdfFromArrayBuffer(buffer, resp.url || url, onProgress);
 }
