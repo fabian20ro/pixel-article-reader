@@ -694,44 +694,46 @@ describe('extractArticleFromYoutube', () => {
         playerMicroformatRenderer: {
           description: 'This is a test description.'
         }
-      }
-    };
-
-    const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockPlayerJson), {
-      status: 200,
-      headers: { 'content-type': 'application/json', 'content-length': '100' },
-    }));
-
-    const article = await extractArticleFromYoutube(url, mockFetch as any);
-    expect(article.title).toBe('Test YouTube Video');
-  });
-});
-
-describe('extractArticleFromYoutube', () => {
-  it('throws when video ID is invalid', async () => {
-    await expect(extractArticleFromYoutube('https://youtube.com/invalid', vi.fn())).rejects.toThrow('Invalid YouTube URL.');
-  });
-
-  it('extracts article from a valid YouTube URL', async () => {
-    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-    const mockPlayerJson = {
-      videoDetails: {
-        title: 'Test YouTube Video',
-        description: 'This is a test description.'
       },
-      microformat: {
-        playerMicroformatRenderer: {
-          description: 'This is a test description.'
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [
+            {
+              baseUrl: 'https://mock-url.com/transcript',
+              languageCode: 'en'
+            }
+          ]
         }
       }
     };
 
-    const mockFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockPlayerJson), {
-      status: 200,
-      headers: { 'content-type': 'application/json', 'content-length': '100' },
-    }));
+    const mockTranscriptResponse = {
+      events: [
+        {
+          segs: [{ utf8: 'Hello' }],
+          dDurationMs: 1000,
+          tStartMs: 0
+        },
+        {
+          segs: [{ utf8: 'world!' }],
+          dDurationMs: 1000,
+          tStartMs: 1000
+        }
+      ]
+    };
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(mockPlayerJson), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(mockTranscriptResponse), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
 
     const article = await extractArticleFromYoutube(url, mockFetch as any);
-    expect(article.title).toBe('Test YouTube Video');
+    expect(article.title).toBe('Transcript for: Test YouTube Video');
   });
 });
+
