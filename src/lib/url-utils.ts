@@ -45,7 +45,7 @@ export function extractUrl(text: string): string | null {
   }
 
   return null;
-};
+}
 
 /** Basic validation: must be http or https and have a hostname with a dot. */
 export function isValidArticleUrl(input: string): boolean {
