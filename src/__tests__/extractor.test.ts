@@ -759,6 +759,21 @@ describe('extractYoutubeVideoId', () => {
     expect(id).toBe('dQw4w9WgXcQ');
   });
 
+  it('returns null for invalid YouTube URLs', () => {
+    expect(extractYoutubeVideoId('not-a-url')).toBeNull();
+    expect(extractYoutubeVideoId('https://example.com/watch?v=not-valid')).toBeNull();
+  });
+
+  it('extracts id from embed URL', () => {
+    const id = extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ');
+    expect(id).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts id from shorts URL', () => {
+    const id = extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ');
+    expect(id).toBe('dQw4w9WgXcQ');
+  });
+
   it('extracts id from live URL', () => {
     const id = extractYoutubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ');
     expect(id).toBe('dQw4w9WgXcQ');
