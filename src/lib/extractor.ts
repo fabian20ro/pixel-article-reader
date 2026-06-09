@@ -20,7 +20,7 @@ export {
   extractArticleFromEpubUrl,
 } from './extractors/extract-url.js';
 
-export { extractArticleFromYoutube } from './extractors/extract-youtube.js';
+export { extractArticleFromYoutube, extractYoutubeVideoId } from './extractors/extract-youtube.js';
 
 // HTML parsing
 export { sanitizeRenderedHtml } from './extractors/extract-html.js';

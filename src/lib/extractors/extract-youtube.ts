@@ -55,12 +55,15 @@ export function extractYoutubeVideoId(url: string): string | null {
       const id = parsed.pathname.slice(1);
       return /^[\w-]{11}$/.test(id) ? id : null;
     }
-    if (parsed.pathname.startsWith('/watch')) {
-      const id = parsed.searchParams.get('v');
-      return id && /^[\w-]{11}$/.test(id) ? id : null;
-    }
-    if (parsed.pathname.startsWith('/embed/') || parsed.pathname.startsWith('/shorts/')) {
-      const id = parsed.pathname.split('/')[2];
+    if (
+      parsed.pathname.startsWith('/watch') ||
+      parsed.pathname.startsWith('/embed/') ||
+      parsed.pathname.startsWith('/shorts/') ||
+      parsed.pathname.startsWith('/live/')
+    ) {
+      const id = parsed.pathname.startsWith('/watch')
+        ? parsed.searchParams.get('v')
+        : parsed.pathname.split('/')[2];
       return id && /^[\w-]{11}$/.test(id) ? id : null;
     }
     return null;
