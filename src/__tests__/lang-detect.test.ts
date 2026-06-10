@@ -9,7 +9,6 @@ import {
 
 describe('detectLanguage', () => {
   // ── English detection ───────────────────────────────────────────
-
   it('detects English text', () => {
     const text =
       'The quick brown fox jumps over the lazy dog. This is a sample English article about technology and science. We will explore many topics in this comprehensive guide.';
@@ -31,7 +30,6 @@ describe('detectLanguage', () => {
   });
 
   // ── Romanian detection ──────────────────────────────────────────
-
   it('detects Romanian via diacritics', () => {
     const text =
       'România este o țară situată în sud-estul Europei. Capitala și cel mai mare oraș este București.';
@@ -60,7 +58,6 @@ describe('detectLanguage', () => {
   });
 
   // ── Edge cases ────────────────────────────────────────────────
-
   it('only examines the first ~1000 characters', () => {
     // English text padded to >1000 chars, followed by heavy Romanian
     const englishPart = 'This is English. '.repeat(70); // ~1190 chars
@@ -95,9 +92,20 @@ describe('detectLangFromHtml', () => {
   it('normalizes "de-DE" to "de"', () => {
     expect(detectLangFromHtml('de-DE')).toBe('de');
   });
-
-  it('normalizes "en-US" to "en"', () => {
+  it('normalizes "en-US" to "en', () => {
     expect(detectLangFromHtml('en-US')).toBe('en');
+  });
+  it('normalizes "en_US" to "en', () => {
+    expect(detectLangFromHtml('en_US')).toBe('en');
+  });
+  it('normalizes "de_DE" to "de', () => {
+    expect(detectLangFromHtml('de_DE')).toBe('de');
+  });
+  it('normalizes "fr-CA" to "fr', () => {
+    expect(detectLangFromHtml('fr-CA')).toBe('fr');
+  });
+  it('normalizes "it-IT" to "it', () => {
+    expect(detectLangFromHtml('it-IT')).toBe('it');
   });
 
   it('handles simple code like "fr"', () => {
@@ -152,8 +160,14 @@ describe('detectLangFromUrl', () => {
     expect(detectLangFromUrl('')).toBe('');
   });
 
-  it('returns empty for invalid URL', () => {
-    expect(detectLangFromUrl('not-a-url')).toBe('');
+  it('returns empty for unknown TLD', () => {
+    expect(detectLangFromUrl('https://example.xyz')).toBe('');
+  });
+  it('returns empty for localhost', () => {
+    expect(detectLangFromUrl('http://localhost:3000')).toBe('');
+  });
+  it('returns empty for ip address', () => {
+    expect(detectLangFromUrl('http://192.168.1.1')).toBe('');
   });
 
   it('detects Spanish from .es TLD', () => {
@@ -200,15 +214,17 @@ describe('needsTranslation', () => {
     expect(needsTranslation('', 'https://web.de/magazine')).toBe(true);
   });
 
-  it('returns false when textLang is ro and no other signals', () => {
+  it('returns true for non-supported URL TLD even if text is en', () => {
+    expect(needsTranslation('', 'https://example.fr', 'en')).toBe(true);
+  });
+
+  it('returns false when textLang is ro', () => {
     expect(needsTranslation('', '', 'ro')).toBe(false);
   });
-
-  it('returns false when textLang is en and no other signals', () => {
+  it('returns false when textLang is en', () => {
     expect(needsTranslation('', '', 'en')).toBe(false);
   });
-
-  it('defaults to true with no signals at all', () => {
+  it('returns true when all signals are empty', () => {
     expect(needsTranslation('', '')).toBe(true);
   });
 
