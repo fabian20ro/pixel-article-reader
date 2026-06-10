@@ -822,4 +822,11 @@ describe('computeTimeline', () => {
     const t = computeTimeline(paragraphs, 2, 0, 1.0);
     expect(t.position).toBeCloseTo(t.duration, 5);
   });
+
+  it('handles rate = 0 by returning Infinity (current behavior)', () => {
+    const paragraphs = [['Hello world.']];
+    const result = computeTimeline(paragraphs, 0, 0, 0);
+    expect(result.duration).toBe(Infinity);
+    expect(result.position).toBe(0);
+  });
 });
