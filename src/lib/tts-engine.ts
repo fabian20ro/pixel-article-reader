@@ -100,6 +100,10 @@ export function computeTimeline(
   let totalChars = 0;
   let currentChars = 0;
 
+  if (charsPerSec === 0) {
+    return { duration: Infinity, position: 0 };
+  }
+
   for (let p = 0; p < paragraphs.length; p++) {
     for (let s = 0; s < paragraphs[p].length; s++) {
       const len = paragraphs[p][s].length;

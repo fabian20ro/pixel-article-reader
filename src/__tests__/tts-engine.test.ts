@@ -827,6 +827,6 @@ describe('computeTimeline', () => {
     const paragraphs = [['Hello world.']];
     const result = computeTimeline(paragraphs, 0, 0, 0);
     expect(result.duration).toBe(Infinity);
-    expect(result.position).toBe(Infinity);
+    expect(result.position).toBe(0);
   });
 });
