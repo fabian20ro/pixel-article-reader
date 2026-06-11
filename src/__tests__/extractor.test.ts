@@ -469,8 +469,10 @@ describe('createArticleFromText', () => {
     expect(article.title).toBe('Pasted Article');
   });
 
-  it('throws if text is too short', () => {
-    expect(() => createArticleFromText('too short')).toThrow();
+  it('handles very short text gracefully', () => {
+    const article = createArticleFromText('Short');
+    expect(article.title).toBe('Short');
+    expect(article.paragraphs.length).toBe(1);
   });
 });
 
