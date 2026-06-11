@@ -39,13 +39,17 @@ describe('sentence-splitter', () => {
        expect(splitLongSentence(text, 10)[0]).toBe('Wait:');
     });
 
-    it('should split at commas if needed', () => {
+    it('should fallback to whitespace splitting when no delimiter is found', () => {
+      const text = 'This is a very long sentence that has no punctuation at all but needs splitting.';
+      // splitLongSentence(text, maxLen)
+      const result = splitLongSentence(text, 20);
+      expect(result.length).toBeGreaterThan(1);
+      expect(result[0].length).toBeLessThanOrEqual(20);
+    });
+    it('should split by commas when requested', () => {
        const text = 'One, two, three';
        expect(splitLongSentence(text, 5)).toEqual(['One,', 'two,', 'three']);
     });
-  });
-
-  describe('splitSentences', () => {
     it('should split basic sentences', () => {
       // Using long enough sentences to avoid merging during testing
       const text = 'This is a much longer first sentence with enough words. This is another long sentence with enough words.';
