@@ -469,8 +469,10 @@ describe('createArticleFromText', () => {
     expect(article.title).toBe('Pasted Article');
   });
 
-  it('throws if text is too short', () => {
-    expect(() => createArticleFromText('too short')).toThrow();
+  it('handles very short text gracefully', () => {
+    const article = createArticleFromText('Short');
+    expect(article.title).toBe('Short');
+    expect(article.paragraphs.length).toBe(1);
   });
 });
 
@@ -773,3 +775,25 @@ describe('extractYoutubeVideoId', () => {
 
 });
 
+
+describe('extractYoutubeVideoId', () => {
+  it('extracts ID from youtube.com/watch?v=...', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
+  });
+
+  it('extracts ID from youtu.be/ID', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/abc12345678')).toBe('abc12345678');
+  });
+
+  it('extracts ID from youtube.com/embed/ID', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/abc12345678')).toBe('abc12345678');
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/abc12345678')).toBe('abc12345678');
+    expect(extractYoutubeVideoId('https://www.youtube.com/live/abc12345678')).toBe('abc12345678');
+  });
+
+  it('returns null for invalid IDs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=too-long-id-1234567890')).toBeNull();
+    expect(extractYoutubeVideoId('not-a-url')).toBeNull();
+  });
+});

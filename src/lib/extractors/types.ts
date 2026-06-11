@@ -27,6 +27,7 @@ export interface Article {
 }
 
 export const MIN_PARAGRAPH_LENGTH = 20;
+export const YOUTUBE_TRANSCRIPT_PARAGRAPH_THRESHOLD = 400;
 export const MAX_ARTICLE_SIZE = 2_000_000;     // 2 MB (HTML articles)
 export const MAX_PDF_SIZE = 10_000_000;        // 10 MB (PDF documents)
 export const FETCH_TIMEOUT = 10_000;           // 10 s

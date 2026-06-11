@@ -9,6 +9,7 @@ import {
   type Article,
   UpstreamResponseError,
   WORDS_PER_MINUTE,
+  YOUTUBE_TRANSCRIPT_PARAGRAPH_THRESHOLD,
 } from './types.js';
 import {
   buildArticleFromParagraphs,
@@ -252,7 +253,7 @@ function groupTranscriptIntoParagraphs(texts: string[]): string[] {
       continue;
     }
 
-    if (currentParagraph.length > 400) {
+    if (currentParagraph.length > YOUTUBE_TRANSCRIPT_PARAGRAPH_THRESHOLD) {
       paragraphs.push(currentParagraph.trim());
       currentParagraph = cleaned;
       continue;

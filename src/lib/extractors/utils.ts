@@ -122,11 +122,15 @@ export function splitSentences(text: string): string[] {
 /**
  * Split text into paragraphs of N sentences each.
  */
-export function splitTextBySentences(text: string, sentencesPerParagraph = 3): string[] {
+export function splitTextBySentences(
+  text: string, 
+  sentencesPerParagraph = 3, 
+  minChars = MIN_PARAGRAPH_LENGTH
+): string[] {
   const sentences = splitSentences(text);
   if (sentences.length <= sentencesPerParagraph) {
     const trimmed = text.trim();
-    if (trimmed.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(trimmed)) {
+    if (trimmed.length >= minChars && isSpeakableText(trimmed)) {
       return [trimmed];
     }
     return [];
@@ -136,7 +140,7 @@ export function splitTextBySentences(text: string, sentencesPerParagraph = 3): s
   for (let i = 0; i < sentences.length; i += sentencesPerParagraph) {
     const chunk = sentences.slice(i, i + sentencesPerParagraph);
     const para = chunk.join(' ').trim();
-    if (para.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(para)) {
+    if (para.length >= minChars && isSpeakableText(para)) {
       paragraphs.push(para);
     }
   }
@@ -153,7 +157,11 @@ export function countWords(text: string): number {
 /**
  * Split plain text into paragraphs.
  */
-export function splitPlainTextParagraphs(text: string): string[] {
+export function splitPlainTextParagraphs(
+  text: string, 
+  sentencesPerParagraph = 3,
+  minChars = MIN_PARAGRAPH_LENGTH
+): string[] {
   const byBlank = filterReadableParagraphs(text.split(/\n\s*\n/));
   if (byBlank.length > 1) return byBlank;
 
@@ -161,11 +169,11 @@ export function splitPlainTextParagraphs(text: string): string[] {
   if (byLine.length > 1) return byLine;
 
   const cleaned = stripNonTextContent(text);
-  const bySentence = splitTextBySentences(cleaned, 3);
+  const bySentence = splitTextBySentences(cleaned, sentencesPerParagraph, minChars);
   
   if (bySentence.length > 0) return bySentence;
 
-  if (cleaned.length >= MIN_PARAGRAPH_LENGTH && isSpeakableText(cleaned)) {
+  if (cleaned.length >= minChars && isSpeakableText(cleaned)) {
     return [cleaned];
   }
 
