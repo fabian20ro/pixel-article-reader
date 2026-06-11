@@ -24,7 +24,11 @@ export function createArticleFromText(text: string): Article {
   const textContent = bodyText || text.trim();
 
   const paragraphs = splitPlainTextParagraphs(textContent);
-  if (paragraphs.length === 0) {
+  let finalParagraphs = paragraphs;
+  if (finalParagraphs.length === 0 && textContent.trim().length > 0) {
+    finalParagraphs = [textContent.trim()];
+  }
+  if (finalParagraphs.length === 0) {
     throw new Error('Pasted text is too short to read as an article.');
   }
 
