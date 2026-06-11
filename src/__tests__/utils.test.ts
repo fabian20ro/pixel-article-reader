@@ -98,7 +98,7 @@ describe('utils.ts', () => {
   describe('splitTextBySentences', () => {
     it('splits into chunks of N sentences', () => {
       const text = 'One. Two. Three. Four. Five. Six. Seven. Eight.';
-      expect(splitTextBySentences(text, 2)).toEqual(['One. Two.', 'Three. Four.', 'Five. Six.', 'Seven. Eight.']);
+      expect(splitTextBySentences(text, 2, 0)).toEqual(['One. Two.', 'Three. Four.', 'Five. Six.', 'Seven. Eight.']);
     });
   });
 
@@ -122,7 +122,7 @@ describe('utils.ts', () => {
 
     it('falls back to sentence splitting if needed', () => {
       const text = 'Sentence one. Sentence two. Sentence three. Sentence four.';
-      expect(splitPlainTextParagraphs(text)).toEqual(['Sentence one. Sentence two.', 'Sentence three. Sentence four.']);
+      expect(splitPlainTextParagraphs(text, 2)).toEqual(['Sentence one. Sentence two.', 'Sentence three. Sentence four.']);
     });
   });
 });
