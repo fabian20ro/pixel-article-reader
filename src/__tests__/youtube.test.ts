@@ -16,8 +16,29 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
 
+  it('extracts ID from v URL', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/v/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
   it('extracts ID from shorts URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from live URL', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from unusual but valid subdomains', () => {
+    expect(extractYoutubeVideoId('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('handles underscores in ID', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc_123-def')).toBe('abc_123-def');
+  });
+
+  it('returns null for IDs with invalid length', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc123')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc123456789012345')).toBeNull();
   });
 
   it('returns null for invalid URLs', () => {
