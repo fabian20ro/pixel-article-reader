@@ -84,8 +84,8 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
   let lastHeight = 0;
 
   for (const item of items) {
-    const text = item.str;
-    if (!text.trim()) continue;
+    const text = item.str.trim();
+    if (!text) continue;
 
     const y = item.transform[5];
     const height = item.height || 12;
@@ -94,7 +94,7 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
       const gap = Math.abs(lastY - y);
       const lineSpacing = lastHeight * 1.5;
 
-      if (gap > lineSpacing * 1.8) {
+      if (gap > lineSpacing * 1.5) {
         // Large vertical gap — paragraph break
         if (currentParagraph.trim()) {
           paragraphs.push(currentParagraph.trim());
