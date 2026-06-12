@@ -29,3 +29,4 @@ describe('extractParagraphsFromTextItems', () => {
     expect(result).toEqual(['Hyphenated word']);
   });
 });
+// comment
