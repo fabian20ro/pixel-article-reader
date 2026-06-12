@@ -146,6 +146,16 @@ describe('getUrlFromParams', () => {
     expect(getUrlFromParams()).toBe('https://example.com/post');
   });
 
+  it('extracts URL from ?link= query param', () => {
+    window.history.replaceState(null, '', '/?link=https%3A%2F%2Fexample.com%2Fpost');
+    expect(getUrlFromParams()).toBe('https://example.com/post');
+  });
+
+  it('extracts URL from ?u= query param', () => {
+    window.history.replaceState(null, '', '/?u=https%3A%2F%2Fexample.com%2Fpost');
+    expect(getUrlFromParams()).toBe('https://example.com/post');
+  });
+
   it('returns null when no URL params are present', () => {
     window.history.replaceState(null, '', '/');
     expect(getUrlFromParams()).toBeNull();
