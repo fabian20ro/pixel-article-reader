@@ -16,6 +16,10 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
 
+  it('extracts ID from v URL', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/v/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
   it('extracts ID from shorts URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });

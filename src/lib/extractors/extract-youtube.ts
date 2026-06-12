@@ -57,10 +57,11 @@ export function extractYoutubeVideoId(url: string): string | null {
       return /^[\w-]{11}$/.test(id) ? id : null;
     }
     if (
-      parsed.pathname.startsWith('/watch') ||
-      parsed.pathname.startsWith('/embed/') ||
-      parsed.pathname.startsWith('/shorts/') ||
-      parsed.pathname.startsWith('/live/')
+      parsed.pathname.startsWith('/watch')
+      || parsed.pathname.startsWith('/embed/')
+      || parsed.pathname.startsWith('/shorts/')
+      || parsed.pathname.startsWith('/live/')
+      || parsed.pathname.startsWith('/v/')
     ) {
       const id = parsed.pathname.startsWith('/watch')
         ? parsed.searchParams.get('v')
