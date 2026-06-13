@@ -81,6 +81,7 @@ describe('utils.ts', () => {
   describe('extractTitleFromMarkdown', () => {
     it('extracts H1 title', () => {
       expect(extractTitleFromMarkdown('# My Title\nContent')).toBe('My Title');
+      expect(extractTitleFromMarkdown('#NoSpaceTitle\nContent')).toBe('NoSpaceTitle');
     });
 
     it('falls back to first line if no H1', () => {
