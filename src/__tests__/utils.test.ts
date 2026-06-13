@@ -96,8 +96,10 @@ describe('utils.ts', () => {
 
   describe('splitSentences', () => {
     it('splits by punctuation', () => {
-      const text = 'Hello world. How are you? It is great!';
-      expect(splitSentences(text)).toEqual(['Hello world.', 'How are you?', 'It is great!']);
+      expect(splitSentences('One. Two. Three. Four. Five. Six. Seven. Eight.')).toEqual(['One.', 'Two.', 'Three.', 'Four.', 'Five.', 'Six.', 'Seven.', 'Eight.']);
+    });
+    it('handles sentences without terminal punctuation at the end of text', () => {
+      expect(splitSentences('Hello. World')).toEqual(['Hello.', 'World']);
     });
   });
 
