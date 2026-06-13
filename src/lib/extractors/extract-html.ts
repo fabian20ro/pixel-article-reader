@@ -168,7 +168,7 @@ export function sanitizeRenderedHtml(
   if (!container) return '';
 
   // Remove dangerous elements, form elements, and image-related elements (this is a text reader).
-  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg, form, meta, link, base').forEach((el) => el.remove());
+  container.querySelectorAll('script, style, iframe, object, embed, img, picture, source, svg, form, meta, link, video, audio').forEach((el) => el.remove());
 
   // Remove links that became empty after image removal (linked images)
   // and links whose text is just an image reference (Jina Reader format).
