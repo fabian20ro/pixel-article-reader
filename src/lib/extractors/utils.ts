@@ -103,7 +103,7 @@ export function markdownToParagraphs(markdown: string): string[] {
 
 export function extractTitleFromMarkdown(markdown: string): string {
   const lines = markdown.split('\n').map((line) => line.trim()).filter(Boolean);
-  const h1 = lines.find((line) => /^#\s*/.test(line));
+  const h1 = lines.find((line) => /^#[^#]\s*/.test(line) || line === '#');
   if (h1) return h1.replace(/^#\s*/, '').trim();
   return stripMarkdownSyntax(lines[0] ?? '').slice(0, 150);
 }
