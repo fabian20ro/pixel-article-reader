@@ -1,8 +1,13 @@
-/**
- * Detect paragraph boundaries from PDF text items using vertical position gaps.
- * PDF text items include position data: transform[5] is the Y coordinate.
- * A gap larger than 1.8x line height suggests a paragraph break.
- */
+import { type Article, MAX_PDF_SIZE } from './types.js';
+import { buildArticleFromParagraphs } from './utils.js';
+
+export interface PdfJsTextItem {
+  str: string;
+  transform: number[];
+  height?: number;
+}
+
+/** Detect paragraph boundaries from PDF text items using vertical position gaps. */
 export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[] {
   if (items.length === 0) return [];
 
@@ -23,13 +28,11 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
       const lineSpacing = lastHeight * 1.5;
 
       if (gap > lineSpacing * 1.5) {
-        // Large vertical gap — paragraph break
         if (currentParagraph.trim()) {
           paragraphs.push(currentParagraph.trim());
         }
         currentParagraph = text;
       } else {
-        // Same paragraph — join with space (handle hyphenation)
         if (currentParagraph.endsWith('-')) {
           currentParagraph = currentParagraph.slice(0, -1) + text;
         } else if (currentParagraph.endsWith('- ')) {
@@ -51,4 +54,28 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
   }
 
   return paragraphs;
+}
+
+/** Create an Article from a local PDF file. */
+export async function createArticleFromPdf(
+  file: File | { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  if (file.size > MAX_PDF_SIZE) {
+    throw new Error('PDF is too large (>10 MB). Please use a smaller file.');
+  }
+
+  const buffer = await file.arrayBuffer();
+  return parsePdfFromArrayBuffer(buffer, file.name, onProgress);
+}
+
+/** Parse a PDF buffer into an Article. */
+export async function parsePdfFromArrayBuffer(
+  buffer: ArrayBuffer,
+  url: string,
+  onProgress?: (message: string) => void,
+): Promise<Article> {
+  onProgress?.('Processing PDF...');
+  // Stub implementation
+  return buildArticleFromParagraphs(['PDF content stub'], 'PDF Document', 'PDF', '');
 }

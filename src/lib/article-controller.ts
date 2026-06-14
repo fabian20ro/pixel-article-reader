@@ -177,7 +177,7 @@ export class ArticleController {
         this.options.refs.loadingMessage.textContent = 'Processing PDF...';
         article = await createArticleFromPdf(
           file,
-          (msg) => { this.options.refs.loadingMessage.textContent = msg; },
+          (msg: string) => { this.options.refs.loadingMessage.textContent = msg; },
         );
       } else if (ext === 'txt' || ext === 'text') {
         this.options.refs.loadingMessage.textContent = 'Processing text file...';
