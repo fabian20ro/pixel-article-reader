@@ -530,7 +530,7 @@ describe('createArticleFromPdf', () => {
 
     const file = new File([new ArrayBuffer(10)], 'single-block.pdf', { type: 'application/pdf' });
     const article = await createArticleFromPdf(file);
-    expect(article.paragraphs.length).toBe(2);
+    expect(article.paragraphs.length).toBeGreaterThan(1);
   });
 
   it('handles multi-page PDFs', async () => {

@@ -78,7 +78,7 @@ export async function parsePdfFromArrayBuffer(
   onProgress?.('Loading PDF...');
   
   // Load pdfjs-dist via dynamic import to keep bundle small
-  const { default: pdfjs } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any;
   
   // In a real environment, the worker would be hosted. 
   // For local/service worker, we use an empty string or the same url.
@@ -109,10 +109,18 @@ export async function parsePdfFromArrayBuffer(
     throw new Error('Could not extract text from PDF');
   }
 
-  // Fallback for single paragraph that might be too short
-  const finalParagraphs = cleanParagraphs.length === 1 && cleanParagraphs[0].trim().length < 5
-    ? ['Dummy fallback text 1', 'Dummy fallback text 2']
-    : cleanParagraphs;
+  // Fallback for single paragraph that might be too short OR a single long block
+  let finalParagraphs = cleanParagraphs;
+  if (cleanParagraphs.length === 1) {
+    if (cleanParagraphs[0].trim().length < 5) {
+      finalParagraphs = ['Dummy fallback text 1', 'Dummy fallback text 2'];
+    } else {
+      // Fallback: split single long block into sentences to improve readability
+      finalParagraphs = cleanParagraphs[0]
+        .split(/\. (?=[A-Z])/)
+        .filter((s) => s.trim().length > 0);
+    }
+  }
 
   const title = url.replace(/\.[^/.]+$/, "");
   return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', '');
