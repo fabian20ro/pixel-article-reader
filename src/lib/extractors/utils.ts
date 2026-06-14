@@ -52,7 +52,7 @@ export function isSpeakableText(text: string): boolean {
   // If wordCount is low, fallback to character count for non-latin.
   if (wordCount < 3) {
     const charCount = trimmed.replace(/[.,!?;:()\[\]{}'\"<>]/g, '').replace(/\s/g, '').length;
-    return charCount >= 5;
+    return charCount >= 4;
   }
   
   return true;
