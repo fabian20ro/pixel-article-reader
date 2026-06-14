@@ -23,11 +23,11 @@ describe('createArticleFromText', () => {
 
 describe('createArticleFromTextFile', () => {
   it('creates an article from a valid file', async () => {
-    const file = new File(['This is a valid article with enough words to be processed correctly.'], {
+    const file = new File(['This is a valid article with enough words to be processed correctly.'], 'test.txt', {
       type: 'text/plain',
     });
     const article = await createArticleFromTextFile(file);
-    expect(article.title).toBe('blob');
+    expect(article.title).toBe('test');
     expect(article.wordCount).toBeGreaterThan(0);
   });
 
