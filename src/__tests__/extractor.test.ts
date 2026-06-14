@@ -469,10 +469,8 @@ describe('createArticleFromText', () => {
     expect(article.title).toBe('Pasted Article');
   });
 
-  it('handles very short text gracefully', () => {
-    const article = createArticleFromText('Short');
-    expect(article.title).toBe('Short');
-    expect(article.paragraphs.length).toBe(1);
+  it('handles very short text gracefully', async () => {
+    await expect(createArticleFromText('A')).toThrow('Pasted text is too short to read as an article.');
   });
 });
 

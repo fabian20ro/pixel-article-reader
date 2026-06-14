@@ -74,7 +74,7 @@ export async function createArticleFromTextFile(file: File): Promise<Article> {
     throw new Error('The text file has no readable content.');
   }
 
-  const title = file.name.replace(/\.(txt|text)$/i, '') || 'Text Document';
+  const title = String(file.name).replace(/\.(txt|text)$/i, '') || 'Text Document';
   const wordCount = countWords(textContent);
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);
