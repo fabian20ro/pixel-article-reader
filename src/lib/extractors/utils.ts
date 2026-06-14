@@ -46,13 +46,13 @@ export function isSpeakableText(text: string): boolean {
   
   // Split by whitespace to get tokens.
   const tokens = trimmed.split(/\s+/);
-  // A "word" for this purpose is at least 2 characters long.
-  const wordCount = tokens.filter(t => t.length >= 2).length;
+  // A "word" for this purpose is at least 2 characters long and contains at least one alphanumeric character.
+  const wordCount = tokens.filter(t => t.length >= 2 && /[a-zA-Z0-9]/.test(t)).length;
   
   // If wordCount is low, fallback to character count for non-latin.
   if (wordCount < 3) {
     const charCount = trimmed.replace(/[.,!?;:()\[\]{}'\"<>]/g, '').replace(/\s/g, '').length;
-    return charCount >= 3;
+    return charCount >= 5;
   }
   
   return true;
