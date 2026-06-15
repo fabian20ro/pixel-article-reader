@@ -17,6 +17,9 @@ describe('extractYoutubeVideoId', () => {
   it('extracts from live URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
+  it('extracts from v/ URL', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/v/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
   it('returns null for invalid video id', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=not-a-video-id-123')).toBeNull();
