@@ -77,7 +77,8 @@ function isYoutubeUrl(url: string): boolean {
     return parsed.pathname.startsWith('/watch')
       || parsed.pathname.startsWith('/embed/')
       || parsed.pathname.startsWith('/shorts/')
-      || parsed.pathname.startsWith('/live/');
+      || parsed.pathname.startsWith('/live/')
+      || parsed.pathname.startsWith('/v/');
   } catch {
     return false;
   }

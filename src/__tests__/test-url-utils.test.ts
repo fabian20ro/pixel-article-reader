@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { extractUrl, isValidArticleUrl } from '../lib/url-utils.js';
+import { extractArticle } from '../lib/extractors/extract-url.js';
 
 describe('url_utils', () => {
   describe('isValidArticleUrl', () => {
@@ -29,6 +30,32 @@ describe('url_utils', () => {
 
     it('returns null for non-URLs', () => {
       expect(extractUrl('Hello world')).toBeNull();
+    });
+  });
+
+  describe('extractArticle', () => {
+    it('extracts content from a valid URL', async () => {
+      const fetcher = vi.fn(async () => {
+        return new Response(JSON.stringify({
+          title: 'Test Title',
+          content: '<h1>Test</h1>',
+          textContent: 'Test Content',
+          markdown: 'Test Markdown',
+          paragraphs: ['Test Paragraph'],
+          lang: 'en',
+          htmlLang: 'en',
+          siteName: 'Test Site',
+          excerpt: 'Test Excerpt',
+          wordCount: 10,
+          estimatedMinutes: 1,
+          resolvedUrl: 'https://example.com',
+        }), { 
+          status: 200,
+          headers: { 'content-type': 'application/json' } 
+        });
+      });
+      const article = await extractArticle('https://example.com', '', { fetcher });
+      expect(article.title).toBe('Test Title');
     });
   });
 });
