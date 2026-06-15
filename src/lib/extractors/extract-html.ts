@@ -11,6 +11,7 @@ import { detectLanguage } from '../lang-detect.js';
 import {
   type Article,
   WORDS_PER_MINUTE,
+  MAX_ARTICLE_SIZE,
 } from './types.js';
 import {
   splitPlainTextParagraphs,
@@ -24,6 +25,9 @@ export function parseArticleFromHtml(
   sourceUrl: string,
   DOMParserConstructor: new () => { parseFromString(html: string, type: string): Document },
 ): Article {
+  if (html.length > MAX_ARTICLE_SIZE) {
+    throw new Error(`HTML exceeds maximum size of ${MAX_ARTICLE_SIZE} characters.`);
+  }
   const doc = new DOMParserConstructor().parseFromString(html, 'text/html');
 
   const htmlLang = doc.documentElement.getAttribute('lang')
@@ -34,8 +38,8 @@ export function parseArticleFromHtml(
   base.href = sourceUrl;
   doc.head.appendChild(base);
 
-  // Strip images before Readability — this is a text reader, not an image viewer.
-  doc.querySelectorAll('img').forEach((el) => el.remove());
+  // Strip noise before Readability — this is a text reader.
+  doc.querySelectorAll('img, script, iframe, style, noscript').forEach((el) => el.remove());
 
   const parsed = new Readability(doc).parse();
 
