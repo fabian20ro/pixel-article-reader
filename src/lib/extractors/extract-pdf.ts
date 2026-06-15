@@ -34,9 +34,9 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
         currentParagraph = text;
       } else {
         if (currentParagraph.endsWith('-')) {
-          currentParagraph = currentParagraph.slice(0, -1) + text;
+          currentParagraph = currentParagraph.slice(0, -1) + ' ' + text;
         } else if (currentParagraph.endsWith('- ')) {
-          currentParagraph = currentParagraph.slice(0, -2) + text;
+          currentParagraph = currentParagraph.slice(0, -2) + ' ' + text;
         } else {
           currentParagraph += (currentParagraph ? ' ' : '') + text;
         }

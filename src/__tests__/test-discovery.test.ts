@@ -29,5 +29,14 @@ describe('extractParagraphsFromTextItems', () => {
     const result = extractParagraphsFromTextItems(items);
     expect(result).toEqual(['Part 1 Part 2', 'Part 3']);
   });
+
+  it('joins hyphenated words with a space', () => {
+    const items = [
+      { str: 'Part 1-', transform: [1, 0, 0, 1, 12, 100], height: 12 },
+      { str: 'else', transform: [1, 0, 0, 1, 12, 95], height: 12 },
+    ] as any;
+    const result = extractParagraphsFromTextItems(items);
+    expect(result).toEqual(['Part 1 else']);
+  });
 });
 // comment
