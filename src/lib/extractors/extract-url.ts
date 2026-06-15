@@ -237,6 +237,10 @@ export async function extractArticle(
       return parseEpubFromArrayBuffer(respBuffer, finalUrl, DOMParserConstructor, onProgress);
     }
 
+    if (contentType.includes('application/json')) {
+      return JSON.parse(new TextDecoder().decode(respBuffer)) as Article;
+    }
+
     // Fallback to HTML
     const body = new TextDecoder().decode(respBuffer);
     if (body.length > MAX_ARTICLE_SIZE) throw new Error('Article is too large (>2 MB).');
