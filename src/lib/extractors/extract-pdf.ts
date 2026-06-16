@@ -115,7 +115,7 @@ export async function parsePdfFromArrayBuffer(
   let finalParagraphs = cleanParagraphs;
   if (cleanParagraphs.length === 1) {
     if (cleanParagraphs[0].trim().length < 5) {
-      finalParagraphs = ['Dummy fallback text 1', 'Dummy fallback text 2'];
+      throw new Error('PDF content too short to be meaningful');
     } else {
       // Fallback: split single long block into sentences to improve readability
       finalParagraphs = cleanParagraphs[0]
