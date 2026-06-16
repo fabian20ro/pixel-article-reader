@@ -34,7 +34,9 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
         currentParagraph = text;
       } else {
         if (currentParagraph.endsWith('-')) {
-          currentParagraph = currentParagraph.slice(0, -1) + text;
+          const beforeHyphen = currentParagraph.charAt(currentParagraph.length - 2);
+          const joiner = /\d/.test(beforeHyphen) ? ' ' : '';
+          currentParagraph = currentParagraph.slice(0, -1) + joiner + text;
         } else if (currentParagraph.endsWith('- ')) {
           currentParagraph = currentParagraph.slice(0, -2).trimEnd() + ' ' + text;
         } else {
