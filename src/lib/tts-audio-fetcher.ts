@@ -1,9 +1,8 @@
 /**
  * TTS Audio Fetcher — fetches sentence-level TTS audio from the Worker.
- *
  * Stateless: each call fetches one sentence's audio from the proxy's
  * ?action=tts endpoint and returns a blob URL for <audio> playback.
- * Includes a single retry on transient failures.
+ * Includes a single retry on transient errors.
  */
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -16,19 +15,28 @@ export interface TtsAudioFetcherConfig {
 /**
  * Fetch TTS audio for a single sentence.
  * Returns a blob URL that can be assigned to audio.src, or null on failure.
- * Retries once on transient errors (network failures, 5xx status).
+ * Retries once on transient errors (network failures, 5xx status, 429).
  */
 export async function fetchTtsAudio(
   text: string,
   lang: string,
   config: TtsAudioFetcherConfig,
 ): Promise<string | null> {
-  const result = await attemptFetch(text, lang, config);
-  if (result !== null) return result;
-
-  // Single retry after a short delay for transient failures
-  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-  return attemptFetch(text, lang, config);
+  try {
+    return await attemptFetch(text, lang, config);
+  } catch (err) {
+    // If it's a permanent error, don't retry.
+    if (err instanceof Error && err.message.startsWith('Permanent error')) {
+      return null;
+    }
+    // Transient error (network error, timeout, or non-retryable HTTP status)
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    try {
+      return await attemptFetch(text, lang, config);
+    } catch {
+      return null;
+    }
+  }
 }
 
 async function attemptFetch(
@@ -46,12 +54,20 @@ async function attemptFetch(
 
   try {
     const resp = await fetch(url, { signal: controller.signal });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      if (resp.status >= 400 && resp.status < 500 && resp.status !== 429) {
+        throw new Error(`Permanent error: ${resp.status}`);
+      }
+      throw new Error(`Transient error: ${resp.status}`);
+    }
 
     const blob = await resp.blob();
     return URL.createObjectURL(blob);
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Permanent error')) {
+      throw err;
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

@@ -46,13 +46,13 @@ export function isSpeakableText(text: string): boolean {
   
   // Split by whitespace to get tokens.
   const tokens = trimmed.split(/\s+/);
-  // A "word" for this purpose is at least 2 characters long.
-  const wordCount = tokens.filter(t => t.length >= 2).length;
+  // A "word" for this purpose is at least 2 characters long and contains at least one alphanumeric character.
+  const wordCount = tokens.filter(t => t.length >= 2 && /[a-zA-Z0-9]/.test(t)).length;
   
   // If wordCount is low, fallback to character count for non-latin.
   if (wordCount < 3) {
     const charCount = trimmed.replace(/[.,!?;:()\[\]{}'\"<>]/g, '').replace(/\s/g, '').length;
-    return charCount >= 3;
+    return charCount >= 4;
   }
   
   return true;
@@ -103,8 +103,8 @@ export function markdownToParagraphs(markdown: string): string[] {
 
 export function extractTitleFromMarkdown(markdown: string): string {
   const lines = markdown.split('\n').map((line) => line.trim()).filter(Boolean);
-  const h1 = lines.find((line) => /^#\s+/.test(line));
-  if (h1) return h1.replace(/^#\s+/, '').trim();
+  const h1 = lines.find((line) => /^#[^#]\s*/.test(line) || line === '#');
+  if (h1) return h1.replace(/^#\s*/, '').trim();
   return stripMarkdownSyntax(lines[0] ?? '').slice(0, 150);
 }
 
@@ -112,8 +112,7 @@ export function extractTitleFromMarkdown(markdown: string): string {
  * Split text into individual sentences.
  */
 export function splitSentences(text: string): string[] {
-  // Regex that captures the terminal punctuation to keep it with the sentence.
-  const regex = /[^.!?]+[.!?](?:\s+|$)/g;
+  const regex = /[^.!?]+[.!?](?:\s+|$)|[^.!?]+$/g;
   const matches = text.match(regex);
   if (!matches) return [];
   return matches.map(s => s.trim()).filter(s => s.length > 0);

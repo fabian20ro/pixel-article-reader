@@ -32,6 +32,9 @@ export function createArticleFromText(text: string): Article {
   }
 
   const wordCount = countWords(textContent);
+  if (wordCount < 3) {
+    throw new Error('Pasted text is too short to read as an article.');
+  }
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);
 
@@ -71,7 +74,7 @@ export async function createArticleFromTextFile(file: File): Promise<Article> {
     throw new Error('The text file has no readable content.');
   }
 
-  const title = file.name.replace(/\.(txt|text)$/i, '') || 'Text Document';
+  const title = String(file.name).replace(/\.(txt|text)$/i, '') || 'Text Document';
   const wordCount = countWords(textContent);
   const estimatedMinutes = Math.max(1, Math.round(wordCount / WORDS_PER_MINUTE));
   const lang = detectLanguage(textContent);

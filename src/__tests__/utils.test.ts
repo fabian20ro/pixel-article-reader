@@ -81,17 +81,25 @@ describe('utils.ts', () => {
   describe('extractTitleFromMarkdown', () => {
     it('extracts H1 title', () => {
       expect(extractTitleFromMarkdown('# My Title\nContent')).toBe('My Title');
+      expect(extractTitleFromMarkdown('#NoSpaceTitle\nContent')).toBe('NoSpaceTitle');
     });
 
     it('falls back to first line if no H1', () => {
       expect(extractTitleFromMarkdown('First line\nSecond line')).toBe('First line');
     });
+
+    it('handles mixed header levels and finds the correct H1', () => {
+      expect(extractTitleFromMarkdown('## Subtitle\n# Real Title\nContent')).toBe('Real Title');
+      expect(extractTitleFromMarkdown('### Not an H1\n# Title')).toBe('Title');
+    });
   });
 
   describe('splitSentences', () => {
     it('splits by punctuation', () => {
-      const text = 'Hello world. How are you? It is great!';
-      expect(splitSentences(text)).toEqual(['Hello world.', 'How are you?', 'It is great!']);
+      expect(splitSentences('One. Two. Three. Four. Five. Six. Seven. Eight.')).toEqual(['One.', 'Two.', 'Three.', 'Four.', 'Five.', 'Six.', 'Seven.', 'Eight.']);
+    });
+    it('handles sentences without terminal punctuation at the end of text', () => {
+      expect(splitSentences('Hello. World')).toEqual(['Hello.', 'World']);
     });
   });
 

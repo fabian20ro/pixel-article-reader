@@ -77,7 +77,8 @@ function isYoutubeUrl(url: string): boolean {
     return parsed.pathname.startsWith('/watch')
       || parsed.pathname.startsWith('/embed/')
       || parsed.pathname.startsWith('/shorts/')
-      || parsed.pathname.startsWith('/live/');
+      || parsed.pathname.startsWith('/live/')
+      || parsed.pathname.startsWith('/v/');
   } catch {
     return false;
   }
@@ -234,6 +235,10 @@ export async function extractArticle(
     if (contentType.includes('application/epub+zip')) {
       onProgress?.('Extracting text from EPUB...');
       return parseEpubFromArrayBuffer(respBuffer, finalUrl, DOMParserConstructor, onProgress);
+    }
+
+    if (contentType.includes('application/json')) {
+      return JSON.parse(new TextDecoder().decode(respBuffer)) as Article;
     }
 
     // Fallback to HTML
