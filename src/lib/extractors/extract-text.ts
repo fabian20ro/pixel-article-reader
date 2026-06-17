@@ -21,7 +21,7 @@ export function createArticleFromText(text: string): Article {
   const hasTitle = firstLine.length > 0 && firstLine.length <= 150;
   const title = hasTitle ? firstLine : 'Pasted Article';
   const bodyText = hasTitle ? lines.slice(1).join('\n').trim() : text.trim();
-  const textContent = bodyText || text.trim();
+  const textContent = bodyText || '';
 
   let paragraphs = splitPlainTextParagraphs(textContent);
   if (paragraphs.length === 0 && textContent.trim().length > 0) {
@@ -42,7 +42,7 @@ export function createArticleFromText(text: string): Article {
     title,
     content: '',
     textContent,
-    markdown: textContent,
+    markdown: text.trim(),
     paragraphs,
     lang,
     htmlLang: '',
@@ -83,7 +83,7 @@ export async function createArticleFromTextFile(file: File): Promise<Article> {
     title,
     content: '',
     textContent,
-    markdown: textContent,
+    markdown: text.trim(),
     paragraphs,
     lang,
     htmlLang: '',

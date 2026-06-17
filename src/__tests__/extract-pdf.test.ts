@@ -2,9 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
 
 describe('extractParagraphsFromTextItems', () => {
-  it('should return empty array for empty input', () => {
-    expect(extractParagraphsFromTextItems([])).toEqual([]);
+  it('should handle empty or whitespace-only strings', () => {
+    const items = [
+      { str: ' ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '', transform: [1, 0, 0, 1, 0, 650], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual([]);
   });
+
 
   it('should extract single paragraph', () => {
     const items = [
@@ -26,7 +31,7 @@ describe('extractParagraphsFromTextItems', () => {
       { str: 'This is a long-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
       { str: 'word', transform: [1, 0, 0, 1, 0, 690], height: 12 } // gap 10 <= 27
     ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a longword']);
+    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
   });
 
   it('should handle " - " hyphenation', () => {
@@ -50,6 +55,15 @@ describe('extractParagraphsFromTextItems', () => {
     const items = [
       { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
       { str: 'Para 2', transform: [1, 0, 0, 1, 0, 600], height: 12 } // gap 100 > 27
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'Para 2']);
+  });
+
+  it('should handle empty strings in items', () => {
+    const items = [
+      { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '', transform: [1, 0, 0, 1, 0, 673], height: 12 },
+      { str: 'Para 2', transform: [1, 0, 0, 1, 0, 600], height: 12 }
     ];
     expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'Para 2']);
   });

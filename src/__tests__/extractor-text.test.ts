@@ -3,10 +3,10 @@ import { createArticleFromText, createArticleFromTextFile } from '../lib/extract
 
 describe('createArticleFromText', () => {
   it('creates an article from valid text', () => {
-    const text = 'This is a valid article with enough words to be processed correctly. It has multiple sentences.';
+    const text = 'Title Line\nThis is a valid article with enough words to be processed correctly. It has multiple sentences.';
     const article = createArticleFromText(text);
     
-    expect(article.title).toBe('This is a valid article with enough words to be processed correctly. It has multiple sentences.');
+    expect(article.title).toBe('Title Line');
     expect(article.textContent).toContain('This is a valid article');
     expect(article.paragraphs.length).toBeGreaterThan(0);
   });

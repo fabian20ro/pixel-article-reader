@@ -34,11 +34,7 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
         currentParagraph = text;
       } else {
         if (currentParagraph.endsWith('-')) {
-          const beforeHyphen = currentParagraph.charAt(currentParagraph.length - 2);
-          const joiner = /\d/.test(beforeHyphen) ? ' ' : '';
-          currentParagraph = currentParagraph.slice(0, -1) + joiner + text;
-        } else if (currentParagraph.endsWith('- ')) {
-          currentParagraph = currentParagraph.slice(0, -2).trimEnd() + ' ' + text;
+          currentParagraph = currentParagraph.slice(0, -1).trimEnd() + ' ' + text;
         } else {
           currentParagraph += (currentParagraph ? ' ' : '') + text;
         }
@@ -115,7 +111,7 @@ export async function parsePdfFromArrayBuffer(
   let finalParagraphs = cleanParagraphs;
   if (cleanParagraphs.length === 1) {
     if (cleanParagraphs[0].trim().length < 5) {
-      finalParagraphs = ['Dummy fallback text 1', 'Dummy fallback text 2'];
+      throw new Error('PDF content too short to be meaningful');
     } else {
       // Fallback: split single long block into sentences to improve readability
       finalParagraphs = cleanParagraphs[0]
@@ -124,6 +120,8 @@ export async function parsePdfFromArrayBuffer(
     }
   }
 
-  const title = url.replace(/\.[^/.]+$/, "");
-  return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', '');
+  const title = url.includes('/')
+    ? url.split('/').pop()?.replace(/\.[^/.]+$/, "") || 'PDF Document'
+    : url.replace(/\.[^/.]+$/, "");
+  return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', finalParagraphs.join('\n\n'));
 }

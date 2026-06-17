@@ -9,7 +9,6 @@ describe('edge cases', () => {
     expect(() => createArticleFromText('   ')).toThrow();
   });
   it('handles punctuation', () => {
-    const a = createArticleFromText('!!! ??? ...');
-    expect(a.title).toBe('!!! ??? ...');
+    expect(() => createArticleFromText('!!! ??? ...')).toThrow();
   });
 });
