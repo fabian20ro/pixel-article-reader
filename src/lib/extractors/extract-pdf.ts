@@ -120,6 +120,8 @@ export async function parsePdfFromArrayBuffer(
     }
   }
 
-  const title = url.replace(/\.[^/.]+$/, "");
+  const title = url.includes('/')
+    ? url.split('/').pop()?.replace(/\.[^/.]+$/, "") || 'PDF Document'
+    : url.replace(/\.[^/.]+$/, "");
   return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', finalParagraphs.join('\n\n'));
 }
