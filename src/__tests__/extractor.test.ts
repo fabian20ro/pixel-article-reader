@@ -580,6 +580,27 @@ describe('createArticleFromPdf', () => {
   });
 });
 
+  it('handles youtube urls with /v path without trailing slash', async () => {
+    const YOUTUBE_URL = 'https://youtube.com/v?v=abc';
+    const videoJson = {
+      title: 'Youtube Video',
+      content: '<p>Content</p>',
+      textContent: 'Content',
+      siteName: 'Youtube',
+      excerpt: '',
+    };
+    const fetchSpy = vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(videoJson), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const article = await extractArticle(YOUTUBE_URL, PROXY);
+    
+    const lastCall = fetchSpy.mock.calls[0];
+    expect(lastCall[1].body).toContain(JSON.stringify({ url: YOUTUBE_URL, format: 'article' }));
+    expect(article.title).toBe('Youtube Video');
+  });
+
 // ── extractArticle: PDF URL detection ───────────────────────────────
 
 describe('extractArticle PDF URL detection', () => {
