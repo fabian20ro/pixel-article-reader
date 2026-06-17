@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { extractYoutubeVideoId } from '../lib/extractors/extract-youtube.js';
 
 describe('extractYoutubeVideoId', () => {
+  it('extracts from URL with extra parameters', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=emb_rel_pause')).toBe('dQw4w9WgXcQ');
+  });
   it('extracts from standard URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
