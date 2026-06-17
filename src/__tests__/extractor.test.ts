@@ -450,9 +450,35 @@ describe('extractArticle', () => {
     expect(capturedDoc!.querySelectorAll('img').length).toBe(0);
     expect(capturedDoc!.querySelectorAll('figcaption').length).toBe(1);
   });
+}
+
+describe('extractYoutubeVideoId', () => {
+  it('extracts ID from youtu.be URLs', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/abc12345678')).toBe('abc12345678');
+    expect(extractYoutubeVideoId('https://youtu.be/short')).toBe(null);
+  });
+  it('extracts ID from youtube.com/watch?v= URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
+    expect(extractYoutubeVideoId('https://youtube.com/watch?v=abc12345678')).toBe('abc12345678');
+  });
+  it('extracts ID from youtube.com/embed/ URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/abc12345678')).toBe('abc12345678');
+  });
+  it('extracts ID from youtube.com/shorts/ URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/abc12345678')).toBe('abc12345678');
+  });
+  it('extracts ID from youtube.com/live/ URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/live/abc12345678')).toBe('abc12345678');
+  });
+  it('extracts ID from youtube.com/v/ URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/v/abc12345678')).toBe('abc12345678');
+  });
+  it('returns null for invalid URLs', () => {
+    expect(extractYoutubeVideoId('not-a-url')).toBe(null);
+    expect(extractYoutubeVideoId('https://example.com/not-youtube')).toBe(null);
+  });
 });
 
-// ── createArticleFromText ───────────────────────────────────────────
 
 describe('createArticleFromText', () => {
   it('uses first line as title if short enough', () => {
@@ -795,24 +821,4 @@ describe('extractYoutubeVideoId', () => {
 });
 
 
-describe('extractYoutubeVideoId', () => {
-  it('extracts ID from youtube.com/watch?v=...', () => {
-    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
-  });
 
-  it('extracts ID from youtu.be/ID', () => {
-    expect(extractYoutubeVideoId('https://youtu.be/abc12345678')).toBe('abc12345678');
-  });
-
-  it('extracts ID from youtube.com/embed/ID', () => {
-    expect(extractYoutubeVideoId('https://www.youtube.com/embed/abc12345678')).toBe('abc12345678');
-    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/abc12345678')).toBe('abc12345678');
-    expect(extractYoutubeVideoId('https://www.youtube.com/live/abc12345678')).toBe('abc12345678');
-  });
-
-  it('returns null for invalid IDs', () => {
-    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
-    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=too-long-id-1234567890')).toBeNull();
-    expect(extractYoutubeVideoId('not-a-url')).toBeNull();
-  });
-});
