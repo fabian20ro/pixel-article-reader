@@ -2,9 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
 
 describe('extractParagraphsFromTextItems', () => {
-  it('should return empty array for empty input', () => {
-    expect(extractParagraphsFromTextItems([])).toEqual([]);
+  it('should handle empty or whitespace-only strings', () => {
+    const items = [
+      { str: ' ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '', transform: [1, 0, 0, 1, 0, 650], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual([]);
   });
+
 
   it('should extract single paragraph', () => {
     const items = [
