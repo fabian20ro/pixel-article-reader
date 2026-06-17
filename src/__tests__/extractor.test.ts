@@ -450,7 +450,7 @@ describe('extractArticle', () => {
     expect(capturedDoc!.querySelectorAll('img').length).toBe(0);
     expect(capturedDoc!.querySelectorAll('figcaption').length).toBe(1);
   });
-}
+});
 
 describe('extractYoutubeVideoId', () => {
   it('extracts ID from youtu.be URLs', () => {
