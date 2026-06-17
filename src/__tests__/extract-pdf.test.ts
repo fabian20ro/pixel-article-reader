@@ -26,7 +26,7 @@ describe('extractParagraphsFromTextItems', () => {
       { str: 'This is a long-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
       { str: 'word', transform: [1, 0, 0, 1, 0, 690], height: 12 } // gap 10 <= 27
     ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a longword']);
+    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
   });
 
   it('should handle " - " hyphenation', () => {
