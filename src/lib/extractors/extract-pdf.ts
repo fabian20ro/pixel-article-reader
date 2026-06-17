@@ -125,5 +125,5 @@ export async function parsePdfFromArrayBuffer(
   }
 
   const title = url.replace(/\.[^/.]+$/, "");
-  return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', '');
+  return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', finalParagraphs.join('\n\n'));
 }
