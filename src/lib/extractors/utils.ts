@@ -112,7 +112,7 @@ export function extractTitleFromMarkdown(markdown: string): string {
  * Split text into individual sentences.
  */
 export function splitSentences(text: string): string[] {
-  const regex = /[^.!?]+[.!?](?:\s+|$)|[^.!?]+$/g;
+  const regex = /[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const matches = text.match(regex);
   if (!matches) return [];
   return matches.map(s => s.trim()).filter(s => s.length > 0);

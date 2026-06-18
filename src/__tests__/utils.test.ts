@@ -101,6 +101,9 @@ describe('utils.ts', () => {
     it('handles sentences without terminal punctuation at the end of text', () => {
       expect(splitSentences('Hello. World')).toEqual(['Hello.', 'World']);
     });
+    it('handles ellipsis', () => {
+      expect(splitSentences('Hello... World')).toEqual(['Hello...', 'World']);
+    });
   });
 
   describe('splitTextBySentences', () => {
