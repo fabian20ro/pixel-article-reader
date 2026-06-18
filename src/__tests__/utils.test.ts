@@ -44,6 +44,9 @@ describe('utils.ts', () => {
       expect(stripNonTextContent('Text with ![alt](url)')).toBe('Text with');
     });
 
+    it('strips image URLs even if followed by a period', () => {
+      expect(stripNonTextContent('Text with https://example.com/image.png.')).toBe('Text with');
+    });
     it('strips image URLs', () => {
       expect(stripNonTextContent('Text with https://example.com/image.png')).toBe('Text with');
     });

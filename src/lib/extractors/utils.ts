@@ -64,7 +64,7 @@ export function stripNonTextContent(text: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
     .replace(IMAGE_MD_RE, '')
-    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(\s|$|\)|")/gi, '')
+    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(?:\s|$|\)|\"|'|\.)/gi, '')
     .replace(/https?:\/\/\S{80,}/g, '')
     .replace(/\s+/g, ' ')
     .trim();
