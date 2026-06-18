@@ -53,7 +53,7 @@ export function extractYoutubeVideoId(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.hostname.includes('youtu.be')) {
-      const id = parsed.pathname.slice(1);
+      const id = parsed.pathname.slice(1).replace(/\/$/, '');
       return /^[\w-]{11}$/.test(id) ? id : null;
     }
     if (
