@@ -52,7 +52,7 @@ type TranscriptTrack = {
 export function extractYoutubeVideoId(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (parsed.hostname.includes('youtu.be')) {
+    if (parsed.hostname === 'youtu.be') {
       const id = parsed.pathname.slice(1).replace(/\/$/, '');
       return /^[\w-]{11}$/.test(id) ? id : null;
     }

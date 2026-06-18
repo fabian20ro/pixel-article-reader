@@ -26,5 +26,6 @@ describe('extractYoutubeVideoId', () => {
   it('returns null for invalid video id', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=not-a-video-id-123')).toBeNull();
+    expect(extractYoutubeVideoId('https://not-really-youtu.be.com/abc12345678')).toBeNull();
   });
 });
