@@ -54,8 +54,13 @@ describe('worker youtube parse', () => {
   it('returns a JSON article and fetches all transcript hops inside the worker', async () => {
     const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
+      const parsedUrl = new URL(url);
 
-      if (url.includes('https://www.youtube.com/youtubei/v1/player')) {
+      if (
+        parsedUrl.protocol === 'https:' &&
+        parsedUrl.hostname === 'www.youtube.com' &&
+        parsedUrl.pathname === '/youtubei/v1/player'
+      ) {
         expect(init?.method).toBe('POST');
         return new Response(JSON.stringify({
           videoDetails: {
@@ -76,7 +81,11 @@ describe('worker youtube parse', () => {
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
 
-      if (url.startsWith('https://www.youtube.com/api/timedtext')) {
+      if (
+        parsedUrl.protocol === 'https:' &&
+        parsedUrl.hostname === 'www.youtube.com' &&
+        parsedUrl.pathname === '/api/timedtext'
+      ) {
         return new Response(JSON.stringify({
           events: [
             { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello.' }] },
