@@ -30,12 +30,17 @@ export function parseArticleFromHtml(
   }
   const doc = new DOMParserConstructor().parseFromString(html, 'text/html');
 
+  const normalizedSourceUrl = new URL(sourceUrl);
+  if (normalizedSourceUrl.protocol !== 'http:' && normalizedSourceUrl.protocol !== 'https:') {
+    throw new Error('Only http(s) source URLs are supported.');
+  }
+
   const htmlLang = doc.documentElement.getAttribute('lang')
     || doc.documentElement.getAttribute('xml:lang')
     || '';
 
   const base = doc.createElement('base');
-  base.href = sourceUrl;
+  base.href = normalizedSourceUrl.toString();
   doc.head.appendChild(base);
 
   // Strip noise before Readability — this is a text reader.
@@ -53,7 +58,7 @@ export function parseArticleFromHtml(
     title = parsed.title || 'Untitled';
     textContent = parsed.textContent || '';
     content = parsed.content || '';
-    siteName = parsed.siteName || new URL(sourceUrl).hostname;
+    siteName = parsed.siteName || normalizedSourceUrl.hostname;
     excerpt = parsed.excerpt || '';
   } else {
     const pElements = doc.querySelectorAll('p');
@@ -61,7 +66,7 @@ export function parseArticleFromHtml(
     textContent = paragraphs.filter((p) => p.length > 0).join('\n\n');
     content = '';
     title = doc.title || 'Untitled';
-    siteName = new URL(sourceUrl).hostname;
+    siteName = normalizedSourceUrl.hostname;
     excerpt = textContent.slice(0, 200);
   }
 
@@ -98,7 +103,7 @@ export function parseArticleFromHtml(
     excerpt: excerpt || normalizedText.slice(0, 200),
     wordCount,
     estimatedMinutes,
-    resolvedUrl: sourceUrl,
+    resolvedUrl: normalizedSourceUrl.toString(),
   };
 }
 
