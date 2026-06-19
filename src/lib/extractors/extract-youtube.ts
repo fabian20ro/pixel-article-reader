@@ -64,7 +64,7 @@ export function extractYoutubeVideoId(url: string): string | null {
       || parsed.pathname.startsWith('/v/')
     ) {
       const id = parsed.pathname.startsWith('/watch')
-        ? parsed.searchParams.get('v')
+        ? parsed.searchParams.get('v') || parsed.pathname.split('/')[2]
         : parsed.pathname.split('/')[2];
       return id && /^[\w-]{11}$/.test(id) ? id : null;
     }
