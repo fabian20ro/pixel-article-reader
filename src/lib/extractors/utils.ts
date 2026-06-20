@@ -114,7 +114,7 @@ export function extractTitleFromMarkdown(markdown: string): string {
 export function splitSentences(text: string): string[] {
   // Simple regex for sentence splitting.
   // TODO: Handle abbreviations like 'Mr.', 'Dr.', 'e.g.' to avoid incorrect splits.
-  const regex = /[^.!?]+[.!?]+(?:\s+|$)|[^.!?]+$/g;
+  const regex = /[^.!?]+(?<!\b(?:Mr|Mrs|Ms|Dr|Prof|e\.g|i\.e|vs|etc))[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const matches = text.match(regex);
   if (!matches) return [];
   return matches.map(s => s.trim()).filter(s => s.length > 0);
