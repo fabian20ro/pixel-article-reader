@@ -5,6 +5,9 @@ describe('extractYoutubeVideoId', () => {
   it('extracts from URL with extra parameters', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=emb_rel_pause')).toBe('dQw4w9WgXcQ');
   });
+  it('extracts from /watch/ URL format', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/abc12345678')).toBe('abc12345678');
+  });
   it('extracts from standard URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
@@ -26,5 +29,6 @@ describe('extractYoutubeVideoId', () => {
   it('returns null for invalid video id', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=not-a-video-id-123')).toBeNull();
+    expect(extractYoutubeVideoId('https://not-really-youtu.be.com/abc12345678')).toBeNull();
   });
 });

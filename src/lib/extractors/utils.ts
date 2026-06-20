@@ -64,7 +64,7 @@ export function stripNonTextContent(text: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/data:[a-zA-Z0-9+.-]+\/[a-zA-Z0-9+.-]+[;,]\S*/g, '')
     .replace(IMAGE_MD_RE, '')
-    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(\s|$|\)|")/gi, '')
+    .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|avif|bmp|ico)(?:[?#]\S*)?(?:\s|$|\)|\"|'|\.)/gi, '')
     .replace(/https?:\/\/\S{80,}/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -112,7 +112,9 @@ export function extractTitleFromMarkdown(markdown: string): string {
  * Split text into individual sentences.
  */
 export function splitSentences(text: string): string[] {
-  const regex = /[^.!?]+[.!?](?:\s+|$)|[^.!?]+$/g;
+  // Simple regex for sentence splitting.
+  // TODO: Handle abbreviations like 'Mr.', 'Dr.', 'e.g.' to avoid incorrect splits.
+  const regex = /[^.!?]+(?<!\b(?:Mr|Mrs|Ms|Dr|Prof|e\.g|i\.e|vs|etc))[.!?]+(?:\s+|$)|[^.!?]+$/g;
   const matches = text.match(regex);
   if (!matches) return [];
   return matches.map(s => s.trim()).filter(s => s.length > 0);
