@@ -32,8 +32,8 @@ export function detectLanguage(text: string): Language {
 
   // Count Romanian common words
   const roWordCount = RO_WORDS.filter((w) => {
-    // Match whole word (or start of word for prefix entries like 'într')
-    const re = new RegExp(`\\b${w}`, 'i');
+    // Match whole word or prefix (diacritics don't work with \b)
+    const re = new RegExp(`(?:^|\\s)${w}(?=[\\s.,!?;:]|$)`, 'i');
     return re.test(sample);
   }).length;
 
