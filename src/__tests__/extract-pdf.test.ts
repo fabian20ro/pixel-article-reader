@@ -104,14 +104,29 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
   });
 
-  it('should not have a leading space when an item is just a hyphen', () => {
-    const items = [{ str: 'Hello', transform: [1, 0, 0, 1, 0, 700], height: 12 }, { str: '-', transform: [1, 0, 0, 1, 0, 690], height: 12 }, { str: 'world', transform: [1, 0, 0, 1, 0, 680], height: 12 }];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
+  it('should handle multiple spaces within a line', () => {
+    const items = [
+      { str: 'Word1    Word2', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'Word3', transform: [1, 0, 0, 1, 0, 650], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Word1    Word2', 'Word3']);
   });
 
-  it('should not have a leading space when the first item is a hyphenated word break', () => {
-    const items = [{ str: 'word-', transform: [1, 0, 0, 1, 0, 700], height: 12 }, { str: 'world', transform: [1, 0, 0, 1, 0, 690], height: 12 }];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['word world']);
+  it('should ignore items with only whitespace', () => {
+    const items = [
+      { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '   ', transform: [1, 0, 0, 1, 0, 650], height: 12 },
+      { str: 'Para 2', transform: [1, 0, 0, 1, 0, 600], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'Para 2']);
+  });
+
+  it('should handle a single hyphen as the first item without leading space', () => {
+    const items = [
+      { str: '-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'world', transform: [1, 0, 0, 1, 0, 690], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['world']);
   });
 
   it('should handle a single hyphen as the first item without leading space', () => {
