@@ -93,11 +93,13 @@ describe('ArticleController', () => {
     vi.clearAllMocks();
   });
 
-  it('passes extractArticle an options object from the browser load path', async () => {
-    vi.mocked(extractArticle).mockRejectedValueOnce(new Error('boom'));
+  it('passes extractArticle an options object from the browser load path and handles errors', async () => {
+    const errorMsg = 'boom';
+    vi.mocked(extractArticle).mockRejectedValueOnce(new Error(errorMsg));
 
+    const refs = makeRefs();
     const controller = new ArticleController({
-      refs: makeRefs(),
+      refs,
       tts: {
         stop: vi.fn(),
       } as any,
@@ -114,6 +116,8 @@ describe('ArticleController', () => {
         onProgress: expect.any(Function),
       }),
     );
+    expect(refs.errorMessage.textContent).toBe(errorMsg);
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
 
   it('ignores stale URL load results when a newer load starts', async () => {
