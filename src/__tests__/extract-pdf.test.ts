@@ -34,6 +34,28 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
   });
 
+  it('should handle multiple items on the same line', () => {
+    const items = [
+      { str: 'Word 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'Word 2', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'Word 3', transform: [1, 0, 0, 1, 0, 650], height: 12 } // gap 50 > 27
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Word 1 Word 2', 'Word 3']);
+  });
+
+  it('should handle multiple lines with a hyphenated word in the middle', () => {
+    const items = [
+      { str: 'This is a long-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'word that spans lines', transform: [1, 0, 0, 1, 0, 690], height: 12 },
+      { str: 'on a new line', transform: [1, 0, 0, 1, 0, 680], height: 12 },
+      { str: 'next paragraph', transform: [1, 0, 0, 1, 0, 600], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual([
+      'This is a long word that spans lines on a new line',
+      'next paragraph'
+    ]);
+  });
+
   it('should handle " - " hyphenation', () => {
     const items = [
       { str: 'This is a long -', transform: [1, 0, 0, 1, 0, 700], height: 12 },
