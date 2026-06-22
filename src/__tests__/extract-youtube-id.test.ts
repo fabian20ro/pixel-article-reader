@@ -26,6 +26,18 @@ describe('extractYoutubeVideoId', () => {
   it('extracts from v/ URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/v/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
+  it('extracts from URL with parameters in different order', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?feature=emb_rel_pause&v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+  it('extracts from mobile URL', () => {
+    expect(extractYoutubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+  it('extracts from YouTube Music URL', () => {
+    expect(extractYoutubeVideoId('https://music.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+  it('extracts from URL with trailing slash in pathname', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ/')).toBe('dQw4w9WgXcQ');
+  });
   it('returns null for invalid video id', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=not-a-video-id-123')).toBeNull();
