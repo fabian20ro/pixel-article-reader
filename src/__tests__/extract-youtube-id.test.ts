@@ -38,9 +38,18 @@ describe('extractYoutubeVideoId', () => {
   it('extracts from URL with trailing slash in pathname', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ/')).toBe('dQw4w9WgXcQ');
   });
+  it('handles parameters in embed and shorts URLs', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0')).toBe('dQw4w9WgXcQ');
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ?feature=share')).toBe('dQw4w9WgXcQ');
+  });
+  it('handles parameters in short URLs', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ?si=abc')).toBe('dQw4w9WgXcQ');
+  });
   it('returns null for invalid video id', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=not-a-video-id-123')).toBeNull();
     expect(extractYoutubeVideoId('https://not-really-youtu.be.com/abc12345678')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=')).toBeNull();
   });
 });
