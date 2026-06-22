@@ -209,4 +209,32 @@ describe('ArticleController', () => {
     expect(controller.getCurrentArticle()).toEqual(article);
     expect(refs.articleTitle.textContent).toBe('Stored Article');
   });
+
+  it('triggers loadArticle when goBtn is clicked', async () => {
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    refs.urlInput.value = 'https://example.com/article';
+    refs.goBtn.click();
+
+    expect(extractArticle).toHaveBeenCalledWith(
+      'https://example.com/article',
+      'https://proxy.example.workers.dev',
+      expect.objectContaining({
+        onProgress: expect.any(Function),
+      }),
+    );
+    expect(ttsMock.stop).toHaveBeenCalled();
+  });
 });
