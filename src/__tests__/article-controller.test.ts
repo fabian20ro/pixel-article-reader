@@ -91,6 +91,13 @@ function makeRefs() {
 describe('ArticleController', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    const localStorageMock = {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      clear: vi.fn(),
+      removeItem: vi.fn(),
+    };
+    vi.stubGlobal('localStorage', localStorageMock);
   });
 
   it('passes extractArticle an options object from the browser load path and handles errors', async () => {
@@ -167,5 +174,39 @@ describe('ArticleController', () => {
     await first;
 
     expect(refs.articleTitle.textContent).toBe('Second');
+  });
+
+  it('loads an article from storage via loadArticleFromStored', async () => {
+    const article = {
+      title: 'Stored Article',
+      content: '<p>Content</p>',
+      textContent: 'Content',
+      markdown: 'Content',
+      paragraphs: ['Paragraph 1'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/stored',
+    } as any;
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: {
+        stop: vi.fn(),
+        loadArticle: vi.fn(),
+        setLang: vi.fn(),
+      } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await controller.loadArticleFromStored(article);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('Stored Article');
   });
 });
