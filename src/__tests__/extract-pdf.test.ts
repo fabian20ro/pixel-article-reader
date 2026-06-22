@@ -10,7 +10,6 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual([]);
   });
 
-
   it('should extract single paragraph', () => {
     const items = [
       { str: 'Hello world', transform: [1, 0, 0, 1, 0, 700], height: 12 }
@@ -108,7 +107,11 @@ describe('extractParagraphsFromTextItems', () => {
   });
 
   it('should handle a single hyphen as a text item', () => {
-    const items = [{ str: 'Hello', transform: [1, 0, 0, 1, 0, 700], height: 12 }, { str: '-', transform: [1, 0, 0, 1, 0, 690], height: 12 }, { str: 'world', transform: [1, 0, 0, 1, 0, 680], height: 12 }];
+    const items = [
+      { str: 'Hello', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '-', transform: [1, 0, 0, 1, 0, 690], height: 12 },
+      { str: 'world', transform: [1, 0, 0, 1, 0, 680], height: 12 }
+    ];
     expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
   });
 
@@ -129,14 +132,6 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'Para 2']);
   });
 
-  it('should handle a single hyphen as the first item without leading space', () => {
-    const items = [
-      { str: '-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
-      { str: 'world', transform: [1, 0, 0, 1, 0, 690], height: 12 }
-    ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['world']);
-  });
-
   it('should handle a hyphenated word at the start of a line', () => {
     const items = [
       { str: 'Part', transform: [1, 0, 0, 1, 0, 700], height: 12 },
@@ -152,5 +147,14 @@ describe('extractParagraphsFromTextItems', () => {
       { str: 'test', transform: [1, 0, 0, 1, 0, 680], height: 12 }
     ];
     expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long line-break test']);
+  });
+
+  it('should handle multiple hyphenated words in a single paragraph', () => {
+    const items = [
+      { str: 'a-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'b-', transform: [1, 0, 0, 1, 0, 690], height: 12 },
+      { str: 'c', transform: [1, 0, 0, 1, 0, 680], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['a b c']);
   });
 });
