@@ -137,4 +137,20 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['world']);
   });
 
+  it('should handle a hyphenated word at the start of a line', () => {
+    const items = [
+      { str: 'Part', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '-part', transform: [1, 0, 0, 1, 0, 690], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Part -part']);
+  });
+
+  it('should handle multiple lines where each line ends with a hyphen', () => {
+    const items = [
+      { str: 'This is a long-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'line-break-', transform: [1, 0, 0, 1, 0, 690], height: 12 },
+      { str: 'test', transform: [1, 0, 0, 1, 0, 680], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long line-break test']);
+  });
 });
