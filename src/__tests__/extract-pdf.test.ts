@@ -123,6 +123,15 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['Word1    Word2', 'Word3']);
   });
 
+  it('should handle multiple spaces within a line', () => {
+    const items = [
+      { str: 'Word1    Word2', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'Word3', transform: [1, 0, 0, 1, 0, 650], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Word1    Word2', 'Word3']);
+  });
+
+
   it('should ignore items with only whitespace', () => {
     const items = [
       { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
