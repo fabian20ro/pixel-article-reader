@@ -55,6 +55,17 @@ describe('extractParagraphsFromTextItems', () => {
     ]);
   });
 
+  it('should handle multiple lines with varying heights on the same line', () => {
+    const items = [
+      { str: 'Line 1', transform: [1, 0, 0, 1, 0, 700], height: 20 },
+      { str: 'Line 2', transform: [1, 0, 0, 1, 0, 650], height: 10 },
+      { str: 'Line 3', transform: [1, 0, 0, 1, 0, 640], height: 10 }
+    ];
+    // gap 1: |700-650|=50. threshold=30. 50 > 30 -> new para.
+    // gap 2: |650-640|=10. threshold=15. 10 < 15 -> same para.
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Line 1', 'Line 2 Line 3']);
+  });
+
   it('should handle " - " hyphenation', () => {
     const items = [
       { str: 'This is a long -', transform: [1, 0, 0, 1, 0, 700], height: 12 },
