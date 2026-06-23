@@ -165,4 +165,20 @@ describe('extractParagraphsFromTextItems', () => {
     ];
     expect(extractParagraphsFromTextItems(items)).toEqual(['a b c']);
   });
+
+  it('should not have a leading space when the first item is a single hyphen', () => {
+    const items = [
+      { str: '-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'world', transform: [1, 0, 0, 1, 0, 690], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['world']);
+  });
+
+  it('should not have a leading space when the first item is a single hyphen', () => {
+    const items = [
+      { str: '-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'world', transform: [1, 0, 0, 1, 0, 690], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['world']);
+  });
 });
