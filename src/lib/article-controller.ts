@@ -15,6 +15,8 @@ import { renderArticleBody } from './article-renderer.js';
 import type { TTSEngine } from './tts-engine.js';
 import type { AppDomRefs } from './dom-refs.js';
 import { loadLastArticle, saveLastArticle } from './session-store.js';
+import { clearQueue } from './queue-store.js';
+import { clearArticleContent } from './article-content-store.js';
 
 export interface ArticleControllerOptions {
   refs: AppDomRefs;
