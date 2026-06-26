@@ -249,7 +249,8 @@ export class ArticleController {
     const showTranslate = needsTranslation(article.htmlLang, this.currentArticleUrl, article.lang);
     refs.translateBtn.classList.toggle('hidden', !showTranslate);
     refs.translateBtn.disabled = false;
-    refs.translateBtn.textContent = 'Translate to English';
+    const targetLangName = DEFAULT_TRANSLATION_TARGET === 'en' ? 'English' : 'Romanian';
+    refs.translateBtn.textContent = `Translate to ${targetLangName}`;
 
     refs.copyMdBtn.classList.toggle('hidden', !article.markdown);
     refs.copyMdBtn.disabled = false;
