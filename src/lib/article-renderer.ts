@@ -59,6 +59,7 @@ export function renderArticleBody(
     div.addEventListener('click', () => {
       tts.jumpToParagraph(index);
       if (!tts.state.isPlaying) tts.play();
+      div.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     container.appendChild(div);
   });
