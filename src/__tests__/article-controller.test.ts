@@ -237,4 +237,42 @@ describe('ArticleController', () => {
     );
     expect(ttsMock.stop).toHaveBeenCalled();
   });
+
+  it('updates language and TTS when setLangOverride is called', async () => {
+    const article = {
+      title: 'Test',
+      content: '<p>test</p>',
+      textContent: 'test',
+      markdown: 'test',
+      paragraphs: ['test paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 10,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/test',
+    } as any;
+
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    // Set article first
+    await controller.loadArticleFromStored(article);
+
+    // Test override to 'ro'
+    controller.setLangOverride('ro');
+    expect(ttsMock.setLang).toHaveBeenCalledWith('ro');
+    expect(refs.articleInfo.textContent).toContain('RO');
+  });
 });
