@@ -13,7 +13,7 @@ describe('createArticleFromText', () => {
 
   it('throws error for very short text', () => {
     // 'A' is too short (charCount < 4)
-    expect(() => createArticleFromText('A')).toThrow();
+    expect(() => createArticleFromText('A')).toThrow('Pasted text is too short to read as an article.');
   });
 
   it('handles empty text by throwing error', () => {
