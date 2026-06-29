@@ -275,4 +275,18 @@ describe('ArticleController', () => {
     expect(ttsMock.setLang).toHaveBeenCalledWith('ro');
     expect(refs.articleInfo.textContent).toContain('RO');
   });
+
+  it('shows error when uploading an unsupported file type', async () => {
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    const file = new File(['content'], 'test.exe', { type: 'application/octet-stream' });
+    await (controller as any).handleFileUpload(file);
+    expect(refs.errorMessage.textContent).toContain('Unsupported file type');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
 });
