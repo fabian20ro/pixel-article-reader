@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
-import { extractArticle } from '../lib/extractor.js';
+import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf } from '../lib/extractor.js';
 
 vi.mock('../lib/extractor.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/extractor.js')>('../lib/extractor.js');
   return {
     ...actual,
     extractArticle: vi.fn(),
+    createArticleFromMarkdownFile: vi.fn(),
+    createArticleFromPdf: vi.fn(),
   };
 });
 
@@ -276,7 +278,24 @@ describe('ArticleController', () => {
     expect(refs.articleInfo.textContent).toContain('RO');
   });
 
-  it('shows error when uploading an unsupported file type', async () => {
+  it('handles successful markdown file upload', async () => {
+    const article = {
+      title: 'Markdown Article',
+      content: '<p>Markdown content</p>',
+      textContent: 'Markdown content',
+      markdown: 'Markdown content',
+      paragraphs: ['Markdown content'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/markdown',
+    } as any;
+
+    vi.mocked(createArticleFromMarkdownFile).mockResolvedValueOnce(article);
+
     const refs = makeRefs();
     const controller = new ArticleController({
       refs,
@@ -284,9 +303,46 @@ describe('ArticleController', () => {
       proxyBase: 'https://proxy.example.workers.dev',
       initialLangOverride: 'auto',
     });
-    const file = new File(['content'], 'test.exe', { type: 'application/octet-stream' });
+
+    const file = new File(['# Title\nContent'], 'test.md', { type: 'text/markdown' });
     await (controller as any).handleFileUpload(file);
-    expect(refs.errorMessage.textContent).toContain('Unsupported file type');
-    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('Markdown Article');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
+  it('handles successful pdf file upload', async () => {
+    const article = {
+      title: 'PDF Article',
+      content: '<p>PDF content</p>',
+      textContent: 'PDF content',
+      markdown: 'PDF content',
+      paragraphs: ['PDF paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/pdf',
+    } as any;
+
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['PDF content'], 'test.pdf', { type: 'application/pdf' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('PDF Article');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 });
