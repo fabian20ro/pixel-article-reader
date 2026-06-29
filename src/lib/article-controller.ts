@@ -42,6 +42,10 @@ export class ArticleController {
 
     refs.goBtn.addEventListener('click', () => this.handleUrlSubmit());
     refs.urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        refs.urlInput.value = '';
+        return;
+      }
       if (e.key !== 'Enter') return;
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
