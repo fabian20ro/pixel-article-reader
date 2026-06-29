@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
-import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf } from '../lib/extractor.js';
+import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile } from '../lib/extractor.js';
 
 vi.mock('../lib/extractor.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/extractor.js')>('../lib/extractor.js');
@@ -9,6 +9,7 @@ vi.mock('../lib/extractor.js', async () => {
     extractArticle: vi.fn(),
     createArticleFromMarkdownFile: vi.fn(),
     createArticleFromPdf: vi.fn(),
+    createArticleFromTextFile: vi.fn(),
   };
 });
 
@@ -343,6 +344,40 @@ describe('ArticleController', () => {
 
     expect(controller.getCurrentArticle()).toEqual(article);
     expect(refs.articleTitle.textContent).toBe('PDF Article');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
+  it('handles successful text file upload', async () => {
+    const article = {
+      title: 'Text Article',
+      content: '<p>Text content</p>',
+      textContent: 'Text content',
+      markdown: 'Text content',
+      paragraphs: ['Text content'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/text',
+    } as any;
+
+    vi.mocked(createArticleFromTextFile).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['Plain text content'], 'test.txt', { type: 'text/plain' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('Text Article');
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 });
