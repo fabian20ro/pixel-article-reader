@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
-import { extractArticle, createArticleFromMarkdownFile } from '../lib/extractor.js';
+import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf } from '../lib/extractor.js';
 
 vi.mock('../lib/extractor.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/extractor.js')>('../lib/extractor.js');
@@ -8,6 +8,7 @@ vi.mock('../lib/extractor.js', async () => {
     ...actual,
     extractArticle: vi.fn(),
     createArticleFromMarkdownFile: vi.fn(),
+    createArticleFromPdf: vi.fn(),
   };
 });
 
@@ -308,6 +309,40 @@ describe('ArticleController', () => {
 
     expect(controller.getCurrentArticle()).toEqual(article);
     expect(refs.articleTitle.textContent).toBe('Markdown Article');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
+  it('handles successful pdf file upload', async () => {
+    const article = {
+      title: 'PDF Article',
+      content: '<p>PDF content</p>',
+      textContent: 'PDF content',
+      markdown: 'PDF content',
+      paragraphs: ['PDF paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/pdf',
+    } as any;
+
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['PDF content'], 'test.pdf', { type: 'application/pdf' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('PDF Article');
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 });
