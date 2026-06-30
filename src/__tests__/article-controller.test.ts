@@ -242,6 +242,28 @@ describe('ArticleController', () => {
     expect(ttsMock.stop).toHaveBeenCalled();
   });
 
+  it('handles invalid pasted text in handleUrlSubmit', async () => {
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    refs.urlInput.value = 'a'; // too short
+    refs.goBtn.click();
+
+    expect(refs.errorMessage.textContent).toBe('Pasted text is too short to read as an article.');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
+
   it('updates language and TTS when setLangOverride is called', async () => {
     const article = {
       title: 'Test',
