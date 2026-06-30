@@ -461,4 +461,24 @@ describe('ArticleController', () => {
     expect(controller.getCurrentArticle()).toEqual(article2);
     expect(refs.articleTitle.textContent).toBe('Second File');
   });
+
+  it('handles file errors (too large or unsupported)', async () => {
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    const largeFile = new File([], 'big.pdf', { type: 'application/pdf' });
+    Object.defineProperty(largeFile, 'size', { value: 60 * 1024 * 1024 });
+    await (controller as any).handleFileUpload(largeFile);
+    expect(refs.errorMessage.textContent).toContain('File too large');
+
+    const badFile = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
+    await (controller as any).handleFileUpload(badFile);
+    expect(refs.errorMessage.textContent).toContain('Unsupported file type');
+  });
 });
