@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
-import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile } from '../lib/extractor.js';
+import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile, createArticleFromEpub } from '../lib/extractor.js';
 
 vi.mock('../lib/extractor.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/extractor.js')>('../lib/extractor.js');
@@ -10,6 +10,7 @@ vi.mock('../lib/extractor.js', async () => {
     createArticleFromMarkdownFile: vi.fn(),
     createArticleFromPdf: vi.fn(),
     createArticleFromTextFile: vi.fn(),
+    createArticleFromEpub: vi.fn(),
   };
 });
 
@@ -347,23 +348,23 @@ describe('ArticleController', () => {
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 
-  it('handles successful text file upload', async () => {
+  it('handles successful epub file upload', async () => {
     const article = {
-      title: 'Text Article',
-      content: '<p>Text content</p>',
-      textContent: 'Text content',
-      markdown: 'Text content',
-      paragraphs: ['Text content'],
+      title: 'EPUB Article',
+      content: '<p>EPUB content</p>',
+      textContent: 'EPUB content',
+      markdown: 'EPUB content',
+      paragraphs: ['EPUB paragraph'],
       lang: 'en',
       htmlLang: 'en',
       siteName: 'Site',
       excerpt: '',
       wordCount: 2,
       estimatedMinutes: 1,
-      resolvedUrl: 'https://example.com/text',
+      resolvedUrl: 'https://example.com/epub',
     } as any;
 
-    vi.mocked(createArticleFromTextFile).mockResolvedValueOnce(article);
+    vi.mocked(createArticleFromEpub).mockResolvedValueOnce(article);
 
     const refs = makeRefs();
     const controller = new ArticleController({
@@ -373,11 +374,11 @@ describe('ArticleController', () => {
       initialLangOverride: 'auto',
     });
 
-    const file = new File(['Plain text content'], 'test.txt', { type: 'text/plain' });
+    const file = new File(['EPUB content'], 'test.epub', { type: 'application/epub+zip' });
     await (controller as any).handleFileUpload(file);
 
     expect(controller.getCurrentArticle()).toEqual(article);
-    expect(refs.articleTitle.textContent).toBe('Text Article');
+    expect(refs.articleTitle.textContent).toBe('EPUB Article');
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 });
