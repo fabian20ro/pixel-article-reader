@@ -403,4 +403,62 @@ describe('ArticleController', () => {
     expect(refs.articleTitle.textContent).toBe('EPUB Article');
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
+
+  it('ignores stale file upload results when a newer upload starts', async () => {
+    const article1 = {
+      title: 'First File',
+      content: '<p>Content 1</p>',
+      textContent: 'Content 1',
+      markdown: 'Content 1',
+      paragraphs: ['Content 1 paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site 1',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/1',
+    } as any;
+
+    const article2 = {
+      title: 'Second File',
+      content: '<p>Content 2</p>',
+      textContent: 'Content 2',
+      markdown: 'Content 2',
+      paragraphs: ['Content 2 paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site 2',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/2',
+    } as any;
+
+    vi.mocked(createArticleFromPdf).mockImplementationOnce(() => new Promise((resolve) => {
+      setTimeout(() => resolve(article1), 50);
+    }) as any);
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce(article2);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file1 = new File(['PDF 1'], 'test1.pdf', { type: 'application/pdf' });
+    const file2 = new File(['PDF 2'], 'test2.pdf', { type: 'application/pdf' });
+
+    // Start first upload
+    const p1 = (controller as any).handleFileUpload(file1);
+    // Immediately start second upload
+    const p2 = (controller as any).handleFileUpload(file2);
+
+    await Promise.all([p1, p2]);
+
+    expect(controller.getCurrentArticle()).toEqual(article2);
+    expect(refs.articleTitle.textContent).toBe('Second File');
+  });
 });
