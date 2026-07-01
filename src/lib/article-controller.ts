@@ -288,6 +288,12 @@ export class ArticleController {
 
   private async translateCurrentArticle(): Promise<void> {
     if (!this.currentArticle) return;
+
+    if (navigator.onLine === false) {
+      this.showError('You appear to be offline. Please reconnect and try again.');
+      return;
+    }
+
     const token = ++this.loadToken;
 
     const { refs } = this.options;

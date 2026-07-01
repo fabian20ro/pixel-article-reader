@@ -598,4 +598,40 @@ describe('ArticleController', () => {
     expect(refs.errorMessage.textContent).toBe('PDF parse failed');
     expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
+
+  it('shows offline error instead of calling translateParagraphs when offline', async () => {
+    const article = {
+      title: 'Test',
+      content: '<p>test</p>',
+      textContent: 'test',
+      markdown: 'test',
+      paragraphs: ['test paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 10,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/test',
+    } as any;
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() },
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    // Load an article first to have something to translate.
+    await controller.loadArticleFromStored(article);
+
+    // Force offline mode.
+    vi.stubGlobal('navigator', { ...globalThis.navigator, onLine: false });
+
+    await (controller as any).translateCurrentArticle();
+
+    expect(refs.errorMessage.textContent).toContain('offline');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
 });
