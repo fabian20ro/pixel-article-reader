@@ -67,6 +67,44 @@ export async function createArticleFromPdf(
   return parsePdfFromArrayBuffer(buffer, file.name, onProgress);
 }
 
+/** Parse PDF metadata (title/author) from the document Info dictionary. */
+function extractDocumentMetadata(pdf: any): { title?: string; author?: string } {
+  try {
+    // pdfjs v1.x exposes .info.Title/.Author as strings.
+    const info = pdf.info || {};
+    let metadataJson: Record<string, unknown> | undefined;
+    if (pdf.metadata?.toJSON) {
+      try {
+        metadataJson = pdf.metadata.toJSON();
+      } catch { /* ignore */ }
+    }
+
+    function decode(value: unknown): string {
+      if (typeof value === 'string') return value.trim();
+      if (value instanceof Uint8Array && value.length >= 2) {
+        // PDF strings are UTF-16 BE, sometimes prefixed with BOM.
+        const bytes = new Uint8Array(value.buffer, value.byteOffset + 2, value.length - 2);
+        let s = '';
+        for (let i = 0; i < bytes.length; i += 2) {
+          s += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
+        }
+        return s.replace(/\u0000/g, '').trim();
+      }
+      return '';
+    }
+
+    const title = decode(info.Title ?? metadataJson?.title);
+    const author = decode(info.Author ?? metadataJson?.author);
+    if (title) info.Title = title; // normalize so callers below use a single path
+    if (author) info.Author = author;
+  } catch { /* ignore extraction errors */ }
+
+  return {
+    title: typeof pdf.info?.Title === 'string' ? pdf.info.Title : undefined,
+    author: typeof pdf.info?.Author === 'string' ? pdf.info.Author : undefined,
+  };
+}
+
 /** Parse a PDF buffer into an Article. */
 export async function parsePdfFromArrayBuffer(
   buffer: ArrayBuffer,
@@ -120,8 +158,17 @@ export async function parsePdfFromArrayBuffer(
     }
   }
 
-  const title = url.includes('/')
+  // Extract document-level metadata (title, author) when available.
+  const meta = extractDocumentMetadata(pdf);
+
+  // Default title from filename.
+  let title = url.includes('/')
     ? url.split('/').pop()?.replace(/\.[^/.]+$/, "") || 'PDF Document'
     : url.replace(/\.[^/.]+$/, "");
-  return buildArticleFromParagraphs(finalParagraphs, title, 'PDF', finalParagraphs.join('\n\n'));
+  let siteName = 'PDF';
+
+  if (meta.title) title = meta.title;
+  if (meta.author) siteName = meta.author;
+
+  return buildArticleFromParagraphs(finalParagraphs, title, siteName, finalParagraphs.join('\n\n'));
 }
