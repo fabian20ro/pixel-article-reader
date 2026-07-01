@@ -17,7 +17,8 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
   let lastHeight = 0;
 
   for (const item of items) {
-    const text = item.str.trim();
+    const rawStr = typeof item.str === 'string' ? item.str : '';
+    const text = rawStr.trim();
     if (!text) continue;
 
     const y = item.transform.length >= 6 ? item.transform[5] : 0;
