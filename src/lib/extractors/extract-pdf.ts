@@ -9,7 +9,7 @@ export interface PdfJsTextItem {
 
 /** Detect paragraph boundaries from PDF text items using vertical position gaps. */
 export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[] {
-  if (items.length === 0) return [];
+  if (!items || items.length === 0) return [];
 
   const paragraphs: string[] = [];
   let currentParagraph = '';
@@ -17,7 +17,8 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
   let lastHeight = 0;
 
   for (const item of items) {
-    const text = item.str.trim();
+    const rawStr = typeof item.str === 'string' ? item.str : '';
+    const text = rawStr.trim();
     if (!text) continue;
 
     const y = item.transform.length >= 6 ? item.transform[5] : 0;

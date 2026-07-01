@@ -170,3 +170,24 @@ describe('extractParagraphsFromTextItems', () => {
 
 
 });
+
+describe('extractParagraphsFromTextItems - input guards', () => {
+  it('should return [] for undefined items (regression: null guard)', () => {
+    expect(extractParagraphsFromTextItems(undefined as any)).toEqual([]);
+  });
+
+  it('should return [] for null items (regression: null guard)', () => {
+    expect(extractParagraphsFromTextItems(null as any)).toEqual([]);
+  });
+
+  it('should skip text items with non-string str without throwing', () => {
+    const items = [
+      { str: 'Hello', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: null as any, transform: [1, 0, 0, 1, 0, 693], height: 12 },
+      { str: undefined as any, transform: [1, 0, 0, 1, 0, 686], height: 12 },
+      { str: ' world', transform: [1, 0, 0, 1, 0, 679], height: 12 }
+    ];
+    // gaps are all <= 27 (lastY stays 700 across skips), so same paragraph.
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
+  });
+});

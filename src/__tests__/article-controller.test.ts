@@ -264,6 +264,34 @@ describe('ArticleController', () => {
     expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
 
+  it('treats non-URL pasted text as a plain-text article via createArticleFromText', async () => {
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    // Two-line input — first line is the title (≤150 chars), second is body.
+    const urlInputValue = 'Plain Pasted Title\nThis is plain pasted text, not a URL at all.';
+    refs.urlInput.value = urlInputValue;
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    refs.goBtn.click();
+
+    // Wait for createArticleFromText to run (synchronous; a microtask tick is enough).
+    await Promise.resolve();
+
+    expect(extractArticle).not.toHaveBeenCalled();
+    expect(refs.articleTitle.textContent).toBe('Plain Pasted Title');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
   it('updates language and TTS when setLangOverride is called', async () => {
     const article = {
       title: 'Test',
@@ -462,6 +490,40 @@ describe('ArticleController', () => {
     expect(refs.articleTitle.textContent).toBe('Second File');
   });
 
+  it('handles successful txt file upload via createArticleFromTextFile', async () => {
+    const article = {
+      title: 'Text Article',
+      content: '<p>Plain text content</p>',
+      textContent: 'Plain text content',
+      markdown: 'Plain text content',
+      paragraphs: ['Plain text paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/text',
+    } as any;
+
+    vi.mocked(createArticleFromTextFile).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['Plain text content'], 'readme.txt', { type: 'text/plain' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('Text Article');
+    expect(createArticleFromTextFile).toHaveBeenCalledWith(file);
+  });
+
   it('handles file errors (too large or unsupported)', async () => {
     const refs = makeRefs();
     const controller = new ArticleController({
@@ -480,5 +542,60 @@ describe('ArticleController', () => {
     const badFile = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
     await (controller as any).handleFileUpload(badFile);
     expect(refs.errorMessage.textContent).toContain('Unsupported file type');
+  });
+
+  it('shows offline error and skips extractArticle when navigator.onLine is false', async () => {
+    const savedArticle = {
+      title: 'Saved Offline',
+      content: '<p>Saved</p>',
+      textContent: 'Saved',
+      markdown: 'Saved',
+      paragraphs: ['Saved paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/saved',
+    } as any;
+
+    // Pre-store an article so restoreLastArticle has something to load.
+    const { saveLastArticle } = await import('../lib/session-store.js');
+    (saveLastArticle as any)(savedArticle);
+
+    vi.stubGlobal('navigator', { ...globalThis.navigator, onLine: false });
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await (controller as any).loadArticle('https://example.com/article');
+
+    expect(extractArticle).not.toHaveBeenCalled();
+    expect(refs.errorMessage.textContent).toContain('offline');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
+
+  it('handles PDF processing failure during file upload', async () => {
+    vi.mocked(createArticleFromPdf).mockRejectedValueOnce(new Error('PDF parse failed'));
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['PDF content'], 'test.pdf', { type: 'application/pdf' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(refs.errorMessage.textContent).toBe('PDF parse failed');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
 });
