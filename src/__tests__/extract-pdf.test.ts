@@ -170,3 +170,13 @@ describe('extractParagraphsFromTextItems', () => {
 
 
 });
+
+describe('extractParagraphsFromTextItems - input guards', () => {
+  it('should return [] for undefined items (regression: null guard)', () => {
+    expect(extractParagraphsFromTextItems(undefined as any)).toEqual([]);
+  });
+
+  it('should return [] for null items (regression: null guard)', () => {
+    expect(extractParagraphsFromTextItems(null as any)).toEqual([]);
+  });
+});
