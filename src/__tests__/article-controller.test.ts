@@ -580,4 +580,22 @@ describe('ArticleController', () => {
     expect(refs.errorMessage.textContent).toContain('offline');
     expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
+
+  it('handles PDF processing failure during file upload', async () => {
+    vi.mocked(createArticleFromPdf).mockRejectedValueOnce(new Error('PDF parse failed'));
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['PDF content'], 'test.pdf', { type: 'application/pdf' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(refs.errorMessage.textContent).toBe('PDF parse failed');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
 });
