@@ -543,4 +543,41 @@ describe('ArticleController', () => {
     await (controller as any).handleFileUpload(badFile);
     expect(refs.errorMessage.textContent).toContain('Unsupported file type');
   });
+
+  it('shows offline error and skips extractArticle when navigator.onLine is false', async () => {
+    const savedArticle = {
+      title: 'Saved Offline',
+      content: '<p>Saved</p>',
+      textContent: 'Saved',
+      markdown: 'Saved',
+      paragraphs: ['Saved paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/saved',
+    } as any;
+
+    // Pre-store an article so restoreLastArticle has something to load.
+    const { saveLastArticle } = await import('../lib/session-store.js');
+    (saveLastArticle as any)(savedArticle);
+
+    vi.stubGlobal('navigator', { ...globalThis.navigator, onLine: false });
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await (controller as any).loadArticle('https://example.com/article');
+
+    expect(extractArticle).not.toHaveBeenCalled();
+    expect(refs.errorMessage.textContent).toContain('offline');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
 });
