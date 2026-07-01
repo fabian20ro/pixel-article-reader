@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
-import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile } from '../lib/extractor.js';
+import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile, createArticleFromEpub } from '../lib/extractor.js';
 
 vi.mock('../lib/extractor.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/extractor.js')>('../lib/extractor.js');
@@ -10,6 +10,7 @@ vi.mock('../lib/extractor.js', async () => {
     createArticleFromMarkdownFile: vi.fn(),
     createArticleFromPdf: vi.fn(),
     createArticleFromTextFile: vi.fn(),
+    createArticleFromEpub: vi.fn(),
   };
 });
 
@@ -241,6 +242,28 @@ describe('ArticleController', () => {
     expect(ttsMock.stop).toHaveBeenCalled();
   });
 
+  it('handles invalid pasted text in handleUrlSubmit', async () => {
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    refs.urlInput.value = 'a'; // too short
+    refs.goBtn.click();
+
+    expect(refs.errorMessage.textContent).toBe('Pasted text is too short to read as an article.');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+  });
+
   it('updates language and TTS when setLangOverride is called', async () => {
     const article = {
       title: 'Test',
@@ -347,23 +370,23 @@ describe('ArticleController', () => {
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 
-  it('handles successful text file upload', async () => {
+  it('handles successful epub file upload', async () => {
     const article = {
-      title: 'Text Article',
-      content: '<p>Text content</p>',
-      textContent: 'Text content',
-      markdown: 'Text content',
-      paragraphs: ['Text content'],
+      title: 'EPUB Article',
+      content: '<p>EPUB content</p>',
+      textContent: 'EPUB content',
+      markdown: 'EPUB content',
+      paragraphs: ['EPUB paragraph'],
       lang: 'en',
       htmlLang: 'en',
       siteName: 'Site',
       excerpt: '',
       wordCount: 2,
       estimatedMinutes: 1,
-      resolvedUrl: 'https://example.com/text',
+      resolvedUrl: 'https://example.com/epub',
     } as any;
 
-    vi.mocked(createArticleFromTextFile).mockResolvedValueOnce(article);
+    vi.mocked(createArticleFromEpub).mockResolvedValueOnce(article);
 
     const refs = makeRefs();
     const controller = new ArticleController({
@@ -373,11 +396,89 @@ describe('ArticleController', () => {
       initialLangOverride: 'auto',
     });
 
-    const file = new File(['Plain text content'], 'test.txt', { type: 'text/plain' });
+    const file = new File(['EPUB content'], 'test.epub', { type: 'application/epub+zip' });
     await (controller as any).handleFileUpload(file);
 
     expect(controller.getCurrentArticle()).toEqual(article);
-    expect(refs.articleTitle.textContent).toBe('Text Article');
+    expect(refs.articleTitle.textContent).toBe('EPUB Article');
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
+  it('ignores stale file upload results when a newer upload starts', async () => {
+    const article1 = {
+      title: 'First File',
+      content: '<p>Content 1</p>',
+      textContent: 'Content 1',
+      markdown: 'Content 1',
+      paragraphs: ['Content 1 paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site 1',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/1',
+    } as any;
+
+    const article2 = {
+      title: 'Second File',
+      content: '<p>Content 2</p>',
+      textContent: 'Content 2',
+      markdown: 'Content 2',
+      paragraphs: ['Content 2 paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site 2',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/2',
+    } as any;
+
+    vi.mocked(createArticleFromPdf).mockImplementationOnce(() => new Promise((resolve) => {
+      setTimeout(() => resolve(article1), 50);
+    }) as any);
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce(article2);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file1 = new File(['PDF 1'], 'test1.pdf', { type: 'application/pdf' });
+    const file2 = new File(['PDF 2'], 'test2.pdf', { type: 'application/pdf' });
+
+    // Start first upload
+    const p1 = (controller as any).handleFileUpload(file1);
+    // Immediately start second upload
+    const p2 = (controller as any).handleFileUpload(file2);
+
+    await Promise.all([p1, p2]);
+
+    expect(controller.getCurrentArticle()).toEqual(article2);
+    expect(refs.articleTitle.textContent).toBe('Second File');
+  });
+
+  it('handles file errors (too large or unsupported)', async () => {
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    const largeFile = new File([], 'big.pdf', { type: 'application/pdf' });
+    Object.defineProperty(largeFile, 'size', { value: 60 * 1024 * 1024 });
+    await (controller as any).handleFileUpload(largeFile);
+    expect(refs.errorMessage.textContent).toContain('File too large');
+
+    const badFile = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
+    await (controller as any).handleFileUpload(badFile);
+    expect(refs.errorMessage.textContent).toContain('Unsupported file type');
   });
 });

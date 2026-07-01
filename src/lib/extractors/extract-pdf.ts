@@ -20,7 +20,7 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
     const text = item.str.trim();
     if (!text) continue;
 
-    const y = item.transform[5];
+    const y = item.transform.length >= 6 ? item.transform[5] : 0;
     const height = item.height || 12;
 
     if (lastY !== null) {
