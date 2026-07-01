@@ -264,6 +264,34 @@ describe('ArticleController', () => {
     expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
 
+  it('treats non-URL pasted text as a plain-text article via createArticleFromText', async () => {
+    const refs = makeRefs();
+    const ttsMock = {
+      stop: vi.fn(),
+      loadArticle: vi.fn(),
+      setLang: vi.fn(),
+    };
+    // Two-line input — first line is the title (≤150 chars), second is body.
+    const urlInputValue = 'Plain Pasted Title\nThis is plain pasted text, not a URL at all.';
+    refs.urlInput.value = urlInputValue;
+    const controller = new ArticleController({
+      refs,
+      tts: ttsMock as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+    controller.init();
+
+    refs.goBtn.click();
+
+    // Wait for createArticleFromText to run (synchronous; a microtask tick is enough).
+    await Promise.resolve();
+
+    expect(extractArticle).not.toHaveBeenCalled();
+    expect(refs.articleTitle.textContent).toBe('Plain Pasted Title');
+    expect(refs.articleSection.classList.contains('hidden')).toBe(false);
+  });
+
   it('updates language and TTS when setLangOverride is called', async () => {
     const article = {
       title: 'Test',
