@@ -462,6 +462,40 @@ describe('ArticleController', () => {
     expect(refs.articleTitle.textContent).toBe('Second File');
   });
 
+  it('handles successful txt file upload via createArticleFromTextFile', async () => {
+    const article = {
+      title: 'Text Article',
+      content: '<p>Plain text content</p>',
+      textContent: 'Plain text content',
+      markdown: 'Plain text content',
+      paragraphs: ['Plain text paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/text',
+    } as any;
+
+    vi.mocked(createArticleFromTextFile).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['Plain text content'], 'readme.txt', { type: 'text/plain' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(controller.getCurrentArticle()).toEqual(article);
+    expect(refs.articleTitle.textContent).toBe('Text Article');
+    expect(createArticleFromTextFile).toHaveBeenCalledWith(file);
+  });
+
   it('handles file errors (too large or unsupported)', async () => {
     const refs = makeRefs();
     const controller = new ArticleController({
