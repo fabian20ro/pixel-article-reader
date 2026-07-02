@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
+import { parsePdfFromArrayBuffer, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
 
 describe('extractParagraphsFromTextItems', () => {
   it('should handle empty or whitespace-only strings', () => {
@@ -189,5 +189,20 @@ describe('extractParagraphsFromTextItems - input guards', () => {
     ];
     // gaps are all <= 27 (lastY stays 700 across skips), so same paragraph.
     expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
+  });
+});
+
+describe('parsePdfFromArrayBuffer - input guards', () => {
+  it('should throw when buffer is empty (regression: zero-byte guard)', async () => {
+    const emptyBuf = new ArrayBuffer(0);
+    await expect(parsePdfFromArrayBuffer(emptyBuf, 'test.pdf')).rejects.toThrow(/empty/i);
+  });
+
+  it('should throw a descriptive error when PDF parsing fails', async () => {
+    // Garbage bytes that pdfjs-dist will reject as invalid.
+    const garbageBuf = new ArrayBuffer(8);
+    const view = new Uint8Array(garbageBuf);
+    view[0] = 0x48; view[1] = 0x49; view[2] = 0x58; // "HIX" — not a valid PDF header
+    await expect(parsePdfFromArrayBuffer(garbageBuf, 'test.pdf')).rejects.toThrow(/invalid|corrupted/i);
   });
 });

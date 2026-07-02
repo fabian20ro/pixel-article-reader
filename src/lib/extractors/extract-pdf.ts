@@ -112,6 +112,10 @@ export async function parsePdfFromArrayBuffer(
   url: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
+  if (!buffer || buffer.byteLength === 0) {
+    throw new Error('Could not load PDF: file is empty.');
+  }
+
   onProgress?.('Loading PDF...');
   
   // Load pdfjs-dist via dynamic import to keep bundle small
@@ -121,13 +125,18 @@ export async function parsePdfFromArrayBuffer(
   // For local/service worker, we use an empty string or the same url.
   pdfjs.GlobalWorkerOptions.workerSrc = '';
 
-  const loadingTask = pdfjs.getDocument({
-    data: buffer,
-    // Avoid issues with some PDF versions by specifying version if needed
-    // but usually it's auto-detected.
-  });
-
-  const pdf = await loadingTask.promise;
+  let pdf: any;
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: buffer,
+      // Avoid issues with some PDF versions by specifying version if needed
+      // but usually it's auto-detected.
+    });
+    pdf = await loadingTask.promise;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid or corrupted PDF file: ${message}`);
+  }
   const numPages = pdf.numPages;
   const allParagraphs: string[] = [];
 
