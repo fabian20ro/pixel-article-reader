@@ -118,8 +118,13 @@ export async function parsePdfFromArrayBuffer(
 
   onProgress?.('Loading PDF...');
   
-  // Load pdfjs-dist via dynamic import to keep bundle small
-  const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any;
+  let pdfjs: any;
+  try {
+    pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any;
+  } catch (importErr) {
+    const msg = importErr instanceof Error ? importErr.message : String(importErr);
+    throw new Error(`Could not load PDF rendering library: ${msg}`);
+  }
   
   // In a real environment, the worker would be hosted. 
   // For local/service worker, we use an empty string or the same url.
