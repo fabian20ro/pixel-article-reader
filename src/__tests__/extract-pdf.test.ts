@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePdfFromArrayBuffer, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
+import { parsePdfFromArrayBuffer, createArticleFromPdf, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
 
 describe('extractParagraphsFromTextItems', () => {
   it('should handle empty or whitespace-only strings', () => {
@@ -204,5 +204,18 @@ describe('parsePdfFromArrayBuffer - input guards', () => {
     const view = new Uint8Array(garbageBuf);
     view[0] = 0x48; view[1] = 0x49; view[2] = 0x58; // "HIX" — not a valid PDF header
     await expect(parsePdfFromArrayBuffer(garbageBuf, 'test.pdf')).rejects.toThrow(/invalid|corrupted/i);
+  });
+});
+
+describe('createArticleFromPdf - input guards', () => {
+  it('should wrap arrayBuffer() failures with a descriptive error', async () => {
+    const failingFile = {
+      name: 'broken.pdf',
+      size: 1024,
+      async arrayBuffer(): Promise<ArrayBuffer> {
+        throw new DOMException('Read failed', 'InvalidStateError');
+      },
+    };
+    await expect(createArticleFromPdf(failingFile as any)).rejects.toThrow(/Could not read PDF file/);
   });
 });

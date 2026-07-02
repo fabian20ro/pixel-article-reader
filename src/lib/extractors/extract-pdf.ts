@@ -64,7 +64,14 @@ export async function createArticleFromPdf(
     throw new Error('PDF is too large (>10 MB). Please use a smaller file.');
   }
 
-  const buffer = await file.arrayBuffer();
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await file.arrayBuffer();
+  } catch (readErr) {
+    const msg = readErr instanceof Error ? readErr.message : String(readErr);
+    throw new Error(`Could not read PDF file: ${msg}`);
+  }
+
   return parsePdfFromArrayBuffer(buffer, file.name, onProgress);
 }
 
