@@ -19,6 +19,24 @@ describe('createArticleFromText', () => {
   it('handles empty text by throwing error', () => {
     expect(() => createArticleFromText('')).toThrow();
   });
+
+  it('throws for single-line paste (title-only, no body)', () => {
+    // Single line with no newline: the entire string becomes the title,
+    // leaving zero words of body content.
+    expect(() => createArticleFromText('Just one line of plain text here.')).toThrow(
+      'Pasted text is too short to read as an article.',
+    );
+  });
+
+  it('uses "Pasted Article" when first line exceeds 150 chars', () => {
+    const title = 'x'.repeat(200);
+    const body = 'This is a valid article with enough words to be processed correctly. It has multiple sentences.';
+    const text = `${title}\n${body}`;
+    const article = createArticleFromText(text);
+
+    expect(article.title).toBe('Pasted Article');
+    expect(article.textContent).toContain(body);
+  });
 });
 
 describe('createArticleFromTextFile', () => {
