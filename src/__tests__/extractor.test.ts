@@ -782,6 +782,7 @@ describe('extractArticleFromYoutube', () => {
 
     const article = await extractArticleFromYoutube(url, mockFetch as any);
     expect(article.title).toBe('Transcript for: Test YouTube Video');
+    expect(mockFetch).toHaveBeenCalledTimes(2); // player JSON + transcript segments
   });
 });
 
