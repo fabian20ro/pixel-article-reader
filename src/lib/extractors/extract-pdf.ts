@@ -64,7 +64,14 @@ export async function createArticleFromPdf(
     throw new Error('PDF is too large (>10 MB). Please use a smaller file.');
   }
 
-  const buffer = await file.arrayBuffer();
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await file.arrayBuffer();
+  } catch (readErr) {
+    const msg = readErr instanceof Error ? readErr.message : String(readErr);
+    throw new Error(`Could not read PDF file: ${msg}`);
+  }
+
   return parsePdfFromArrayBuffer(buffer, file.name, onProgress);
 }
 
@@ -112,22 +119,36 @@ export async function parsePdfFromArrayBuffer(
   url: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
+  if (!buffer || buffer.byteLength === 0) {
+    throw new Error('Could not load PDF: file is empty.');
+  }
+
   onProgress?.('Loading PDF...');
   
-  // Load pdfjs-dist via dynamic import to keep bundle small
-  const pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any;
+  let pdfjs: any;
+  try {
+    pdfjs = (await import('pdfjs-dist/legacy/build/pdf.mjs')) as any;
+  } catch (importErr) {
+    const msg = importErr instanceof Error ? importErr.message : String(importErr);
+    throw new Error(`Could not load PDF rendering library: ${msg}`);
+  }
   
   // In a real environment, the worker would be hosted. 
   // For local/service worker, we use an empty string or the same url.
   pdfjs.GlobalWorkerOptions.workerSrc = '';
 
-  const loadingTask = pdfjs.getDocument({
-    data: buffer,
-    // Avoid issues with some PDF versions by specifying version if needed
-    // but usually it's auto-detected.
-  });
-
-  const pdf = await loadingTask.promise;
+  let pdf: any;
+  try {
+    const loadingTask = pdfjs.getDocument({
+      data: buffer,
+      // Avoid issues with some PDF versions by specifying version if needed
+      // but usually it's auto-detected.
+    });
+    pdf = await loadingTask.promise;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Invalid or corrupted PDF file: ${message}`);
+  }
   const numPages = pdf.numPages;
   const allParagraphs: string[] = [];
 
