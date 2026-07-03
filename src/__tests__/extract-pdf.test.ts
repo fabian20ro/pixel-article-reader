@@ -183,6 +183,14 @@ describe('parsePdfFromArrayBuffer - input guards', () => {
     await expect(parsePdfFromArrayBuffer(emptyBuf, 'test.pdf')).rejects.toThrow(/empty/i);
   });
 
+  it('should throw when url is not a string', async () => {
+    const buf = new ArrayBuffer(16);
+    // pdfjs will reject garbage bytes; we just need to confirm the guard fires first.
+    await expect(parsePdfFromArrayBuffer(buf, null as any)).rejects.toThrow(/PDF URL must be/);
+    await expect(parsePdfFromArrayBuffer(buf, undefined as any)).rejects.toThrow(/PDF URL must be/);
+    await expect(parsePdfFromArrayBuffer(buf, 123 as any)).rejects.toThrow(/PDF URL must be/);
+  });
+
   it('should throw a descriptive error when PDF parsing fails', async () => {
     // Garbage bytes that pdfjs-dist will reject as invalid.
     const garbageBuf = new ArrayBuffer(8);
