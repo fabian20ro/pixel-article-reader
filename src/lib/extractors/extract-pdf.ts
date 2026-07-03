@@ -1,4 +1,4 @@
-import { type Article, MAX_PDF_SIZE } from './types.js';
+import { type Article, MIN_PARAGRAPH_LENGTH, MAX_PDF_SIZE } from './types.js';
 import { buildArticleFromParagraphs } from './utils.js';
 
 export interface PdfJsTextItem {
@@ -21,8 +21,9 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
     const text = rawStr.trim();
     if (!text) continue;
 
-    const y = item.transform.length >= 6 ? item.transform[5] : 0;
-    const height = item.height || 12;
+    const transform = Array.isArray(item.transform) && item.transform.length >= 6 ? item.transform : null;
+    const y = transform ? transform[5] : 0;
+    const height = (item.height != null && item.height > 0) ? item.height : 12;
 
     if (lastY !== null) {
       const gap = Math.abs(lastY - y);
@@ -123,6 +124,10 @@ export async function parsePdfFromArrayBuffer(
     throw new Error('Could not load PDF: file is empty.');
   }
 
+  if (typeof url !== 'string') {
+    throw new Error('PDF URL must be a non-empty string.');
+  }
+
   onProgress?.('Loading PDF...');
   
   let pdfjs: any;
@@ -160,23 +165,25 @@ export async function parsePdfFromArrayBuffer(
     allParagraphs.push(...paragraphs);
   }
 
-  // Clean up paragraphs (remove empty ones)
-  const cleanParagraphs = allParagraphs.filter(p => p.trim().length > 0);
+  // Clean up paragraphs (remove empty ones and sub-threshold noise like headers/page-numbers).
+  const cleanParagraphs = allParagraphs.filter(
+    p => p.trim().length >= MIN_PARAGRAPH_LENGTH,
+  );
 
   if (cleanParagraphs.length === 0) {
     throw new Error('Could not extract text from PDF');
   }
 
-  // Fallback for single paragraph that might be too short OR a single long block
+  // Fallback for single paragraph that might be too short OR a single long block.
   let finalParagraphs = cleanParagraphs;
   if (cleanParagraphs.length === 1) {
-    if (cleanParagraphs[0].trim().length < 5) {
+    if (cleanParagraphs[0].trim().length < MIN_PARAGRAPH_LENGTH) {
       throw new Error('PDF content too short to be meaningful');
     } else {
-      // Fallback: split single long block into sentences to improve readability
+      // Fallback: split single long block into sentences to improve readability.
       finalParagraphs = cleanParagraphs[0]
         .split(/\. (?=[A-Z])/)
-        .filter((s) => s.trim().length > 0);
+        .filter((s) => s.trim().length >= MIN_PARAGRAPH_LENGTH);
     }
   }
 
