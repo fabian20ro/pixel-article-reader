@@ -21,8 +21,9 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
     const text = rawStr.trim();
     if (!text) continue;
 
-    const y = item.transform.length >= 6 ? item.transform[5] : 0;
-    const height = item.height || 12;
+    const transform = Array.isArray(item.transform) && item.transform.length >= 6 ? item.transform : null;
+    const y = transform ? transform[5] : 0;
+    const height = (item.height != null && item.height > 0) ? item.height : 12;
 
     if (lastY !== null) {
       const gap = Math.abs(lastY - y);

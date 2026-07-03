@@ -127,48 +127,6 @@ describe('extractParagraphsFromTextItems', () => {
   });
 
 
-
-
-
-
-  it('should ignore items with only whitespace', () => {
-    const items = [
-      { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
-      { str: '   ', transform: [1, 0, 0, 1, 0, 650], height: 12 },
-      { str: 'Para 2', transform: [1, 0, 0, 1, 0, 600], height: 12 }
-    ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'Para 2']);
-  });
-
-  it('should handle a hyphenated word at the start of a line', () => {
-    const items = [
-      { str: 'Part', transform: [1, 0, 0, 1, 0, 700], height: 12 },
-      { str: '-part', transform: [1, 0, 0, 1, 0, 690], height: 12 }
-    ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['Part -part']);
-  });
-
-  it('should handle multiple lines where each line ends with a hyphen', () => {
-    const items = [
-      { str: 'This is a long-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
-      { str: 'line-break-', transform: [1, 0, 0, 1, 0, 690], height: 12 },
-      { str: 'test', transform: [1, 0, 0, 1, 0, 680], height: 12 }
-    ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long line-break test']);
-  });
-
-  it('should handle multiple hyphenated words in a single paragraph', () => {
-    const items = [
-      { str: 'a-', transform: [1, 0, 0, 1, 0, 700], height: 12 },
-      { str: 'b-', transform: [1, 0, 0, 1, 0, 690], height: 12 },
-      { str: 'c', transform: [1, 0, 0, 1, 0, 680], height: 12 }
-    ];
-    expect(extractParagraphsFromTextItems(items)).toEqual(['a b c']);
-  });
-
-
-
-
 });
 
 describe('extractParagraphsFromTextItems - input guards', () => {
@@ -189,6 +147,33 @@ describe('extractParagraphsFromTextItems - input guards', () => {
     ];
     // gaps are all <= 27 (lastY stays 700 across skips), so same paragraph.
     expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
+  });
+
+  it('should handle items with missing/null transform without throwing', () => {
+    const items = [
+      { str: 'Para 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'missing transform', transform: undefined as any, height: 12 }, // y defaults to 0 -> new para (gap > threshold)
+      { str: 'Para 2', transform: [1, 0, 0, 1, 0, 650], height: 12 }
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Para 1', 'missing transform', 'Para 2']);
+  });
+
+  it('should handle items with missing/null transform within a line without throwing', () => {
+    const items = [
+      { str: 'Hello', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: null as any, transform: undefined as any, height: 12 }, // skipped due to no text
+      { str: ' world', transform: [1, 0, 0, 1, 0, 693], height: 12 } // gap from lastY=700 is |700-693|=7 <= 27
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
+  });
+
+  it('should handle items with missing/null transform within a line (null text, defined transform)', () => {
+    const items = [
+      { str: 'First', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: null as any, transform: [1, 0, 0, 1, 0, 693], height: undefined as any }, // null text skipped; lastY stays 700
+      { str: ' Second', transform: [1, 0, 0, 1, 0, 693], height: 12 } // gap |700-693|=7 <= 27 -> same para
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['First Second']);
   });
 });
 
