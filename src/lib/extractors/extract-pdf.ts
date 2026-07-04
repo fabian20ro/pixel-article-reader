@@ -120,7 +120,13 @@ export async function parsePdfFromArrayBuffer(
   url: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  if (!buffer || buffer.byteLength === 0) {
+  if (!(buffer instanceof ArrayBuffer)) {
+    throw new TypeError(
+      'Invalid input: expected an ArrayBuffer.',
+    );
+  }
+
+  if (buffer.byteLength === 0) {
     throw new Error('Could not load PDF: file is empty.');
   }
 

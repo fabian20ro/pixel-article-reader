@@ -178,6 +178,13 @@ describe('extractParagraphsFromTextItems - input guards', () => {
 });
 
 describe('parsePdfFromArrayBuffer - input guards', () => {
+  it('should throw when buffer is not an ArrayBuffer', async () => {
+    await expect(parsePdfFromArrayBuffer(null as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer(undefined as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer('not a buffer' as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer(123 as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+  });
+
   it('should throw when buffer is empty (regression: zero-byte guard)', async () => {
     const emptyBuf = new ArrayBuffer(0);
     await expect(parsePdfFromArrayBuffer(emptyBuf, 'test.pdf')).rejects.toThrow(/empty/i);
