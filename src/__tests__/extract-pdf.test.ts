@@ -225,4 +225,26 @@ describe('createArticleFromPdf - input guards', () => {
     };
     await expect(createArticleFromPdf(failingFile as any)).rejects.toThrow(/Could not read PDF file/);
   });
+
+  it('should reject an object missing a numeric size with a descriptive error', async () => {
+    const badSizeFile = {
+      name: 'no-size.pdf',
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(badSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should reject a File-like object with NaN size (regression: NaN > MAX_PDF_SIZE is false)', async () => {
+    const nanSizeFile = {
+      name: 'nan-size.pdf',
+      get size() { return NaN; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(nanSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should not crash on a plain non-File-like object (regression: missing arrayBuffer)', async () => {
+    const noArrayBuf = { size: 100, name: 'x.pdf' };
+    await expect(createArticleFromPdf(noArrayBuf as any)).rejects.toThrow(/Could not read PDF file/);
+  });
 });
