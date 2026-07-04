@@ -124,7 +124,7 @@ export async function parsePdfFromArrayBuffer(
     throw new Error('Could not load PDF: file is empty.');
   }
 
-  if (typeof url !== 'string') {
+  if (typeof url !== 'string' || url.trim().length === 0) {
     throw new Error('PDF URL must be a non-empty string.');
   }
 
