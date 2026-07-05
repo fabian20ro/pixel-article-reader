@@ -74,6 +74,23 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
   });
 
+  it('should handle trailing whitespace before hyphen on next line', () => {
+    const items = [
+      { str: 'Word with trailing ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '-', transform: [1, 0, 0, 1, 0, 685], height: 12 }, // gap 15 <= 27 -> same paragraph
+      { str: 'continuation', transform: [1, 0, 0, 1, 0, 670], height: 12 } // gap 15 <= 27 -> still same paragraph
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Word with trailing continuation']);
+  });
+
+  it('should join paragraphs when hyphen has surrounding whitespace', () => {
+    const items = [
+      { str: 'This is a long - ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'word', transform: [1, 0, 0, 1, 0, 685], height: 12 } // gap 15 <= 27 -> same paragraph
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
+  });
+
   it('should handle line spacing accurately', () => {
     const items = [
       { str: 'Line 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },

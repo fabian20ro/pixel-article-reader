@@ -35,8 +35,10 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
         }
         currentParagraph = text;
       } else {
-        if (currentParagraph.endsWith('-')) {
-          currentParagraph = currentParagraph.slice(0, -1).trimEnd() + ' ' + text;
+        const trimmed = currentParagraph.trimEnd();
+        if (trimmed.endsWith('-')) {
+          // Handle hyphenated line breaks: strip trailing `-` and any whitespace around it, then join.
+          currentParagraph = trimmed.slice(0, -1).trimEnd() + ' ' + text;
         } else {
           currentParagraph += (currentParagraph ? ' ' : '') + text;
         }
