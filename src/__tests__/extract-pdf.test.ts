@@ -74,6 +74,23 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
   });
 
+  it('should handle trailing whitespace before hyphen on next line', () => {
+    const items = [
+      { str: 'Word with trailing ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '-', transform: [1, 0, 0, 1, 0, 685], height: 12 }, // gap 15 <= 27 -> same paragraph
+      { str: 'continuation', transform: [1, 0, 0, 1, 0, 670], height: 12 } // gap 15 <= 27 -> still same paragraph
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['Word with trailing continuation']);
+  });
+
+  it('should join paragraphs when hyphen has surrounding whitespace', () => {
+    const items = [
+      { str: 'This is a long - ', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'word', transform: [1, 0, 0, 1, 0, 685], height: 12 } // gap 15 <= 27 -> same paragraph
+    ];
+    expect(extractParagraphsFromTextItems(items)).toEqual(['This is a long word']);
+  });
+
   it('should handle line spacing accurately', () => {
     const items = [
       { str: 'Line 1', transform: [1, 0, 0, 1, 0, 700], height: 12 },
@@ -178,6 +195,13 @@ describe('extractParagraphsFromTextItems - input guards', () => {
 });
 
 describe('parsePdfFromArrayBuffer - input guards', () => {
+  it('should throw when buffer is not an ArrayBuffer', async () => {
+    await expect(parsePdfFromArrayBuffer(null as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer(undefined as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer('not a buffer' as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+    await expect(parsePdfFromArrayBuffer(123 as any, 'test.pdf')).rejects.toThrow(/expected an ArrayBuffer/i);
+  });
+
   it('should throw when buffer is empty (regression: zero-byte guard)', async () => {
     const emptyBuf = new ArrayBuffer(0);
     await expect(parsePdfFromArrayBuffer(emptyBuf, 'test.pdf')).rejects.toThrow(/empty/i);
@@ -189,6 +213,13 @@ describe('parsePdfFromArrayBuffer - input guards', () => {
     await expect(parsePdfFromArrayBuffer(buf, null as any)).rejects.toThrow(/PDF URL must be/);
     await expect(parsePdfFromArrayBuffer(buf, undefined as any)).rejects.toThrow(/PDF URL must be/);
     await expect(parsePdfFromArrayBuffer(buf, 123 as any)).rejects.toThrow(/PDF URL must be/);
+  });
+
+  it('should throw when url is an empty string', async () => {
+    const buf = new ArrayBuffer(16);
+    // Guard should fire before pdfjs attempts to parse garbage.
+    await expect(parsePdfFromArrayBuffer(buf, '')).rejects.toThrow(/PDF URL must be/);
+    await expect(parsePdfFromArrayBuffer(buf, '   ')).rejects.toThrow(/PDF URL must be/);
   });
 
   it('should throw a descriptive error when PDF parsing fails', async () => {
@@ -210,5 +241,36 @@ describe('createArticleFromPdf - input guards', () => {
       },
     };
     await expect(createArticleFromPdf(failingFile as any)).rejects.toThrow(/Could not read PDF file/);
+  });
+
+  it('should reject an object missing a numeric size with a descriptive error', async () => {
+    const badSizeFile = {
+      name: 'no-size.pdf',
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(badSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should reject a File-like object with NaN size (regression: NaN > MAX_PDF_SIZE is false)', async () => {
+    const nanSizeFile = {
+      name: 'nan-size.pdf',
+      get size() { return NaN; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(nanSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should reject a File-like object with negative size (regression: negative size slips past guard)', async () => {
+    const negSizeFile = {
+      name: 'neg-size.pdf',
+      get size() { return -1; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(negSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should not crash on a plain non-File-like object (regression: missing arrayBuffer)', async () => {
+    const noArrayBuf = { size: 100, name: 'x.pdf' };
+    await expect(createArticleFromPdf(noArrayBuf as any)).rejects.toThrow(/Could not read PDF file/);
   });
 });

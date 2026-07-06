@@ -432,6 +432,47 @@ describe('ArticleController', () => {
     expect(refs.articleSection.classList.contains('hidden')).toBe(false);
   });
 
+  it('passes DOMParser and progress callback to createArticleFromEpub', async () => {
+    const article = {
+      title: 'EPUB Article',
+      content: '<p>EPUB content</p>',
+      textContent: 'EPUB content',
+      markdown: 'EPUB content',
+      paragraphs: ['EPUB paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 2,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/epub',
+    } as any;
+
+    vi.mocked(createArticleFromEpub).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['EPUB content'], 'test.epub', { type: 'application/epub+zip' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(createArticleFromEpub).toHaveBeenCalledWith(
+      file,
+      globalThis.DOMParser,
+      expect.any(Function), // progress callback
+    );
+
+    const progressCallback = vi.mocked(createArticleFromEpub).mock.calls[0][2];
+    refs.loadingMessage.textContent = '';
+    progressCallback('Parsing EPUB...');
+    expect(refs.loadingMessage.textContent).toBe('Parsing EPUB...');
+  });
+
   it('ignores stale file upload results when a newer upload starts', async () => {
     const article1 = {
       title: 'First File',

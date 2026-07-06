@@ -35,8 +35,10 @@ export function extractParagraphsFromTextItems(items: PdfJsTextItem[]): string[]
         }
         currentParagraph = text;
       } else {
-        if (currentParagraph.endsWith('-')) {
-          currentParagraph = currentParagraph.slice(0, -1).trimEnd() + ' ' + text;
+        const trimmed = currentParagraph.trimEnd();
+        if (trimmed.endsWith('-')) {
+          // Handle hyphenated line breaks: strip trailing `-` and any whitespace around it, then join.
+          currentParagraph = trimmed.slice(0, -1).trimEnd() + ' ' + text;
         } else {
           currentParagraph += (currentParagraph ? ' ' : '') + text;
         }
@@ -61,6 +63,10 @@ export async function createArticleFromPdf(
   file: File | { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
+  if (typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0) {
+    throw new Error('Invalid file object: size must be a non-negative finite number.');
+  }
+
   if (file.size > MAX_PDF_SIZE) {
     throw new Error('PDF is too large (>10 MB). Please use a smaller file.');
   }
@@ -120,11 +126,17 @@ export async function parsePdfFromArrayBuffer(
   url: string,
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  if (!buffer || buffer.byteLength === 0) {
+  if (!(buffer instanceof ArrayBuffer)) {
+    throw new TypeError(
+      'Invalid input: expected an ArrayBuffer.',
+    );
+  }
+
+  if (buffer.byteLength === 0) {
     throw new Error('Could not load PDF: file is empty.');
   }
 
-  if (typeof url !== 'string') {
+  if (typeof url !== 'string' || url.trim().length === 0) {
     throw new Error('PDF URL must be a non-empty string.');
   }
 
