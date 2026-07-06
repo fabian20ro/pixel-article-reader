@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parsePdfFromArrayBuffer, createArticleFromPdf, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
+import { MAX_PDF_SIZE } from '../lib/extractors/types.js';
 
 describe('extractParagraphsFromTextItems', () => {
   it('should handle empty or whitespace-only strings', () => {
@@ -272,5 +273,15 @@ describe('createArticleFromPdf - input guards', () => {
   it('should not crash on a plain non-File-like object (regression: missing arrayBuffer)', async () => {
     const noArrayBuf = { size: 100, name: 'x.pdf' };
     await expect(createArticleFromPdf(noArrayBuf as any)).rejects.toThrow(/Could not read PDF file/);
+  });
+
+  it('should surface the configured MAX_PDF_SIZE limit in the rejection message (regression: stale MB constant)', async () => {
+    const oversizedFile = {
+      name: 'huge.pdf',
+      size: MAX_PDF_SIZE + 1,
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    const maxMb = Math.round(MAX_PDF_SIZE / 1_000_000);
+    await expect(createArticleFromPdf(oversizedFile as any)).rejects.toThrow(new RegExp(`>${maxMb} MB`));
   });
 });
