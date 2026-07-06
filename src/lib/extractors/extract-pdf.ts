@@ -194,9 +194,15 @@ export async function parsePdfFromArrayBuffer(
       throw new Error('PDF content too short to be meaningful');
     } else {
       // Fallback: split single long block into sentences to improve readability.
-      finalParagraphs = cleanParagraphs[0]
+      const splitParagraphs = cleanParagraphs[0]
         .split(/\. (?=[A-Z])/)
         .filter((s) => s.trim().length >= MIN_PARAGRAPH_LENGTH);
+      if (splitParagraphs.length > 0) {
+        finalParagraphs = splitParagraphs;
+      } else {
+        // Sentence splitting produced nothing usable — keep the original block.
+        finalParagraphs = cleanParagraphs;
+      }
     }
   }
 

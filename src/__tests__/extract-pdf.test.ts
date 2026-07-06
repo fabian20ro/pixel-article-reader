@@ -144,6 +144,18 @@ describe('extractParagraphsFromTextItems', () => {
     expect(extractParagraphsFromTextItems(items)).toEqual(['Hello world']);
   });
 
+  it('should return a single block for items with no sentence boundaries (regression: empty-after-split guard input)', () => {
+    const items = [
+      { str: 'Continuous text without any periods that would split into sentences', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: 'stays on the same line or next line without a period-space-uppercase pattern', transform: [1, 0, 0, 1, 0, 688], height: 12 }
+    ];
+    // No ". " followed by uppercase -> extractParagraphsFromTextItems returns one paragraph;
+    // parsePdfFromArrayBuffer's sentence-split would yield zero qualifying fragments.
+    expect(extractParagraphsFromTextItems(items)).toEqual([
+      'Continuous text without any periods that would split into sentences stays on the same line or next line without a period-space-uppercase pattern'
+    ]);
+  });
+
 
 });
 
