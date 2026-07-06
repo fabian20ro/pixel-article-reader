@@ -67,8 +67,9 @@ export async function createArticleFromPdf(
     throw new Error('Invalid file object: size must be a non-negative finite number.');
   }
 
+  const maxMb = Math.round(MAX_PDF_SIZE / 1_000_000);
   if (file.size > MAX_PDF_SIZE) {
-    throw new Error('PDF is too large (>10 MB). Please use a smaller file.');
+    throw new Error(`PDF is too large (>${maxMb} MB). Please use a smaller file.`);
   }
 
   let buffer: ArrayBuffer;
