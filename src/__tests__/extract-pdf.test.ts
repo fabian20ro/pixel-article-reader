@@ -260,6 +260,15 @@ describe('createArticleFromPdf - input guards', () => {
     await expect(createArticleFromPdf(nanSizeFile as any)).rejects.toThrow(/Invalid file object/);
   });
 
+  it('should reject a File-like object with negative size (regression: negative size slips past guard)', async () => {
+    const negSizeFile = {
+      name: 'neg-size.pdf',
+      get size() { return -1; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(negSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
   it('should not crash on a plain non-File-like object (regression: missing arrayBuffer)', async () => {
     const noArrayBuf = { size: 100, name: 'x.pdf' };
     await expect(createArticleFromPdf(noArrayBuf as any)).rejects.toThrow(/Could not read PDF file/);

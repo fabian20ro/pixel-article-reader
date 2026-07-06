@@ -63,8 +63,8 @@ export async function createArticleFromPdf(
   file: File | { name: string; size: number; arrayBuffer(): Promise<ArrayBuffer> },
   onProgress?: (message: string) => void,
 ): Promise<Article> {
-  if (typeof file.size !== 'number' || !Number.isFinite(file.size)) {
-    throw new Error('Invalid file object: size must be a finite number.');
+  if (typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0) {
+    throw new Error('Invalid file object: size must be a non-negative finite number.');
   }
 
   if (file.size > MAX_PDF_SIZE) {
