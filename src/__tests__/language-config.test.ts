@@ -48,6 +48,12 @@ describe('langToCode', () => {
   it('returns "ro" for Romanian', () => {
     expect(langToCode('ro')).toBe('ro');
   });
+
+  // Regression: silent fallback must not change when new languages are added.
+  it('falls back to "en" for any unsupported language', () => {
+    expect(langToCode('fr' as Language)).toBe('en');
+    expect(langToCode('de' as Language)).toBe('en');
+  });
 });
 
 // ── isLanguage ──────────────────────────────────────────────────────
