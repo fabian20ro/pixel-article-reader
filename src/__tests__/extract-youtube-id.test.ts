@@ -52,4 +52,14 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch')).toBeNull();
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=')).toBeNull();
   });
+
+  it('handles youtu.be trailing slash', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ/')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('returns null for empty and unparseable input', () => {
+    expect(extractYoutubeVideoId('')).toBeNull();
+    expect(extractYoutubeVideoId('not a url at all')).toBeNull();
+    expect(extractYoutubeVideoId('   ')).toBeNull();
+  });
 });
