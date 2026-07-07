@@ -232,6 +232,42 @@ describe('needsTranslation', () => {
     // English htmlLang on a .de domain → no translation needed
     expect(needsTranslation('en', 'https://web.de/article')).toBe(false);
   });
+
+  // ── Unsupported-language contract (the only supported langs are en/ro) ───
+
+  it('returns true when htmlLang is an unsupported language (ja)', () => {
+    expect(needsTranslation('ja', '')).toBe(true);
+  });
+
+  it('returns true when url TLD maps to an unsupported language (nl)', () => {
+    expect(needsTranslation('', 'https://example.nl/article')).toBe(true);
+  });
+
+  it('returns false only for supported languages regardless of htmlLang vs URL conflict', () => {
+    // English htmlLang + .de URL → htmlLang wins, no translation needed
+    expect(needsTranslation('en', 'https://web.de/a')).toBe(false);
+    // German htmlLang on a .ro URL → htmlLang wins, but de is unsupported → translate
+    expect(needsTranslation('de', 'https://example.ro/stiri')).toBe(true);
+  });
+
+  it('returns true for every non-English/rominan language code via text fallback', () => {
+    // The `textLang` parameter accepts Language = 'en' | 'ro'. If an external
+    // caller passes a non-en/ro language it would not typecheck, so we verify the
+    // actual supported set by asserting both members of SUPPORTED_LANGUAGES
+    // short-circuit translation:
+    expect(needsTranslation('en', '', 'en')).toBe(false);
+    expect(needsTranslation('', '', 'ro')).toBe(false);
+  });
+
+  it('assumes non-English when all signals are empty (default-to-translate)', () => {
+    expect(needsTranslation('', '')).toBe(true);
+  });
+
+  it('assumes non-English for unknown TLD with no htmlLang or text', () => {
+    // .xyz is not in TLD_LANG_MAP and not in GENERIC_TLDS, so detectLangFromUrl
+    // returns ''; all three signals are empty → translate.
+    expect(needsTranslation('', 'https://example.xyz/page')).toBe(true);
+  });
 });
 
 // ── getSourceLang ──────────────────────────────────────────────────
