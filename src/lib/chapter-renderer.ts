@@ -21,6 +21,10 @@ export interface ChapterRendererOptions {
 export function buildChaptersList(options: ChapterRendererOptions): void {
   const { articleText, chaptersList, chaptersBtn, chaptersFilter, tts, onChapterClick } = options;
 
+  if (!articleText || !chaptersList) {
+    throw new TypeError('ChapterRenderer: articleText and chaptersList are required');
+  }
+
   chaptersFilter.clear();
   const headings = articleText.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6');
 

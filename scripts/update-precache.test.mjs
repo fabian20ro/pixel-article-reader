@@ -34,7 +34,7 @@ describe('update-precache', () => {
         ['./', ...entries],
       );
 
-      expect(rendered).toContain("'./',");
+      expect(rendered).toContain("'.',");
       expect(rendered).toContain("'./assets/main.js',");
       expect(rendered).toContain("'./assets/main.css',");
       expect(rendered).not.toContain("./old.js");
@@ -51,7 +51,7 @@ describe('update-precache', () => {
     `;
     const manifest = renderStableManifest(JSON.stringify({
       name: 'App',
-      icons: [{ src: 'icons/icon-192.png' }],
+      icons: [{ src: './icons/icon-192.png' }],
     }));
 
     expect(rewriteIndexHtmlForStableAssets(html)).toContain('href="./manifest.webmanifest"');
@@ -59,5 +59,22 @@ describe('update-precache', () => {
     expect(manifest).toContain('"src": "./icons/icon-192.png"');
     expect(manifest).toContain('"src": "./icons/icon-512.png"');
     expect(manifest).not.toContain('"src": "icons/icon-192.png"');
+  });
+
+  it('renders entries with backslashes and single quotes without escaping leaks', () => {
+    const template = `const PRECACHE = [\n];\n`;
+    const entries = [
+      './assets/ok.js',
+      "./assets/bad\\back\\path.js",
+      "./assets/skip'quote.js",
+    ];
+
+    const rendered = renderServiceWorker(template, entries);
+
+    // Backslashes doubled so JS parses them as literal '\' chars.
+    expect(rendered).toContain("./assets/bad\\\\back\\\\path.js',");
+    // Single quotes escaped so they don't break out of the string literal.
+    expect(rendered).toContain('./assets/skip\\'quote.js\',');
+    expect(rendered).not.toMatch(/bad\back/);
   });
 });
