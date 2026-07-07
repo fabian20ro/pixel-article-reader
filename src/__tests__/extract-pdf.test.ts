@@ -296,4 +296,22 @@ describe('createArticleFromPdf - input guards', () => {
     const maxMb = Math.round(MAX_PDF_SIZE / 1_000_000);
     await expect(createArticleFromPdf(oversizedFile as any)).rejects.toThrow(new RegExp(`>${maxMb} MB`));
   });
+
+  it('should reject a File-like object with Infinity size (regression: non-finite size slips past guard)', async () => {
+    const infSizeFile = {
+      name: 'inf-size.pdf',
+      get size() { return Infinity; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(infSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+
+  it('should reject a File-like object with -Infinity size (regression: non-finite negative size slips past guard)', async () => {
+    const negInfSizeFile = {
+      name: 'neg-inf-size.pdf',
+      get size() { return -Infinity; },
+      arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
+    };
+    await expect(createArticleFromPdf(negInfSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
 });
