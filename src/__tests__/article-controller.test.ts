@@ -675,4 +675,22 @@ describe('ArticleController', () => {
     expect(refs.errorMessage.textContent).toContain('offline');
     expect(refs.errorSection.classList.contains('hidden')).toBe(false);
   });
+
+  it('rejects files with unsupported extensions and shows an error', async () => {
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file = new File(['some content'], 'test.xyz', { type: 'application/octet-stream' });
+    await (controller as any).handleFileUpload(file);
+
+    expect(refs.errorMessage.textContent).toContain('Unsupported file type');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+    // Article section must remain hidden — no article was displayed.
+    expect(refs.articleSection.classList.contains('hidden')).toBe(true);
+  });
 });
