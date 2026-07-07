@@ -139,3 +139,19 @@ export async function clearArticleContent(): Promise<void> {
     log.warn('Failed to clear article content store', err);
   }
 }
+
+/** Check whether any article content is stored. */
+export async function isEmptyArticleContent(): Promise<boolean> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const countRequest = tx.objectStore(STORE_NAME).count();
+    return await new Promise<boolean>((resolve, reject) => {
+      countRequest.onsuccess = () => resolve(countRequest.result === 0);
+      countRequest.onerror = () => reject(countRequest.error);
+    });
+  } catch (err) {
+    log.warn('Failed to check article content emptiness', err);
+    return true; // assume empty on error — safer than blocking the UI
+  }
+}
