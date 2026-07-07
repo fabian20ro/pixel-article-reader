@@ -602,7 +602,7 @@ describe('createArticleFromPdf', () => {
     } as any);
 
     const file = new File([new ArrayBuffer(10)], 'empty.pdf', { type: 'application/pdf' });
-    await expect(createArticleFromPdf(file)).rejects.toThrow(/Could not extract/);
+    await expect(createArticleFromPdf(file)).rejects.toThrow('Could not extract text from PDF');
   });
 });
 
