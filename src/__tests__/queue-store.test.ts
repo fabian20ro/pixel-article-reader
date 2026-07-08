@@ -199,6 +199,27 @@ describe('queue-store', () => {
     });
   });
 
+  describe('saveQueue', () => {
+    it('returns false when localStorage.setItem throws (quota exceeded)', () => {
+      const mock = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!;
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: createStorageMock(),
+        configurable: true,
+      });
+
+      // Monkey-patch setItem to throw on the new store
+      (globalThis.localStorage as any).setItem = () => {
+        throw new DOMException('QuotaExceededError', 'Failed to save');
+      };
+
+      const result = saveQueue([makeItem()]);
+      expect(result).toBe(false);
+
+      // Restore original mock so tests don't leak
+      Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
+    });
+  });
+
   describe('removeFromQueue', () => {
     it('removes item by id', () => {
       const a = makeItem({ id: 'a' });
