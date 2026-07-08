@@ -30,9 +30,15 @@ export class EventEmitter<T extends Record<string, unknown>> {
   emit<K extends keyof T>(event: K, ...[data]: T[K] extends void ? [] : [T[K]]): void {
     const handlers = this.listeners.get(event);
     if (!handlers) return;
+    let firstError: unknown;
     for (const handler of handlers) {
-      (handler as Handler<T[K]>)(data as T[K]);
+      try {
+        (handler as Handler<T[K]>)(data as T[K]);
+      } catch (err) {
+        if (!firstError) firstError = err;
+      }
     }
+    if (firstError) throw firstError;
   }
 
   /** Remove all listeners for a specific event, or all events if none specified. */
