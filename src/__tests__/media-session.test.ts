@@ -86,4 +86,24 @@ describe('MediaSessionController', () => {
     controller.dispose();
     expect(removeSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
+
+  it('should append audio element to document.body on activate (Android Chrome requirement)', async () => {
+    controller.activate('Test Title');
+    await Promise.resolve(); // let play() promise settle
+
+    const bodyChildren = Array.from(document.body.children);
+    const audioEl = bodyChildren.find(el => el instanceof HTMLAudioElement);
+
+    expect(audioEl).toBeDefined();
+    expect(audioEl!.loop).toBe(true);
+  });
+
+  it('should stop keep-alive timer on deactivate', () => {
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+    controller.activate();
+    controller.deactivate();
+
+    expect(clearIntervalSpy).toHaveBeenCalled();
+    expect(controller.active).toBe(false);
+  });
 });
