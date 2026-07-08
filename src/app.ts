@@ -287,6 +287,25 @@ async function main(): Promise<void> {
   refs.settingsOverlay.addEventListener('click', closeSettingsDrawer);
 
   document.addEventListener('keydown', (e) => {
+    // Player keyboard shortcuts — only when article is loaded and not typing
+    if (articleController.getCurrentArticle() && e.target !== refs.urlInput) {
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          if (tts.state.isPaused) tts.resume();
+          else if (tts.state.isPlaying) tts.pause();
+          else tts.play();
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          tts.skipForward();
+          return;
+        case 'ArrowLeft':
+          e.preventDefault();
+          tts.skipBackward();
+          return;
+      }
+    }
     if (e.key === 'Escape') {
       if (refs.queueDrawer.classList.contains('open')) closeQueueDrawer();
       if (refs.settingsPanel.classList.contains('open')) closeSettingsDrawer();
