@@ -145,4 +145,40 @@ describe('PwaUpdateManager', () => {
     expect(cacheStorage.del).toHaveBeenCalledWith('cache-b');
     expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('applies reload immediately when controller changes outside playback', async () => {
+    const sw = mockServiceWorkerEnvironment();
+    mockCacheStorage();
+    const reloadSpy = vi.fn();
+
+    const onStatus = vi.fn();
+    const onUpdateReady = vi.fn();
+    const manager = new PwaUpdateManager({
+      onStatus,
+      onUpdateReady,
+      isPlaybackActive: () => false,
+      reload: reloadSpy,
+    });
+
+    await manager.init('sw.js');
+    sw.listeners.controllerchange(new Event('controllerchange'));
+
+    expect(manager.hasPendingReload()).toBe(false);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(onStatus).toHaveBeenCalledWith('Applying update...');
+    expect(onUpdateReady).not.toHaveBeenCalled();
+  });
+
+  it('checkForUpdates returns failed on registration error', async () => {
+    const sw = mockServiceWorkerEnvironment();
+    sw.update.mockRejectedValue(new Error('network'));
+
+    const manager = new PwaUpdateManager({});
+    await manager.init('sw.js');
+
+    const result = await manager.checkForUpdates({ silent: false });
+
+    expect(result).toBe('failed');
+    expect(sw.update).toHaveBeenCalledTimes(2); // init + explicit check
+  });
 });
