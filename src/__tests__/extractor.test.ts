@@ -14,6 +14,7 @@ import {
   splitTextBySentences,
   extractParagraphsFromTextItems,
 } from '../lib/extractor.js';
+import { parseArticleFromHtml } from '../lib/extractors/extract-html.js';
 
 // ── Mock modules ──────────────────────────────────────────────────
 
@@ -497,6 +498,38 @@ describe('createArticleFromText', () => {
 
   it('handles very short text gracefully', () => {
     expect(() => createArticleFromText('A')).toThrow('Pasted text is too short to read as an article.');
+  });
+});
+
+// ── parseArticleFromHtml (extract-html.ts) ────────────────────────────────
+
+describe('parseArticleFromHtml', () => {
+  it('throws when HTML exceeds MAX_ARTICLE_SIZE', () => {
+    const oversized = '<p>word </p>'.repeat(400_001); // >2M chars
+    expect(() => parseArticleFromHtml(oversized, 'https://example.com', DOMParser)).toThrow();
+  });
+
+  it('throws with a helpful message mentioning the size limit', () => {
+    const oversized = '<p>word </p>'.repeat(400_001);
+    expect(() => parseArticleFromHtml(oversized, 'https://example.com', DOMParser)).toThrow(/HTML exceeds maximum size/);
+  });
+
+  it('does not throw for HTML at exactly the limit', () => {
+    // Mock parseFromString to return a minimal Document so the "empty" guard below is never hit.
+    const fakeDoc = new DOMParser().parseFromString('<p>text</p>', 'text/html');
+    vi.spyOn(DOMParser.prototype, 'parseFromString').mockReturnValue(fakeDoc);
+    vi.mocked(Readability).mockImplementation(function(this: any) {
+      this.parse = () => ({
+        title: 'OK',
+        content: '<p>enough words to pass the filter and be considered valid article content.</p>',
+        textContent: 'enough words to pass the filter and be considered valid article content.',
+        siteName: 'Site',
+        excerpt: '',
+      });
+    } as any);
+
+    const atLimit = 'x'.repeat(2_000_000); // exactly MAX_ARTICLE_SIZE (guard is >, not >=)
+    expect(() => parseArticleFromHtml(atLimit, 'https://example.com', DOMParser)).not.toThrow();
   });
 });
 
