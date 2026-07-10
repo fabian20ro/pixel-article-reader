@@ -13,6 +13,7 @@ import {
   createArticleFromPdf,
   splitTextBySentences,
   extractParagraphsFromTextItems,
+  MIN_PARAGRAPH_LENGTH,
 } from '../lib/extractor.js';
 import { sanitizeRenderedHtml, parseArticleFromHtml } from '../lib/extractors/extract-html.js';
 
@@ -120,6 +121,15 @@ const SAMPLE_HTML = `
 </body>
 </html>
 `;
+
+// ── MIN_PARAGRAPH_LENGTH export ───────────────────────────────────────
+
+describe('MIN_PARAGRAPH_LENGTH', () => {
+  it('is exported as a public constant with value 20', () => {
+    expect(MIN_PARAGRAPH_LENGTH).toBe(20);
+  });
+});
+
 
 // ── extractArticle ──────────────────────────────────────────────────
 

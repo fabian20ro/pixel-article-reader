@@ -10,7 +10,8 @@
 export type { Article } from './extractors/types.js';
 export { IMAGE_MD_RE, IMAGE_HTML_RE } from './extractors/types.js';
 
-// Shared utilities (re-exported for test access)
+// Shared constants & utilities (re-exported for consumer/test use)
+export { MIN_PARAGRAPH_LENGTH } from './extractors/types.js';
 export { splitTextBySentences } from './extractors/utils.js';
 
 // URL fetch orchestration (detects format and dispatches to the right parser)
