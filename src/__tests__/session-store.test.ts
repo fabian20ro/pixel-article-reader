@@ -106,5 +106,17 @@ describe('session-store', () => {
       expect(stored.article).toEqual(article);
       expect(stored.savedAt).toEqual(expect.any(Number));
     });
+
+    it('round-trips an article through save and load', () => {
+      const article = makeArticle({ title: 'Round-Trip Article' });
+      saveLastArticle(article);
+
+      const loaded = loadLastArticle();
+      expect(loaded).not.toBeNull();
+      expect(loaded!.article.title).toBe('Round-Trip Article');
+      const savedAt = loaded!.savedAt;
+      expect(typeof savedAt).toBe('number');
+      expect(savedAt === savedAt && savedAt !== Infinity && savedAt !== -Infinity).toBe(true);
+    });
   });
 });
