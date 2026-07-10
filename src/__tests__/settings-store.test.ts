@@ -67,6 +67,63 @@ describe('settings-store', () => {
     expect(JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}')).toEqual(settings);
   });
 
+  it('sanitizes every field and round-trips known-good values', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({
+        rate: -5,
+        lang: 'xx',
+        voiceName: undefined as unknown as string,
+        voiceGender: 'unknown' as unknown as 'auto',
+        wakeLock: true as unknown as boolean,
+        theme: 'neon' as unknown as Theme,
+        deviceVoiceOnly: null as unknown as boolean,
+      }),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings.rate).toBe(0.5);
+    expect(settings.lang).toBe('auto');
+    expect(settings.voiceName).toBe('');
+    expect(settings.voiceGender).toBe('auto');
+    expect(settings.wakeLock).toBe(true);
+    expect(settings.theme).toBe('dark');
+    expect(settings.deviceVoiceOnly).toBe(false);
+
+    const writtenBack = JSON.parse(localStorage.getItem('articlevoice-settings') ?? '{}');
+    expect(writtenBack).toEqual(settings);
+  });
+
+  it('preserves known-good theme "khaki" without falling back to dark', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ ...defaults, theme: 'khaki' } satisfies AppSettings),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings.theme).toBe('khaki');
+  });
+
+  it('clamps rate to the [0.5, 3] inclusive range', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 10 } satisfies Partial<AppSettings>),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings.rate).toBe(3);
+  });
+
+  it('treats NaN as invalid and falls back to the default rate', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: Number.NaN } satisfies Partial<AppSettings>),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings.rate).toBe(defaults.defaultRate);
+  });
+
   it('persists and reloads valid settings', () => {
     const expected: AppSettings = {
       rate: 1.25,

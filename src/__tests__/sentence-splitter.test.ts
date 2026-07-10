@@ -46,6 +46,11 @@ describe('sentence-splitter', () => {
       expect(result.length).toBeGreaterThan(1);
       expect(result[0].length).toBeLessThanOrEqual(20);
     });
+    it('should split multiple semicolons into separate segments', () => {
+      const text = 'First; Second; Third; Fourth';
+      expect(splitLongSentence(text, 5)).toEqual(['First;', 'Second;', 'Third;', 'Fourth']);
+    });
+
     it('should split by commas when requested', () => {
        const text = 'One, two, three';
        expect(splitLongSentence(text, 5)).toEqual(['One,', 'two,', 'three']);

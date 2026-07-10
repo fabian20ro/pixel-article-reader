@@ -13,8 +13,9 @@ import {
   createArticleFromPdf,
   splitTextBySentences,
   extractParagraphsFromTextItems,
+  MIN_PARAGRAPH_LENGTH,
 } from '../lib/extractor.js';
-import { parseArticleFromHtml } from '../lib/extractors/extract-html.js';
+import { sanitizeRenderedHtml, parseArticleFromHtml } from '../lib/extractors/extract-html.js';
 
 // ── Mock modules ──────────────────────────────────────────────────
 
@@ -120,6 +121,15 @@ const SAMPLE_HTML = `
 </body>
 </html>
 `;
+
+// ── MIN_PARAGRAPH_LENGTH export ───────────────────────────────────────
+
+describe('MIN_PARAGRAPH_LENGTH', () => {
+  it('is exported as a public constant with value 20', () => {
+    expect(MIN_PARAGRAPH_LENGTH).toBe(20);
+  });
+});
+
 
 // ── extractArticle ──────────────────────────────────────────────────
 
@@ -498,6 +508,121 @@ describe('createArticleFromText', () => {
 
   it('handles very short text gracefully', () => {
     expect(() => createArticleFromText('A')).toThrow('Pasted text is too short to read as an article.');
+  });
+});
+
+// ── sanitizeRenderedHtml (extract-html.ts) ────────────────────────
+
+describe('sanitizeRenderedHtml', () => {
+  it('strips script elements from rendered HTML', () => {
+    const input = '<p>Hello</p><script>alert(1)</script>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<script>');
+    expect(result).toContain('Hello');
+  });
+
+  it('strips iframe elements from rendered HTML', () => {
+    const input = '<p>Article text with enough words to pass the filter.</p><iframe src="https://evil.com"></iframe>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<iframe');
+    expect(result).toContain('Article text');
+  });
+
+  it('strips img and picture elements', () => {
+    const input = '<p>Text with enough words to pass the filter.</p><img src="x.png"/><picture></picture>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<img');
+    expect(result).not.toContain('<picture');
+  });
+
+  it('preserves allowed formatting tags (strong, em, code)', () => {
+    const input = '<p><strong>bold</strong> and <em>italic</em> with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).toContain('<strong>');
+    expect(result).toContain('<em>');
+  });
+
+  it('removes event handler attributes', () => {
+    const input = '<div onclick="alert(1)" onmouseover="steal()">safe content with enough words to pass the filter.</div>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('onclick');
+    expect(result).not.toContain('onmouseover');
+  });
+
+  it('removes javascript: href values', () => {
+    const input = '<a href="javascript:void(0)">malicious link</a><p>valid paragraph with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('href="javascript:');
+  });
+
+  it('removes data: src values', () => {
+    const input = '<a href="data:text/html,<script>alert(1)</script>">trapped link</a><p>valid paragraph with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('href="data:');
+  });
+
+  it('adds target and rel to external http(s) links', () => {
+    const input = '<p><a href="https://example.com">external link</a> with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).toContain('target="_blank"');
+    expect(result).toContain('rel="noopener noreferrer"');
+  });
+
+  it('does not add target/rel for internal links', () => {
+    const input = '<p><a href="/local/page">internal link</a> with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('target="_blank"');
+  });
+
+  it('returns empty string when no parseable container exists', () => {
+    // An empty string should produce a Document with no meaningful content
+    const result = sanitizeRenderedHtml('', DOMParser);
+    expect(typeof result).toBe('string');
+  });
+
+  it('strips style and meta elements', () => {
+    const input = '<style>body{display:none}</style><meta charset="utf-8"><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<style');
+    expect(result).not.toContain('<meta');
+  });
+
+  it('strips video and audio elements', () => {
+    const input = '<video src="evil.mp4"></video><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<video');
+  });
+
+  it('strips SVG elements', () => {
+    const input = '<svg xmlns="http://www.w3.org/2000/svg"></svg><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<svg');
+  });
+
+  it('strips empty anchor tags', () => {
+    const input = '<a href="https://example.com"></a><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<a');
+  });
+
+  it('preserves anchors with non-empty link text', () => {
+    const input = '<p><a href="https://example.com">read more</a> content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).toContain('<a');
+    expect(result).not.toContain('href=""');
+  });
+
+  it('strips form elements', () => {
+    const input = '<form action="/submit"><input type="text"></form><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<form');
+  });
+
+  it('strips object and embed elements', () => {
+    const input = '<object data="evil.swf"></object><embed src="evil.mp3"><p>content with enough words to pass the filter.</p>';
+    const result = sanitizeRenderedHtml(input, DOMParser);
+    expect(result).not.toContain('<object');
+    expect(result).not.toContain('<embed');
   });
 });
 
