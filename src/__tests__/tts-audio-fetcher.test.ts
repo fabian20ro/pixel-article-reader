@@ -41,4 +41,43 @@ describe('fetchTtsAudio', () => {
     expect(result).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(2);
   });
+
+  it('does not retry on permanent 4xx errors', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 404,
+    } as any);
+
+    const result = await fetchTtsAudio('hello', 'en', config);
+    expect(result).toBeNull();
+    // Only one attempt — permanent error path throws immediately
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on 429 (rate limit) as transient', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 429,
+    } as any);
+
+    const result = await fetchTtsAudio('hello', 'en', config);
+    expect(result).toBeNull();
+    // Two attempts — 429 is treated as transient despite being in 4xx range
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('encodes text and lang params in the fetch URL', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['audio']),
+    } as any);
+
+    const result = await fetchTtsAudio('hello & world', 'en-US', config);
+    expect(result).toBe('blob:url');
+    const [calledUrl] = vi.mocked(fetch).mock.calls[0];
+    expect(calledUrl).toContain(encodeURIComponent('hello & world'));
+    expect(calledUrl).toContain(encodeURIComponent('en-US'));
+    // No space literal — must be percent-encoded
+    expect(calledUrl).not.toContain(' ');
+  });
 });
