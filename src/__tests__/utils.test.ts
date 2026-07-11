@@ -140,6 +140,17 @@ describe('utils.ts', () => {
       expect(countWords('Hello world')).toBe(2);
       expect(countWords('')).toBe(0);
     });
+
+    // `split(/\s+/)` after `.trim()` still splits the remaining string — so leading/trailing whitespace never inflates the count, but:
+    it('treats trimmed-empty input as zero', () => {
+      expect(countWords('   ')).toBe(0);
+      expect(countWords('\n\t')).toBe(0);
+    });
+
+    // Regression guard: current implementation does `text.trim().split(/\s+/)` which gives 2 for this input. Lock it in.
+    it('does not inflate word count on leading/trailing whitespace', () => {
+      expect(countWords('  hello world  ')).toBe(2);
+    });
   });
 
   describe('splitPlainTextParagraphs', () => {
