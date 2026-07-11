@@ -48,6 +48,25 @@ describe('worker validation', () => {
     expect(await response.json()).toEqual({ error: 'Only http and https URLs are allowed.' });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it('rejects parse requests with malformed JSON body', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{invalid json body',
+      }),
+      env,
+      ctx,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid JSON body.' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('worker youtube parse', () => {
