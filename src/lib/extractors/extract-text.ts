@@ -3,7 +3,7 @@
  */
 
 import { detectLanguage } from '../lang-detect.js';
-import { type Article, MAX_ARTICLE_SIZE, WORDS_PER_MINUTE } from './types.js';
+import { type Article, IMAGE_MD_RE, MAX_ARTICLE_SIZE, WORDS_PER_MINUTE } from './types.js';
 import {
   buildArticleFromParagraphs,
   splitPlainTextParagraphs,
@@ -16,7 +16,9 @@ import {
  * Create an Article directly from pasted plain text (no fetch needed).
  */
 export function createArticleFromText(text: string): Article {
-  const lines = text.split('\n');
+  // Strip markdown image references before paragraph processing — TTS would otherwise read them aloud.
+  const cleaned = text.replace(IMAGE_MD_RE, '');
+  const lines = cleaned.split('\n');
   const firstLine = lines[0].trim();
   const hasTitle = firstLine.length > 0 && firstLine.length <= 150;
   const title = hasTitle ? firstLine : 'Pasted Article';
