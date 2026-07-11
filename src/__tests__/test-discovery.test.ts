@@ -38,5 +38,11 @@ describe('extractParagraphsFromTextItems', () => {
     const result = extractParagraphsFromTextItems(items);
     expect(result).toEqual(['Part 1 else']);
   });
+
+  it('returns empty array for no items', () => {
+    const items = [] as any[];
+    const result = extractParagraphsFromTextItems(items);
+    expect(result).toEqual([]);
+  });
 });
 // comment
