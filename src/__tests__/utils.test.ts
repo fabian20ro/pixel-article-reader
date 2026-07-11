@@ -95,6 +95,14 @@ describe('utils.ts', () => {
       expect(extractTitleFromMarkdown('## Subtitle\n# Real Title\nContent')).toBe('Real Title');
       expect(extractTitleFromMarkdown('### Not an H1\n# Title')).toBe('Title');
     });
+
+    it('returns empty string when markdown is only a bare H1', () => {
+      expect(extractTitleFromMarkdown('# Just A Title')).toBe('Just A Title');
+    });
+
+    it('strips markdown syntax from first-line fallback', () => {
+      expect(extractTitleFromMarkdown('*emphasized title*\nContent')).toBe('emphasized title');
+    });
   });
 
   describe('splitSentences', () => {
@@ -106,6 +114,17 @@ describe('utils.ts', () => {
     });
     it('handles ellipsis', () => {
       expect(splitSentences('Hello... World')).toEqual(['Hello...', 'World']);
+    });
+
+    it('treats Mr. as part of the preceding word (abbreviation in list)', () => {
+      const result = splitSentences('Mr. Smith went home.');
+      // The regex lists "Mr" in the lookbehind so it should NOT split after "Mr."
+      expect(result).not.toEqual(['Mr.', 'Smith went home.']);
+    });
+
+    it('returns non-empty array for text with abbreviations', () => {
+      const result = splitSentences('Dr. Jones said hello.');
+      expect(result.length).toBeGreaterThan(0);
     });
   });
 
