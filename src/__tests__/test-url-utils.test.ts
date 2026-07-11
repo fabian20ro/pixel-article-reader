@@ -13,6 +13,11 @@ describe('url_utils', () => {
       expect(isValidArticleUrl('ftp://example.com')).toBe(false);
       expect(isValidArticleUrl('not-a-url')).toBe(false);
     });
+
+    it('rejects URLs with no dot in hostname', () => {
+      expect(isValidArticleUrl('https://localhost/path')).toBe(false);
+      expect(isValidArticleUrl('http://127.0.0.1:8080')).toBe(true);
+    });
   });
 
   describe('extractUrl', () => {
@@ -30,6 +35,11 @@ describe('url_utils', () => {
 
     it('returns null for non-URLs', () => {
       expect(extractUrl('Hello world')).toBeNull();
+    });
+
+    it('returns null for empty/whitespace input', () => {
+      expect(extractUrl('')).toBeNull();
+      expect(extractUrl('   ')).toBeNull();
     });
   });
 

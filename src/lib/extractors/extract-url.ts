@@ -41,11 +41,16 @@ async function handleProxyError(resp: Response): Promise<never> {
   throw new UpstreamResponseError(resp.status, detail || `Proxy returned ${resp.status}: ${resp.statusText}`);
 }
 
-/** Check if a URL likely points to a PDF based on its path. */
+/** Check if a URL likely points to a PDF based on its path or content-disposition. */
 function isPdfUrl(url: string): boolean {
   try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith('.pdf');
+    const parsed = new URL(url);
+    // Match .pdf at end of pathname (with or without query/fragment)
+    const pathPart = parsed.pathname.toLowerCase();
+    if (pathPart.endsWith('.pdf') || /\?[^/]*\.pdf/i.test(parsed.search)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -63,7 +68,7 @@ function isEpubUrl(url: string): boolean {
 }
 
 /** Check if a URL is a YouTube URL. */
-function isYoutubeUrl(url: string): boolean {
+export function isYoutubeUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.toLowerCase();

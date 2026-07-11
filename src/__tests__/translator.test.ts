@@ -119,6 +119,27 @@ describe('translateParagraphs', () => {
     expect(result.length).toBe(3);
   });
 
+  it('merges extra API paragraphs into the last slot when API splits text more than expected', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse('First part.\n\nSecond part.\n\nExtra sentence.'),
+    );
+
+    const result = await translateParagraphs(['Original one.', 'Original two.'], 'de', 'en', PROXY);
+    expect(result).toEqual([
+      'First part.',
+      'Second part. Extra sentence.',
+    ]);
+  });
+
+  it('pads with empty strings when API returns fewer paragraphs than input', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse('Only one paragraph.'),
+    );
+
+    const result = await translateParagraphs(['First.', 'Second.'], 'de', 'en', PROXY);
+    expect(result).toEqual(['Only one paragraph.', '']);
+  });
+
   it('handles API error with descriptive message', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockErrorResponse(502, 'Google Translate API returned 503: Service Unavailable'),

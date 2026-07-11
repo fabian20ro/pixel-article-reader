@@ -148,7 +148,7 @@ function extractOpfPath(containerXml: string): string | null {
 }
 
 /** Sanitize a ZIP-internal href from OPF manifest to prevent path traversal. */
-function sanitizeHref(href: string): string {
+export function sanitizeHref(href: string): string {
   const decoded = decodeURIComponent(href).replace(/\\/g, '/');
   const parts = decoded.split('/').filter(Boolean);
   const safe: string[] = [];
@@ -235,3 +235,51 @@ function extractTextFromXhtml(
 
   return paragraphs;
 }
+
+// ── Inline tests: sanitizeHref path-traversal invariant ────────────────
+
+import { describe, it, expect } from 'vitest';
+
+describe('sanitizeHref', () => {
+  // Normal paths pass through unchanged (sanity + regression guard).
+  it('returns normal paths as-is', () => {
+    expect(sanitizeHref('chapters/intro.xhtml')).toBe('chapters/intro.xhtml');
+    expect(sanitizeHref('text/section.html')).toBe('text/section.html');
+    expect(sanitizeHref('a/b/c/d/e.xhtml')).toBe('a/b/c/d/e.xhtml');
+  });
+
+  // Single dot segments are stripped (no-op directory reference).
+  it('strips single-dot segments', () => {
+    expect(sanitizeHref('./chapter.xhtml')).toBe('chapter.xhtml');
+    expect(sanitizeHref('text/./section.html')).toBe('text/section.html');
+    expect(sanitizeHref('a/b/c/./d.xhtml')).toBe('a/b/c/d.xhtml');
+  });
+
+  // Double-dot segments collapse by popping the previous segment.
+  it('collapses double-dot segments', () => {
+    expect(sanitizeHref('../chapter.xhtml')).toBe('chapter.xhtml');
+    expect(sanitizeHref('text/../section.html')).toBe('section.html');
+    expect(sanitizeHref('a/b/../../c.xhtml')).toBe('c.xhtml');
+  });
+
+  // Nested traversal like ../../etc/passwd must NOT escape — pop empties the stack.
+  it('does not allow path traversal beyond root', () => {
+    const malicious = '../../etc/passwd';
+    expect(sanitizeHref(malicious)).not.toContain('../../');
+    expect(sanitizeHref(malicious)).toBe('etc/passwd'); // two pops remove a, b; result is just etc/passwd
+
+    const aggressive = '../../../etc/shadow';
+    expect(sanitizeHref(aggressive)).not.toMatch(/^(\.\.)+/);
+    expect(sanitizeHref(aggressive)).toBe('etc/shadow');
+  });
+
+  // URL-encoded traversal is decoded before sanitization — still blocked.
+  it('handles URL-encoded traversal', () => {
+    const encoded = '%2e%2e/chapters/intro.xhtml';
+    expect(sanitizeHref(encoded)).not.toContain('%2e');
+    expect(sanitizeHref(encoded)).toBe('chapters/intro.xhtml');
+
+    const sneaky = 'text/%2e%2e/section.html';
+    expect(sanitizeHref(sneaky)).toBe('section.html');
+  });
+});
