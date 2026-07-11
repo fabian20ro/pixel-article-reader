@@ -62,4 +62,20 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('not a url at all')).toBeNull();
     expect(extractYoutubeVideoId('   ')).toBeNull();
   });
+
+  it('extracts from watch URL with mixed parameter order', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30&list=PLxyz')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts from youtu.be with trailing slash and query params', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ/?si=abc')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('returns null for watch URL without v= parameter', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?t=30&list=PLxyz')).toBeNull();
+  });
+
+  it('extracts from /watch/ path with multiple query parameters', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120&feature=share')).toBe('dQw4w9WgXcQ');
+  });
 });
