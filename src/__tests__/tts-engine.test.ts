@@ -780,6 +780,59 @@ describe('TTSEngine', () => {
     engine.seekToTime(2.5);
     expect(engine.state.currentParagraph).toBe(1);
   });
+
+  // ── Dead-man's switch (TTSEngine) ───────────────────────────────
+
+  it('stops playback after 30 s of no progress', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    engine.loadArticle(['A sentence long enough to keep playing forever without progress.'], 'en');
+    engine.play();
+
+    expect(engine.state.isPlaying).toBe(true);
+
+    // Advance past the dead-man threshold (30 s)
+    vi.advanceTimersByTime(35_001);
+
+    expect(engine.state.isPlaying).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('does not stop when onEnd resets progress timer', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    // Single sentence that completes immediately via mock's setTimeout(0) for onend.
+    engine.loadArticle(['Done.'], 'en');
+    engine.play();
+
+    expect(engine.state.isPlaying).toBe(true);
+
+    // Advance past threshold — mock fires onend at t=0, which resets progress time
+    vi.advanceTimersByTime(10);
+
+    // The article is done (onEnd fired), so engine should be stopped gracefully by handleEnd
+    expect(engine.state.isPlaying).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('resets progress timer on each sentence completion', () => {
+    vi.useFakeTimers();
+    const engine = createEngine();
+    // Two sentences — the second one never completes (simulating a stuck backend)
+    engine.loadArticle(['First. Second.'], 'en');
+    engine.play();
+
+    expect(engine.state.isPlaying).toBe(true);
+
+    // First sentence completes at t=0 (mock), resetting progress timer to now
+    vi.advanceTimersByTime(10);
+
+    // Now simulate second sentence never completing — advance 35s from the reset point
+    vi.advanceTimersByTime(35_001);
+
+    expect(engine.state.isPlaying).toBe(false);
+    vi.useRealTimers();
+  });
 });
 
 // ── computeTimeline ─────────────────────────────────────────────────
