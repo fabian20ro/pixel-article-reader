@@ -256,4 +256,93 @@ describe('extractArticleFromYoutube', () => {
       .rejects.toThrow(/Transcript track is missing a fetch URL/);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+
+  it('throws when captions key is entirely missing but video plays', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'No Captions Video' },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/YouTube extraction failed/);
+  });
+
+  it('throws when captionTracks array is empty', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'Empty Tracks Video' },
+          captions: {
+            playerCaptionsTracklistRenderer: { captionTracks: [] },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/No transcript found/);
+  });
+
+  it('wraps transcript fetch failure in extraction error', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'Bad Transcript Video' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&lang=en' }],
+            },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      if (url.startsWith('https://www.youtube.com/api/timedtext')) {
+        return new Response('Service unavailable', { status: 503 });
+      }
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/YouTube extraction failed/);
+  });
+
+  it('extracts API key from escaped JSON format in watch page', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response('blocked', { status: 500 });
+      }
+      // Return HTML where INNERTUBE_API_KEY is escaped with literal backslash-quote chars.
+      const html = '<html>INNERTUBE_API_KEY\\":\\"escaped-key-12345\\"</html>';
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response(html, { status: 200 });
+      }
+      // Player API with extracted key
+      if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=escaped-key-12345')) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: "Escaped Key Video" },
+          captions: {
+            playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext' }] },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+      // Transcript
+      return new Response(JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Escaped works.' }] }] }), { status: 200 });
+    });
+
+    const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
+    expect(article.title).toBe('Transcript for: Escaped Key Video');
+    expect(article.paragraphs[0]).toBe('Escaped works.');
+  });
 });
