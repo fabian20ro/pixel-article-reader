@@ -187,7 +187,7 @@ async function fetchPlayerJson(videoId: string, apiKey: string, fetcher: typeof 
   return await response.json();
 }
 
-function pickTranscriptTrack(playerJson: any): TranscriptTrack {
+export function pickTranscriptTrack(playerJson: any): TranscriptTrack {
   const tracklist =
     playerJson?.captions?.playerCaptionsTracklistRenderer
     || playerJson?.playerCaptionsTracklistRenderer;
