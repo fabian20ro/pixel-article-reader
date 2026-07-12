@@ -159,10 +159,11 @@ function extractSubItems(
 ): Array<{ element: HTMLElement; text: string }> {
   const tag = block.tagName;
 
-  // Lists: each <li> is a separate sub-item
+  // Lists: every descendant <li> becomes its own TTS sub-item,
+  // so nested bullets are announced as distinct utterances.
   if (tag === 'UL' || tag === 'OL') {
     const items = Array.from(
-      block.querySelectorAll<HTMLElement>(':scope > li'),
+      block.querySelectorAll<HTMLElement>('li'),
     );
     if (items.length > 0) {
       return items.map((li) => ({

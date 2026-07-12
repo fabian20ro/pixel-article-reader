@@ -77,4 +77,10 @@ describe('update-precache', () => {
     expect(rendered).toContain('./assets/skip\\'quote.js\',');
     expect(rendered).not.toMatch(/bad\back/);
   });
+
+  it('throws when template lacks PRECACHE pattern', () => {
+    const template = `// no precache here\nconst FOO = 'bar';\n`;
+
+    expect(() => renderServiceWorker(template, [])).toThrow(/PRECACHE pattern not found/);
+  });
 });

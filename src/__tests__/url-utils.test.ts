@@ -99,6 +99,11 @@ describe('extractUrl', () => {
     expect(extractUrl(shared)).toBe('https://share.google/yvjomHo2mSvrYaOcf');
   });
 
+  it('extracts URL when prefix is exactly 500 chars', () => {
+    const title = 'A'.repeat(500);
+    expect(extractUrl(`${title} https://example.com/article`)).toBe('https://example.com/article');
+  });
+
   it('returns null when prefix exceeds 500 chars', () => {
     const longTitle = 'A'.repeat(510);
     expect(extractUrl(`${longTitle} https://example.com/article`)).toBeNull();
