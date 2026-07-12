@@ -87,6 +87,35 @@ describe('PwaUpdateManager', () => {
     expect(sw.update).toHaveBeenCalledTimes(2);
   });
 
+  it('silent checkForUpdates does not call onStatus', async () => {
+    const sw = mockServiceWorkerEnvironment();
+    mockCacheStorage();
+    const onStatus = vi.fn();
+
+    const manager = new PwaUpdateManager({ onStatus });
+    await manager.init('sw.js');
+
+    // clear init's silent checkForUpdates side effects (none expected)
+    onStatus.mockClear();
+
+    const result = await manager.checkForUpdates({ silent: true });
+
+    expect(result).toBe('no-change');
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
+  it('init returns early without service worker support', async () => {
+    mockCacheStorage();
+
+    // remove serviceWorker from navigator
+    Object.defineProperty(navigator, 'serviceWorker', { value: undefined, configurable: true });
+
+    const manager = new PwaUpdateManager();
+    await manager.init('sw.js');
+
+    expect(manager.hasPendingReload()).toBe(false);
+  });
+
   it('defers reload when controller changes during active playback', async () => {
     const sw = mockServiceWorkerEnvironment();
     mockCacheStorage();
