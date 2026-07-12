@@ -84,6 +84,23 @@ describe('detectLanguage', () => {
     const text = 'Word ă word â word î word ș and nothing else here.';
     expect(detectLanguage(text)).toBe('ro');
   });
+
+  // ── Word-boundary edge cases (heuristic contract) ────────────────
+
+  it('does not detect Romanian when words are stuck to punctuation without diacritics', () => {
+    // Word boundary regex requires whitespace/punctuation BEFORE the word,
+    // but "ș" in "Hello,și" is attached to a comma with no preceding space.
+    // No diacritics above threshold either → English.
+    const text = 'Hello,și ești aici și nu este frumos.';
+    expect(detectLanguage(text)).toBe('en');
+  });
+
+  it('detects Romanian when diacritic count exceeds threshold regardless of word boundaries', () => {
+    // Even with words stuck to punctuation, the diacritic counter alone
+    // should push detection past the >3 threshold.
+    const text = 'Hello,ăâîș ești aici și nu este frumos.';
+    expect(detectLanguage(text)).toBe('ro');
+  });
 });
 
 // ── detectLangFromHtml ─────────────────────────────────────────────
