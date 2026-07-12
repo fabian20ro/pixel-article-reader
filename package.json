@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "generate-icons": "node scripts/generate-icons.mjs",
     "worker:dev": "wrangler dev worker/index.ts",
+    "worker:check": "wrangler deploy --dry-run --outdir .worker-dist --config worker/wrangler.toml && ! grep -R -l \"vitest\" .worker-dist",
     "worker:deploy": "wrangler deploy --config worker/wrangler.toml"
   },
   "devDependencies": {

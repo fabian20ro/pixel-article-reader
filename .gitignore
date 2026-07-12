@@ -4,6 +4,7 @@ node_modules/
 app.js
 lib/**/*.js
 dist/
+.worker-dist/
 
 # Compound Autopilot infrastructure metadata
 .compound-autopilot/
