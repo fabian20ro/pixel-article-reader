@@ -97,7 +97,8 @@ describe('utils.ts', () => {
     });
 
     it('returns empty string when markdown is only a bare H1', () => {
-      expect(extractTitleFromMarkdown('# Just A Title')).toBe('Just A Title');
+      // Bare H1 has no body content — nothing to read aloud.
+      expect(extractTitleFromMarkdown('# Just A Title')).toBe('');
     });
 
     it('strips markdown syntax from first-line fallback', () => {
