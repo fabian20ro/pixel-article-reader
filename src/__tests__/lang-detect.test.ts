@@ -100,6 +100,13 @@ describe('detectLanguage', () => {
     expect(detectLanguage(text)).toBe('ro');
   });
 
+  it('counts Romanian diacritics even when they are inside HTML tags', () => {
+    // Simulates readability output where a single Romanian word is wrapped in <b>.
+    // No Romanian common words outside the tag; detection relies solely on diacritics.
+    const text = 'Acest articol este despre <b>țară</b> și inovație.';
+    expect(detectLanguage(text)).toBe('ro');
+  });
+
   // ── Word-boundary edge cases (heuristic contract) ────────────────
 
   it('does not detect Romanian when words are stuck to punctuation without diacritics', () => {
