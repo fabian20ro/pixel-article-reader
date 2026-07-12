@@ -95,6 +95,26 @@ describe('session-store', () => {
       expect(loadLastArticle()).toBeNull();
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
+
+    it('removes articles with invalid field types before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: { ...makeArticle(), title: 42 }, savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
+    it('removes articles missing required fields before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: { title: 'Hello' }, savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
   });
 
   describe('saveLastArticle', () => {
