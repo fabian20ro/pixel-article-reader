@@ -85,6 +85,21 @@ describe('detectLanguage', () => {
     expect(detectLanguage(text)).toBe('ro');
   });
 
+  // ── Mixed HTML/content input shape (realistic extraction artifact) ─
+
+  it('handles English text with embedded Romanian diacritics in tags', () => {
+    // Simulates readability output where a word is wrapped in formatting tags.
+    // Diacritics should still be counted past the tag boundary.
+    const text = 'The <b>cafeteria</b> serves great food. This article covers many topics.';
+    expect(detectLanguage(text)).toBe('en');
+  });
+
+  it('handles Romanian text with English words inside HTML tags', () => {
+    // Mixed content: Romanian prose with an English word wrapped in <span>.
+    const text = 'Acest articol despre <span>technology</span> și inovație este important.';
+    expect(detectLanguage(text)).toBe('ro');
+  });
+
   // ── Word-boundary edge cases (heuristic contract) ────────────────
 
   it('does not detect Romanian when words are stuck to punctuation without diacritics', () => {
