@@ -54,6 +54,17 @@ describe('langToCode', () => {
     expect(langToCode('fr' as Language)).toBe('en');
     expect(langToCode('de' as Language)).toBe('en');
   });
+
+  // Dynamic guard: every supported language must yield a defined code, even
+  // after SUPPORTED_LANGUAGES grows. This catches missing langToCode cases.
+  it('returns a non-empty code for every supported language', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const code = langToCode(lang);
+      expect(code).toBeDefined();
+      expect(typeof code).toBe('string');
+      expect(code.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 // ── isLanguage ──────────────────────────────────────────────────────
