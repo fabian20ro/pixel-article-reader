@@ -103,6 +103,8 @@ export function markdownToParagraphs(markdown: string): string[] {
 
 export function extractTitleFromMarkdown(markdown: string): string {
   const lines = markdown.split('\n').map((line) => line.trim()).filter(Boolean);
+  // Bare H1 with no body content — nothing to read aloud.
+  if (lines.length === 1 && /^#/.test(lines[0]!)) return '';
   const h1 = lines.find((line) => /^#[^#]\s*/.test(line) || line === '#');
   if (h1) return h1.replace(/^#\s*/, '').trim();
   return stripMarkdownSyntax(lines[0] ?? '').slice(0, 150);

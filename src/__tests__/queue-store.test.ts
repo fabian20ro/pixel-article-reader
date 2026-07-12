@@ -310,4 +310,29 @@ describe('queue-store', () => {
       expect(loaded[2].id).toBe('b');
     });
   });
+
+  describe('addToQueue ordering', () => {
+    it('preserves newest-last (FIFO) order through multiple adds', () => {
+      const a = makeItem({ id: 'first', url: 'https://example.com/1' });
+      const b = makeItem({ id: 'second', url: 'https://example.com/2' });
+      const c = makeItem({ id: 'third', url: 'https://example.com/3' });
+
+      let queue: QueueItem[] = [];
+      queue = addToQueue(queue, a);
+      queue = addToQueue(queue, b);
+      queue = addToQueue(queue, c);
+
+      expect(queue.map((i) => i.id)).toEqual(['first', 'second', 'third']);
+    });
+
+    it('does not deduplicate when item has no URL (preserves duplicates)', () => {
+      const blankA = makeItem({ id: 'blank-1', url: '' });
+      const blankB = makeItem({ id: 'blank-2', url: '' });
+      const result = addToQueue([blankA], blankB);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('blank-1');
+      expect(result[1].id).toBe('blank-2');
+    });
+  });
 });

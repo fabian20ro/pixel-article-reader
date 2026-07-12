@@ -19,11 +19,12 @@ export class PwaUpdateManager {
   constructor(private readonly options: PwaUpdateManagerOptions = {}) {}
 
   async init(scriptUrl = 'sw.js'): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
+    const sw = (navigator as any).serviceWorker;
+    if (!sw) {
       return;
     }
 
-    navigator.serviceWorker.addEventListener('controllerchange', this.handleControllerChange);
+    sw.addEventListener('controllerchange', this.handleControllerChange);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
 
     this.registration = await navigator.serviceWorker

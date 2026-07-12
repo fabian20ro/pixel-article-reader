@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { 
   mergeShortSentences, 
+  splitKeepingDelimiter,
   splitLongSentence, 
   splitSentences 
 } from '../lib/sentence-splitter';
@@ -76,6 +77,29 @@ describe('sentence-splitter', () => {
     it('should merge very short fragments into one sentence', () => {
       const text = 'A. B. C. D.';
       expect(splitSentences(text)).toEqual(['A. B. C. D.']);
+    });
+  });
+
+  describe('splitKeepingDelimiter', () => {
+    it('should split on semicolon keeping delimiter in segment end', () => {
+      const result = splitKeepingDelimiter('one; two;', /;\s*/);
+      expect(result).toEqual(['one;', 'two;']);
+    });
+
+    it('should return single segment when no match is found', () => {
+      const result = splitKeepingDelimiter('plain text, no delimiters here', /;/);
+      expect(result).toEqual(['plain text, no delimiters here']);
+    });
+
+    it('should split on adjacent semicolons keeping delimiter in each segment', () => {
+      // Adjacent semicolons each become their own segments with delimiters kept
+      const result = splitKeepingDelimiter('a;;b', /;/);
+      expect(result).toEqual(['a;', ';', 'b']);
+    });
+
+    it('should include trailing text as tail segment after last match when regex captures surrounding whitespace', () => {
+      const result = splitKeepingDelimiter('alpha; beta; gamma delta', /;\s*/);
+      expect(result[result.length - 1]).toBe('gamma delta');
     });
   });
 });

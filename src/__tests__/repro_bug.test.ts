@@ -37,4 +37,16 @@ describe('extractYoutubeVideoId bug reproduction', () => {
   it('returns null when ID is too short', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc1234567')).toBeNull();
   });
+
+  it('returns null for an unparseable URL string (catch path)', () => {
+    expect(extractYoutubeVideoId('not-a-url-at-all')).toBeNull();
+  });
+
+  it('extracts ID from /watch fallback when v param is missing but path has valid ID', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/abc12345678')).toBe('abc12345678');
+  });
+
+  it('returns null for invalid characters in v query param', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=invalid!@#chars')).toBeNull();
+  });
 });

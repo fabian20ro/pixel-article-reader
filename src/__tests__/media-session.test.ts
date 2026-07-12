@@ -11,19 +11,21 @@ globalThis.MediaMetadata = class {
 
 describe('MediaSessionController', () => {
   let controller: MediaSessionController;
+  let mockMetadata: any;
+  let mockMediaSession: any;
 
   beforeEach(() => {
     // Reset DOM
     document.body.innerHTML = '';
     
     // Mock navigator.mediaSession
-    const mockMetadata = {
+    mockMetadata = {
       title: 'Title',
       artist: 'Artist',
       artwork: [],
     };
     
-    const mockMediaSession = {
+    mockMediaSession = {
       metadata: mockMetadata,
       playbackState: 'none' as MediaSessionPlaybackState,
       actionHandlers: new Map(),
@@ -105,5 +107,60 @@ describe('MediaSessionController', () => {
 
     expect(clearIntervalSpy).toHaveBeenCalled();
     expect(controller.active).toBe(false);
+  });
+
+  it('should use default metadata when no args provided', () => {
+    controller.updateMetadata();
+    expect(navigator.mediaSession.metadata?.title).toBe('Article Local Reader');
+    expect(navigator.mediaSession.metadata?.artist).toBe('Article Local Reader');
+  });
+
+  it('should clamp position in updatePositionState', () => {
+    controller.updatePositionState(100, 200, 1);
+    expect(navigator.mediaSession.setPositionState).toHaveBeenCalledWith({
+      duration: 100,
+      position: 100,
+      playbackRate: 1,
+    });
+
+    controller.updatePositionState(100, -5, 1);
+    expect(navigator.mediaSession.setPositionState).toHaveBeenLastCalledWith({
+      duration: 100,
+      position: 0,
+      playbackRate: 1,
+    });
+
+    controller.updatePositionState(100, 50, 0.01);
+    expect(navigator.mediaSession.setPositionState).toHaveBeenLastCalledWith({
+      duration: 100,
+      position: 50,
+      playbackRate: 0.1,
+    });
+  });
+
+  it('should populate action handlers via setActions', () => {
+    const actions = {
+      play: vi.fn(),
+      pause: vi.fn(),
+      stop: vi.fn(),
+      nexttrack: vi.fn(),
+      previoustrack: vi.fn(),
+    };
+    controller.setActions(actions);
+
+    expect(mockMediaSession.setActionHandler).toHaveBeenCalledTimes(8);
+    const handler = mockMediaSession.actionHandlers.get('play');
+    handler?.();
+    expect(actions.play).toHaveBeenCalled();
+  });
+
+  it('should dispose remove audio from DOM and revoke object URL', () => {
+    controller.activate();
+    const urlBefore = controller['silentUrl'] as string | null;
+
+    controller.dispose();
+
+    expect(document.body.children.length).toBe(0);
+    expect(urlBefore).not.toBeNull();
   });
 });
