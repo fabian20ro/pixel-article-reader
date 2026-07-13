@@ -139,4 +139,44 @@ describe('settings-store', () => {
 
     expect(loadSettings(defaults)).toEqual(expected);
   });
+
+  it('preserves valid voiceGender "male" / "female"', () => {
+    for (const gender of ['male' as const, 'female' as const]) {
+      localStorage.setItem(
+        'articlevoice-settings',
+        JSON.stringify({ ...defaults, voiceGender: gender } satisfies Partial<AppSettings>),
+      );
+
+      expect(loadSettings(defaults).voiceGender).toBe(gender);
+    }
+  });
+
+  it('preserves valid theme "light" alongside known "khaki"', () => {
+    for (const theme of ['light' as const, 'khaki' as const]) {
+      localStorage.setItem(
+        'articlevoice-settings',
+        JSON.stringify({ ...defaults, theme } satisfies Partial<AppSettings>),
+      );
+
+      expect(loadSettings(defaults).theme).toBe(theme);
+    }
+  });
+
+  it('preserves deviceVoiceOnly true when stored', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ ...defaults, deviceVoiceOnly: true } satisfies Partial<AppSettings>),
+    );
+
+    expect(loadSettings(defaults).deviceVoiceOnly).toBe(true);
+  });
+
+  it('preserves a non-auto lang when stored and valid', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ ...defaults, lang: 'en' } satisfies Partial<AppSettings>),
+    );
+
+    expect(loadSettings(defaults).lang).toBe('en');
+  });
 });
