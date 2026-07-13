@@ -37,6 +37,32 @@ describe('createArticleFromText', () => {
     expect(article.title).toBe('Pasted Article');
     expect(article.textContent).toContain(body);
   });
+
+  it('splits multi-paragraph pasted text into multiple paragraphs', () => {
+    const text = 'My Title\n\nFirst paragraph with enough words.\n\nSecond paragraph also valid.';
+    const article = createArticleFromText(text);
+
+    expect(article.paragraphs).toHaveLength(2);
+    expect(article.paragraphs[0]).toContain('First paragraph');
+    expect(article.paragraphs[1]).toContain('Second paragraph');
+  });
+
+  it('accepts exactly 3 words as minimum body', () => {
+    const text = 'Title Line\none two three';
+    const article = createArticleFromText(text);
+
+    expect(article.wordCount).toBeGreaterThanOrEqual(3);
+    expect(article.paragraphs.length).toBeGreaterThan(0);
+  });
+
+  it('produces paragraphs when long-title pasted text has single body line', () => {
+    const title = 'x'.repeat(200);
+    const body = 'This is a valid article with enough words to be processed correctly. It has multiple sentences.';
+    const text = `${title}\n${body}`;
+    const article = createArticleFromText(text);
+
+    expect(article.paragraphs.length).toBeGreaterThan(1);
+  });
 });
 
 describe('createArticleFromTextFile', () => {
