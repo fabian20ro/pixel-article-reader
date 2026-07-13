@@ -44,5 +44,12 @@ describe('extractParagraphsFromTextItems', () => {
     const result = extractParagraphsFromTextItems(items);
     expect(result).toEqual([]);
   });
+
+  it('returns a single paragraph for one item', () => {
+    const items = [
+      { str: 'Single piece of text', transform: [1, 0, 0, 1, 12, 100], height: 12 },
+    ] as any;
+    const result = extractParagraphsFromTextItems(items);
+    expect(result).toEqual(['Single piece of text']);
+  });
 });
-// comment

@@ -41,6 +41,24 @@ describe('url_utils', () => {
       expect(extractUrl('')).toBeNull();
       expect(extractUrl('   ')).toBeNull();
     });
+
+    it('returns null when URL is embedded in long text (>500 char prefix)', () => {
+      const prefix = 'x'.repeat(501);
+      expect(extractUrl(`${prefix} https://example.com`)).toBeNull();
+    });
+
+    it('returns null when URL is embedded mid-text (not at end)', () => {
+      expect(extractUrl('Some text https://example.com more text')).toBeNull();
+    });
+
+    it('strips trailing ellipsis from share-text URLs', () => {
+      expect(extractUrl('Read this: https://example.com/path...')).toBe('https://example.com/path');
+    });
+
+    it('selects the last URL when multiple are present at end-of-text', () => {
+      const text = 'First link: https://old.example.com\nThen updated: https://new.example.com';
+      expect(extractUrl(text)).toBe('https://new.example.com');
+    });
   });
 
   describe('extractArticle', () => {
