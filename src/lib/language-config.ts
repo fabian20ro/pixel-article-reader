@@ -23,4 +23,7 @@ export function isLanguage(v: unknown): v is Language {
   return typeof v === 'string' && SUPPORTED_LANGUAGES.includes(v as Language);
 }
 
+/** First supported language — used as default for new sessions. */
+export const DEFAULT_LANGUAGE: Language = SUPPORTED_LANGUAGES[0];
+
 export const DEFAULT_TRANSLATION_TARGET: Language = 'en';
