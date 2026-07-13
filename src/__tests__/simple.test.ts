@@ -36,5 +36,62 @@ describe('parseArticleFromHtml', () => {
     it('handles punctuation', () => {
       expect(() => createArticleFromText('!!! ??? ...')).toThrow();
     });
+
+    it('extracts short first line as title and body from remainder', () => {
+      const article = createArticleFromText('My Article Title\n\nFirst paragraph.\n\nSecond paragraph.');
+      expect(article.title).toBe('My Article Title');
+      expect(article.textContent).toContain('First paragraph.');
+      expect(article.textContent).not.toContain('My Article Title');
+    });
+
+    it('falls back to "Pasted Article" for long first lines', () => {
+      const longTitle = 'A'.repeat(151);
+      const article = createArticleFromText(`${longTitle}\n\nBody text here.`);
+      expect(article.title).toBe('Pasted Article');
+    });
+
+    it('splits paragraphs on blank lines', () => {
+      const longBody = 'First paragraph with substantial content that passes the length filter and contains enough words.';
+      const article = createArticleFromText(`Title Line\n\n${longBody}`);
+      expect(Array.isArray(article.paragraphs)).toBe(true);
+    });
+
+    it('returns word count and estimated read time', () => {
+      const text = 'word '.repeat(60); // 60 words
+      const article = createArticleFromText(text.trim());
+      expect(article.wordCount).toBeGreaterThan(0);
+      expect(article.estimatedMinutes).toBeGreaterThanOrEqual(1);
+    });
+
+    it('detects language', () => {
+      const text = 'word '.repeat(60); // 60 words for minimum threshold
+      const article = createArticleFromText(text.trim());
+      expect(typeof article.lang).toBe('string');
+      expect(article.lang.length).toBeGreaterThan(0);
+    });
+
+    it('sets siteName and excerpt fields', () => {
+      const text = 'word '.repeat(60); // 60 words for minimum threshold
+      const article = createArticleFromText(text.trim());
+      expect(article.siteName).toBe('Pasted');
+      expect(typeof article.excerpt).toBe('string');
+    });
+
+    it('strips markdown images from body when title is present', () => {
+      const text = 'Short Title\n\n![alt](image.png)\n\n' + 'word '.repeat(60) + '\nmore words'; // hasTitle=true, cleaned used for bodyText
+      const article = createArticleFromText(text);
+      expect(article.textContent).not.toContain('![');
+    });
+
+    it('preserves markdown image in raw text when no title detected', () => {
+      // Long first line exceeds 150 chars → hasTitle=false → bodyText uses uncleaned original
+      const longLine = 'A'.repeat(160) + '\n![alt](image.png)\n\nbody';
+      const article = createArticleFromText(longLine);
+      expect(article.textContent).toContain('![alt](image.png)');
+    });
+
+    it('throws on too few words', () => {
+      expect(() => createArticleFromText('one two')).toThrow();
+    });
   });
 });
