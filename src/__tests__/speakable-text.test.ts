@@ -74,4 +74,63 @@ describe('isSpeakableText', () => {
     // No alphanumeric tokens survive the wordCount filter; char fallback stripped = '' → false.
     expect(isSpeakableText('!!! ???? ....')).toBe(false);
   });
+
+  it('treats non-Latin (CJK) text as speakable via character-count fallback', () => {
+    // CJK chars are not matched by /[a-zA-Z0-9]/ so wordCount=0 (<3),
+    // triggering char fallback. Stripped length of "你好世界" = 4 ≥ 4 → true.
+    expect(isSpeakableText('你好世界')).toBe(true);
+  });
+
+  it('returns false for non-Latin text shorter than character threshold', () => {
+    // wordCount=0 (<3), char fallback: stripped "你好" length=2 < 4 → false.
+    expect(isSpeakableText('你好')).toBe(false);
+  });
+
+  it('treats Cyrillic text as speakable via character-count fallback', () => {
+    // Cyrillic chars bypass /[a-zA-Z0-9]/ so wordCount=0 (<3), char fallback:
+    // "Привет" stripped length = 6 ≥ 4 → true.
+    expect(isSpeakableText('Привет мир')).toBe(true);
+  });
+
+  it('handles tab-separated content correctly', () => {
+    // Tabs are whitespace in the split regex; tokens separated by tabs count normally.
+    const text = 'hello\tworld\tthis\tis\ta\ttest';
+    expect(isSpeakableText(text)).toBe(true);
+  });
+
+  it('treats mixed ASCII and non-Latin tokens as speakable', () => {
+    // Mixed content: "abc" passes wordCount directly (3 tokens with alnum).
+    const text = 'hello 你好 world';
+    expect(isSpeakableText(text)).toBe(true);
+  });
+
+  it('treats pure non-Latin token as speakable via char fallback', () => {
+    // Single CJK word: "世界" → wordCount=0 (<3), char fallback length=2 < 4? No, length=2...
+    // Actually let's use longer: "世界和平" → wordCount=0, stripped len=4 ≥ 4 → true.
+    expect(isSpeakableText('世界和平')).toBe(true);
+  });
+
+  it('returns false for non-Latin text that fails both thresholds', () => {
+    // Single CJK character: wordCount=0 (<3), char fallback length=1 < 4 → false.
+    expect(isSpeakableText('世')).toBe(false);
+  });
+
+  it('treats string with only ASCII punctuation and non-latin chars as speakable', () => {
+    // "你好!" → wordCount=0 (<3), stripped removes '!' → "你好" length=2 < 4...
+    // Use longer: "你好世界！" → stripped "你好世界" len=4 ≥ 4 → true.
+    expect(isSpeakableText('你好世界！')).toBe(true);
+  });
+
+  it('handles string with embedded quotes and brackets in char fallback', () => {
+    // The char fallback strips ' " < > [ ] { } as punctuation; these chars are not alnum so
+    // wordCount counts only real tokens. Test: tokens + stripped punctuation boundary.
+    const text = 'hello "world"';
+    expect(isSpeakableText(text)).toBe(true);
+  });
+
+  it('returns false for whitespace-only string', () => {
+    // Trimmed length < 2 → false (early return).
+    expect(isSpeakableText('   ')).toBe(false);
+    expect(isSpeakableText('\t\t')).toBe(false);
+  });
 });

@@ -216,6 +216,30 @@ describe('detectLangFromUrl', () => {
   it('detects Italian from .it TLD', () => {
     expect(detectLangFromUrl('https://example.it/article')).toBe('it');
   });
+
+  // ── Baltic TLDs ────────────────────────────────────────────────
+
+  it('detects Lithuanian from .lt TLD', () => {
+    expect(detectLangFromUrl('https://lrytas.lt/straipsnis')).toBe('lt');
+  });
+
+  it('detects Latvian from .lv TLD', () => {
+    expect(detectLangFromUrl('https://delfi.lv/zinas')).toBe('lv');
+  });
+
+  it('detects Estonian from .ee TLD', () => {
+    expect(detectLangFromUrl('https://delfi.ee/artikll')).toBe('et');
+  });
+
+  // ── Balkan TLDs ────────────────────────────────────────────────
+
+  it('detects Serbian from .me TLD (Montenegro)', () => {
+    expect(detectLangFromUrl('https://cdn.me/clanak')).toBe('sr');
+  });
+
+  it('detects Macedonian from .mk TLD', () => {
+    expect(detectLangFromUrl('https://kurir.mk/tekst')).toBe('mk');
+  });
 });
 
 // ── needsTranslation ───────────────────────────────────────────────

@@ -59,7 +59,8 @@ const TLD_LANG_MAP: Record<string, string> = {
   ru: 'ru', jp: 'ja', cn: 'zh', kr: 'ko', pl: 'pl', cz: 'cs',
   ro: 'ro', at: 'de', ch: 'de', be: 'nl', dk: 'da', se: 'sv',
   no: 'no', fi: 'fi', hu: 'hu', gr: 'el', tr: 'tr', ua: 'uk',
-  bg: 'bg', hr: 'hr', sk: 'sk', si: 'sl', rs: 'sr',
+  bg: 'bg', hr: 'hr', sk: 'sk', si: 'sl', rs: 'sr', me: 'sr', mk: 'mk',
+  lt: 'lt', lv: 'lv', ee: 'et',
   uk: 'en', us: 'en', au: 'en', ca: 'en', nz: 'en', ie: 'en',
 };
 
