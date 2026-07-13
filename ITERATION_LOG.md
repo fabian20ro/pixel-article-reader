@@ -1201,3 +1201,9 @@ Each entry should follow this structure:
 **Outcome:** Success. Missing transcript URLs now produce the intended explicit error without an extra fetch.
 **Insight:** Validate raw upstream URL fields before decorating them with query parameters; otherwise an empty string can become a syntactically non-empty but wrong URL.
 **Promoted to Lessons Learned:** No
+
+## 2026-07-13 — Quiet deterministic media-session tests
+
+**What happened:** Added a Vitest baseline for jsdom's unimplemented media `play()`/`pause()` methods and kept call assertions in the media-session tests with local spies.
+
+**Verification:** Container Compound local-green — lint/build and 585/585 tests passed without jsdom media-method errors.

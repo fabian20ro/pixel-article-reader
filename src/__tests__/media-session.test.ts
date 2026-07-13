@@ -13,6 +13,8 @@ describe('MediaSessionController', () => {
   let controller: MediaSessionController;
   let mockMetadata: any;
   let mockMediaSession: any;
+  let playSpy: ReturnType<typeof vi.spyOn>;
+  let pauseSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     // Reset DOM
@@ -48,11 +50,13 @@ describe('MediaSessionController', () => {
       writable: true,
     });
 
+    playSpy = vi.spyOn(HTMLAudioElement.prototype, 'play').mockResolvedValue(undefined);
+    pauseSpy = vi.spyOn(HTMLAudioElement.prototype, 'pause').mockImplementation(() => {});
+
     controller = new MediaSessionController();
   });
 
   it('should activate and start audio', async () => {
-    const playSpy = vi.spyOn(HTMLAudioElement.prototype, 'play').mockResolvedValue(undefined);
     controller.activate('Test Title');
     
     expect(controller.active).toBe(true);
@@ -60,7 +64,6 @@ describe('MediaSessionController', () => {
   });
 
   it('should deactivate and stop audio', () => {
-    const pauseSpy = vi.spyOn(HTMLAudioElement.prototype, 'pause');
     controller.activate();
     controller.deactivate();
     
