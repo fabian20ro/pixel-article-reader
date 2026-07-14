@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import { sanitizeHref, parseEpubFromArrayBuffer } from '../lib/extractors/extract-epub.js';
 
@@ -64,5 +65,165 @@ describe('parseEpubFromArrayBuffer', () => {
       // Expected to fail at some point — just ensure it doesn't throw about invalid URL
       expect(err.message).not.toContain('Invalid URL');
     }
+  });
+
+  it('extracts text from a minimal valid EPUB', async () => {
+    const zip = new JSZip();
+
+    // META-INF/container.xml — OPF entry point
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`
+    );
+
+    // content.opf — manifest + spine referencing one chapter
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId">
+  <metadata dc:language="en">
+    <dc:title>Test Book</dc:title>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    // One XHTML chapter with two paragraphs of text
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <p>This is the first paragraph of a test book about pixel article reading.</p>
+    <p>A second paragraph with enough words to pass minimum length filters.</p>
+  </body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    // The DOMParser mock delegates to the real one provided by JSDOM/Vitest globals
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    const article = await parseEpubFromArrayBuffer(buf, 'https://example.com/test-book.epub', domParserCtor);
+
+    expect(article.title).toBe('Test Book');
+    expect(article.textContent).toContain('first paragraph');
+    expect(article.textContent).toContain('second paragraph');
+  });
+
+  it('uses URL-derived fallback title when OPF has no <title>', async () => {
+    const zip = new JSZip();
+
+    // container.xml without namespace — extractOpfPath only uses full-path regex, so this still works
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0"?>
+<container>
+  <rootfiles>
+    <rootfile full-path="content.opf"/>
+  </rootfiles>
+</container>`
+    );
+
+    // OPF with empty title — should fall through to URL pathname fallback
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf">
+  <metadata dc:language="en"></metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>A paragraph long enough to satisfy the minimum length requirement for extraction.</p></body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    const article = await parseEpubFromArrayBuffer(buf, 'https://example.com/my-book.epub', domParserCtor);
+
+    expect(article.title).toBe('my-book');
+  });
+
+  it('skips manifest entries with unsupported media types (e.g. images)', async () => {
+    const zip = new JSZip();
+
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf"/>
+  </rootfiles>
+</container>`
+    );
+
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf">
+  <metadata><dc:title>Image Book</dc:title></metadata>
+  <manifest>
+    <item id="img1" href="cover.png" media-type="image/png"/>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="img1"/>
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    zip.file(
+      'cover.png',
+      '\x89PNG\r\n\x1a\n' // minimal PNG header bytes — content doesn't matter; file is skipped
+    );
+
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>This paragraph survives because it passes the extraction filter.</p></body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    const article = await parseEpubFromArrayBuffer(buf, 'https://example.com/image-book.epub', domParserCtor);
+
+    expect(article.title).toBe('Image Book');
+    // cover.png is skipped — only the chapter paragraph should appear
+    expect(article.textContent).toContain('survives');
   });
 });
