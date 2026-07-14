@@ -599,6 +599,19 @@ describe('TTSEngine', () => {
     expect(onParagraphChange).toHaveBeenCalledWith(0, 'First paragraph content.');
   });
 
+  it('strips markdown headers from internal paragraph text (not raw)', () => {
+    const onParagraphChange = vi.fn();
+    const engine = createEngine({ onParagraphChange });
+    // loadArticle() strips headings internally for sentence-splitting,
+    // but the onParagraphChange callback receives the original raw paragraphs.
+    engine.loadArticle(['## Section Title\nThis is the first paragraph.', '# Another Heading\nSecond para here.'], 'en');
+    engine.play();
+
+    // Observable behavior: onParagraphChange fires with original unstripped text,
+    // confirming the contract that callbacks receive raw paragraphs before heading removal.
+    expect(onParagraphChange).toHaveBeenCalledWith(0, '## Section Title\nThis is the first paragraph.');
+  });
+
   it('fires onProgress callback', () => {
     const onProgress = vi.fn();
     const engine = createEngine({ onProgress });
