@@ -99,6 +99,12 @@ describe('extractUrl', () => {
     expect(extractUrl(shared)).toBe('https://share.google/yvjomHo2mSvrYaOcf');
   });
 
+  it('returns null when trailing punctuation stripping leaves an invalid URL', () => {
+    // After stripping trailing dots, the remaining string is not a valid URL.
+    const shared = 'Read this https://.';
+    expect(extractUrl(shared)).toBeNull();
+  });
+
   it('extracts URL when prefix is exactly 500 chars', () => {
     const title = 'A'.repeat(500);
     expect(extractUrl(`${title} https://example.com/article`)).toBe('https://example.com/article');
