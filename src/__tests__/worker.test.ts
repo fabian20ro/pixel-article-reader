@@ -9,10 +9,6 @@ const env = {
 
 const ctx = {} as ExecutionContext;
 
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -75,24 +71,26 @@ describe('worker validation', () => {
 });
 
 describe('worker rate limiting', () => {
-  it('rejects requests after exhausting the per-IP quota within the window', async () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
 
-    // Exhaust the rate limit: 60 requests, all at t=0
+  it('rejects requests after exhausting the per-IP quota within the window', async () => {
+    const fetchSpy = vi.fn(async () => new Response('ok', { headers: { 'content-type': 'text/html' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const request = (path: string) => new Request(
+      `https://worker.example/?url=https://example.com/${path}`,
+      { headers: { 'CF-Connecting-IP': '192.0.2.10' } },
+    );
+
+    // Every request through the configured quota must still be accepted.
     for (let i = 0; i < 60; i++) {
-      await worker.fetch(
-        new Request('https://worker.example/?url=https://example.com/page'),
-        env,
-        ctx,
-      );
+      const allowed = await worker.fetch(request(`page-${i}`), env, ctx);
+      expect(allowed.status).toBe(200);
+      expect(allowed.headers.get('X-RateLimit-Remaining')).toBe(String(59 - i));
     }
 
-    const response = await worker.fetch(
-      new Request('https://worker.example/?url=https://example.com/overflow'),
-      env,
-      ctx,
-    );
+    const response = await worker.fetch(request('overflow'), env, ctx);
 
     expect(response.status).toBe(429);
     const body = await response.json();
@@ -104,26 +102,22 @@ describe('worker rate limiting', () => {
   it('allows requests once the rate-limit window passes', async () => {
     const fetchSpy = vi.fn(async () => new Response('ok', { headers: { 'content-type': 'text/html' } }));
     vi.stubGlobal('fetch', fetchSpy);
-
-    // Exhaust quota at t=0
-    for (let i = 0; i < 60; i++) {
-      await worker.fetch(
-        new Request('https://worker.example/?url=https://example.com/page'),
-        env,
-        ctx,
-      );
-    }
-
-    // Advance time past the rate-limit window (60s)
-    vi.advanceTimersByTime(61_000);
-
-    const response = await worker.fetch(
-      new Request('https://worker.example/?url=https://example.com/page'),
-      env,
-      ctx,
+    const request = () => new Request(
+      'https://worker.example/?url=https://example.com/page',
+      { headers: { 'CF-Connecting-IP': '192.0.2.11' } },
     );
 
+    for (let i = 0; i < 60; i++) {
+      const allowed = await worker.fetch(request(), env, ctx);
+      expect(allowed.status).toBe(200);
+    }
+
+    vi.advanceTimersByTime(61_000);
+
+    const response = await worker.fetch(request(), env, ctx);
+
     expect(response.status).toBe(200);
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('59');
   });
 });
 
