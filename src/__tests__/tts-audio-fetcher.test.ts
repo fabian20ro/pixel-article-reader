@@ -80,4 +80,34 @@ describe('fetchTtsAudio', () => {
     // No space literal — must be percent-encoded
     expect(calledUrl).not.toContain(' ');
   });
+
+  it('treats fetch abort (timeout) as transient and retries', async () => {
+    const abortError = new Error('The user aborted a request.');
+    abortError.name = 'AbortError';
+
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(abortError); // first attempt: timeout → transient path
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      blob: async () => new Blob(['audio']),
+    } as any); // second attempt succeeds
+
+    const result = await fetchTtsAudio('hello', 'en', config);
+    expect(result).toBe('blob:url');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the timeout after successful response', async () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
+
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['audio']),
+    } as any);
+
+    await fetchTtsAudio('hello', 'en', config);
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+  });
 });
