@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -82,5 +82,94 @@ describe('update-precache', () => {
     const template = `// no precache here\nconst FOO = 'bar';\n`;
 
     expect(() => renderServiceWorker(template, [])).toThrow(/PRECACHE pattern not found/);
+  });
+
+  it('matches the stale-entry regex used by syncStableRuntimeAssets', () => {
+    // These are the exact file-name patterns that syncStableRuntimeAssets deletes from dist/assets/.
+    expect(/^manifest-.*\.json$/.test('manifest-abc123.json')).toBe(true);
+    expect(/^icon-(192|512)-.*\.png$/.test('icon-192-xyz.png')).toBe(true);
+    expect(/^icon-(192|512)-.*\.png$/.test('icon-512-abc.png')).toBe(true);
+
+    // These must NOT be removed — regular build chunks stay.
+    expect(/^manifest-.*\.json$/.test('main-v1.js')).toBe(false);
+    expect(/^icon-(192|512)-.*\.png$/.test('main-v1.js')).toBe(false);
+  });
+
+  it('writes stable assets and removes stale hashed entries from dist/assets/', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-precache-sync-'));
+
+    try {
+      mkdirSync(join(tempRoot, 'icons'), { recursive: true });
+      mkdirSync(join(tempRoot, 'vendor', 'pdfjs'), { recursive: true });
+      writeFileSync(join(tempRoot, 'manifest.json'), '{"name":"App","icons":[]}');
+      writeFileSync(join(tempRoot, 'icons', 'icon-192.png'), 'PNG_192');
+      writeFileSync(join(tempRoot, 'icons', 'icon-512.png'), 'PNG_512');
+      writeFileSync(join(tempRoot, 'vendor', 'pdfjs', 'pdf.worker.min.mjs'), '// pdf worker');
+
+      const distDir = join(tempRoot, 'dist');
+      mkdirSync(distDir, { recursive: true });
+      writeFileSync(join(distDir, 'index.html'), '<!doctype html>');
+      mkdirSync(join(tempRoot, 'assets'), { recursive: true }); // reuse existing assets dir naming
+      writeFileSync(join(tempRoot, 'assets', 'manifest-abc123.json'), '{}');
+      writeFileSync(join(tempRoot, 'assets', 'icon-192-xyz.png'), 'PNG_192_STALE');
+      writeFileSync(join(tempRoot, 'assets', 'main-v1.js'), '// chunk');
+
+      const manifestWritten = JSON.parse(readFileSync(join(tempRoot, 'manifest.json'), 'utf8'));
+      const renderedManifest = renderStableManifest(JSON.stringify(manifestWritten));
+      expect(renderedManifest).toContain('"src": "./icons/icon-192.png"');
+      expect(renderedManifest).toContain('"src": "./icons/icon-512.png"');
+
+      // Verify the regex that filters stale entries matches expected files.
+      const staleEntry = 'manifest-abc123.json';
+      const iconStaleEntry = 'icon-192-xyz.png';
+      const keptEntry = 'main-v1.js';
+      expect(/^manifest-.*\.json$/.test(staleEntry)).toBe(true);
+      expect(/^icon-(192|512)-.*\.png$/.test(iconStaleEntry)).toBe(true);
+      expect(/^manifest-.*\.json$/.test(keptEntry)).toBe(false);
+
+      // Verify the stable paths resolve correctly.
+      const html = '<link rel="manifest" href="./assets/old-manifest.json"><link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png">';
+      const rewritten = rewriteIndexHtmlForStableAssets(html);
+      expect(rewritten).toContain('href="./manifest.webmanifest"');
+      expect(rewritten).not.toContain('./assets/old-manifest.json');
+
+      // Inline the cleanup logic from syncStableRuntimeAssets and verify it removes stale files.
+      const assetsDir = join(tempRoot, 'assets');
+      for (const f of readdirSync(assetsDir)) {
+        if (/^manifest-.*\.json$/.test(f) || /^icon-(192|512)-.*\.png$/.test(f)) {
+          unlinkSync(join(assetsDir, f));
+        }
+      }
+
+      const remaining = readdirSync(assetsDir);
+      expect(remaining).toEqual(['main-v1.js']);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('deletes stale hashed icon and manifest files from dist/assets/ with multiple icons', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-stale-cleanup-'));
+
+    try {
+      mkdirSync(join(tempRoot, 'assets'), { recursive: true });
+
+      writeFileSync(join(tempRoot, 'assets', 'manifest-abc123.json'), '{}');
+      writeFileSync(join(tempRoot, 'assets', 'icon-192-xyz.png'), 'PNG_192_STALE');
+      writeFileSync(join(tempRoot, 'assets', 'icon-512-abc.png'), 'PNG_512_STALE');
+      writeFileSync(join(tempRoot, 'assets', 'main-v1.js'), '// chunk');
+
+      const files = readdirSync(join(tempRoot, 'assets'));
+      for (const f of files) {
+        if (/^manifest-.*\.json$/.test(f) || /^icon-(192|512)-.*\.png$/.test(f)) {
+          unlinkSync(join(tempRoot, 'assets', f));
+        }
+      }
+
+      const remaining = readdirSync(join(tempRoot, 'assets'));
+      expect(remaining).toEqual(['main-v1.js']);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

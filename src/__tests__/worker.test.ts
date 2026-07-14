@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../../worker/index.ts';
 
 const env = {
@@ -12,6 +12,7 @@ const ctx = {} as ExecutionContext;
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('worker validation', () => {
@@ -66,6 +67,57 @@ describe('worker validation', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid JSON body.' });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('worker rate limiting', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('rejects requests after exhausting the per-IP quota within the window', async () => {
+    const fetchSpy = vi.fn(async () => new Response('ok', { headers: { 'content-type': 'text/html' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const request = (path: string) => new Request(
+      `https://worker.example/?url=https://example.com/${path}`,
+      { headers: { 'CF-Connecting-IP': '192.0.2.10' } },
+    );
+
+    // Every request through the configured quota must still be accepted.
+    for (let i = 0; i < 60; i++) {
+      const allowed = await worker.fetch(request(`page-${i}`), env, ctx);
+      expect(allowed.status).toBe(200);
+      expect(allowed.headers.get('X-RateLimit-Remaining')).toBe(String(59 - i));
+    }
+
+    const response = await worker.fetch(request('overflow'), env, ctx);
+
+    expect(response.status).toBe(429);
+    const body = await response.json();
+    expect(typeof body.error).toBe('string');
+    expect(body.error).toMatch(/Rate limit exceeded/i);
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('0');
+  });
+
+  it('allows requests once the rate-limit window passes', async () => {
+    const fetchSpy = vi.fn(async () => new Response('ok', { headers: { 'content-type': 'text/html' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const request = () => new Request(
+      'https://worker.example/?url=https://example.com/page',
+      { headers: { 'CF-Connecting-IP': '192.0.2.11' } },
+    );
+
+    for (let i = 0; i < 60; i++) {
+      const allowed = await worker.fetch(request(), env, ctx);
+      expect(allowed.status).toBe(200);
+    }
+
+    vi.advanceTimersByTime(61_000);
+
+    const response = await worker.fetch(request(), env, ctx);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('59');
   });
 });
 

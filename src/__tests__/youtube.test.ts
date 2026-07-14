@@ -345,4 +345,83 @@ describe('extractArticleFromYoutube', () => {
     expect(article.title).toBe('Transcript for: Escaped Key Video');
     expect(article.paragraphs[0]).toBe('Escaped works.');
   });
+
+  it('falls back to watch page when direct API returns non-JSON response', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+
+      // Fail the direct API call with non-JSON body
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response('Internal Server Error', { status: 500 });
+      }
+
+      // Fallback: Watch page with valid key
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response('<html>\"INNERTUBE_API_KEY\":\"fallback-key-xyz\"</html>', { status: 200 });
+      }
+
+      // Player API with extracted fallback key
+      if (url.startsWith('https://www.youtube.com/youtubei/v1/player?key=fallback-key-xyz')) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'Fallback JSON Video' },
+          captions: {
+            playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext' }] },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+
+      // Transcript
+      return new Response(JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Fallback JSON works.' }] }] }), { status: 200 });
+    });
+
+    const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
+    expect(article.title).toBe('Transcript for: Fallback JSON Video');
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
+  it('throws when both direct API and watch page extraction fail', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      // Fail the direct API call
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response('Blocked', { status: 403 });
+      }
+
+      // Watch page also fails
+      if (url.startsWith('https://www.youtube.com/watch?v=')) {
+        return new Response('<html>no key</html>', { status: 500 });
+      }
+
+      throw new Error(`Unexpected URL ${input}`);
+    });
+
+    await expect(extractArticleFromYoutube(YT_URL, fetcher as typeof fetch))
+      .rejects.toThrow(/YouTube extraction failed/);
+  });
+
+  it('uses url field on caption track when baseUrl is absent', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.startsWith(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}`)) {
+        return new Response(JSON.stringify({
+          videoDetails: { title: 'Url Field Video' },
+          captions: {
+            playerCaptionsTracklistRenderer: {
+              captionTracks: [{ languageCode: 'en', url: 'https://www.youtube.com/api/timedtext?v=dQw4w9WgXcQ&lang=en' }],
+            },
+          },
+          playabilityStatus: { status: 'OK' },
+        }), { status: 200 });
+      }
+
+      if (url.startsWith('https://www.youtube.com/api/timedtext')) {
+        return new Response(JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Url field path works.' }] }] }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+
+    const article = await extractArticleFromYoutube(YT_URL, fetcher as typeof fetch);
+    expect(article.paragraphs[0]).toBe('Url field path works.');
+  });
 });
