@@ -103,12 +103,15 @@ describe('MediaSessionController', () => {
     expect(audioEl!.loop).toBe(true);
   });
 
-  it('should stop keep-alive timer on deactivate', () => {
-    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+  it('should clear keep-alive timer on deactivate', () => {
     controller.activate();
+    // Timer should be set after activate (positive assertion)
+    expect((controller as any)['keepAliveTimer']).not.toBeNull();
+
     controller.deactivate();
 
-    expect(clearIntervalSpy).toHaveBeenCalled();
+    // Direct state check — deterministic, no global object spy needed
+    expect((controller as any)['keepAliveTimer']).toBeNull();
     expect(controller.active).toBe(false);
   });
 
