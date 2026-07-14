@@ -141,6 +141,23 @@ describe('MediaSessionController', () => {
     });
   });
 
+  it('should clamp negative position to 0 in updatePositionState', () => {
+    controller.updatePositionState(100, -42, 1);
+    expect(navigator.mediaSession.setPositionState).toHaveBeenCalledWith({
+      duration: 100,
+      position: 0,
+      playbackRate: 1,
+    });
+
+    // Second call to verify prior state was not leaked
+    controller.updatePositionState(50, 25, 1);
+    expect(navigator.mediaSession.setPositionState).toHaveBeenLastCalledWith({
+      duration: 50,
+      position: 25,
+      playbackRate: 1,
+    });
+  });
+
   it('should populate action handlers via setActions', () => {
     const actions = {
       play: vi.fn(),
