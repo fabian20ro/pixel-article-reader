@@ -200,4 +200,59 @@ describe('translateParagraphs', () => {
     const callHeaders = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
     expect(callHeaders['X-Proxy-Key']).toBeUndefined();
   });
+
+  it('sends one fetch per batch when paragraphs span multiple batches and reassembles correctly', async () => {
+    const para1 = 'A'.repeat(2000);
+    const para2 = 'B'.repeat(2000);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(mockTranslateResponse('Translated A paragraph.'))   // batch 1
+      .mockResolvedValueOnce(mockTranslateResponse('Translated B paragraph.'));   // batch 2
+
+    const result = await translateParagraphs([para1, para2], 'de', 'en', PROXY);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(result.length).toBe(2);
+    expect(result[0]).toBe('Translated A paragraph.');
+    expect(result[1]).toBe('Translated B paragraph.');
+  });
+
+  it('merges multiple extra API paragraphs into the last slot', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse('First.\n\nSecond.\n\nThird.\n\nFourth.'),
+    );
+
+    const result = await translateParagraphs(['Orig1', 'Orig2'], 'de', 'en', PROXY);
+    expect(result).toEqual([
+      'First.',
+      'Second. Third. Fourth.',
+    ]);
+  });
+
+  it('preserves paragraph count when input contains empty strings', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse('\\n\\nTranslated third.'),
+    );
+
+    const result = await translateParagraphs(['First.', '', 'Third.'], 'de', 'en', PROXY);
+    expect(result.length).toBe(3);
+  });
+
+  it('handles API returning significantly fewer paragraphs than input via padding', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse('Only returned.'),
+    );
+
+    const result = await translateParagraphs(['A.', 'B.', 'C.'], 'de', 'en', PROXY);
+    expect(result).toEqual(['Only returned.', '', '']);
+  });
+
+  it('handles a single empty paragraph input', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockTranslateResponse(''),
+    );
+
+    const result = await translateParagraphs([''], 'de', 'en', PROXY);
+    expect(result).toEqual(['']);
+  });
 });
