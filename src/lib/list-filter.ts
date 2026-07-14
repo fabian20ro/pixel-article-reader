@@ -26,16 +26,25 @@ export interface ListFilterOptions {
 
   /** If provided, insert the input before this element instead of appending. */
   insertBefore?: HTMLElement;
+
+  /**
+   * Debounce duration in milliseconds for filter re-application during typing.
+   * Defaults to 150ms. Set to 0 or null to disable debouncing.
+   */
+  inputDebounceMs?: number | null;
 }
 
 export class ListFilter {
   private readonly input: HTMLInputElement;
   private readonly list: HTMLElement;
   private readonly getText: (item: HTMLElement) => string;
+  private readonly debounceMs: number | null;
+  private timerId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: ListFilterOptions) {
     this.list = opts.list;
     this.getText = opts.getText ?? ((el) => el.textContent ?? '');
+    this.debounceMs = opts.inputDebounceMs ?? 150;
 
     this.input = document.createElement('input');
     this.input.type = 'search';
@@ -50,8 +59,10 @@ export class ListFilter {
       opts.container.appendChild(this.input);
     }
 
-    this.input.addEventListener('input', () => this.applyFilter());
-    // WebKit fires 'search' (not always 'input') when the native clear button is clicked
+    // Use a debounced handler for typing; the `search` event is still immediate
+    // because WebKit fires it when the native clear button is clicked.
+    const applyWithDebounce = () => this.debounceApply();
+    this.input.addEventListener('input', applyWithDebounce);
     this.input.addEventListener('search', () => this.applyFilter());
 
     this.input.addEventListener('keydown', (e) => {
@@ -61,6 +72,27 @@ export class ListFilter {
         this.clear();
       }
     });
+  }
+
+  /** Cancel any pending debounce timer. */
+  private cancelPending(): void {
+    if (this.timerId !== null) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
+  }
+
+  /** Apply filter with optional debouncing. */
+  private debounceApply(): void {
+    if (this.debounceMs === null || this.debounceMs <= 0) {
+      this.applyFilter();
+      return;
+    }
+    this.cancelPending();
+    this.timerId = setTimeout(() => {
+      this.timerId = null;
+      this.applyFilter();
+    }, this.debounceMs);
   }
 
   /** Re-apply the current filter query against list items. Call after list re-render. */
@@ -81,6 +113,7 @@ export class ListFilter {
 
   /** Clear the filter and show all items. */
   clear(): void {
+    this.cancelPending();
     this.input.value = '';
     this.applyFilter();
   }
