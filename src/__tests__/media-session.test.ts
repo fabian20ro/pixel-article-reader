@@ -185,5 +185,6 @@ describe('MediaSessionController', () => {
 
     expect(document.body.children.length).toBe(0);
     expect(urlBefore).not.toBeNull();
+    expect(controller['silentUrl']).toBeNull();
   });
 });
