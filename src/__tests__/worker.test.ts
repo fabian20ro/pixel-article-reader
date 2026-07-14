@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker from '../../worker/index.ts';
 
 const env = {
@@ -9,9 +9,14 @@ const env = {
 
 const ctx = {} as ExecutionContext;
 
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('worker validation', () => {
@@ -66,6 +71,59 @@ describe('worker validation', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'Invalid JSON body.' });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('worker rate limiting', () => {
+  it('rejects requests after exhausting the per-IP quota within the window', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    // Exhaust the rate limit: 60 requests, all at t=0
+    for (let i = 0; i < 60; i++) {
+      await worker.fetch(
+        new Request('https://worker.example/?url=https://example.com/page'),
+        env,
+        ctx,
+      );
+    }
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/?url=https://example.com/overflow'),
+      env,
+      ctx,
+    );
+
+    expect(response.status).toBe(429);
+    const body = await response.json();
+    expect(typeof body.error).toBe('string');
+    expect(body.error).toMatch(/Rate limit exceeded/i);
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('0');
+  });
+
+  it('allows requests once the rate-limit window passes', async () => {
+    const fetchSpy = vi.fn(async () => new Response('ok', { headers: { 'content-type': 'text/html' } }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    // Exhaust quota at t=0
+    for (let i = 0; i < 60; i++) {
+      await worker.fetch(
+        new Request('https://worker.example/?url=https://example.com/page'),
+        env,
+        ctx,
+      );
+    }
+
+    // Advance time past the rate-limit window (60s)
+    vi.advanceTimersByTime(61_000);
+
+    const response = await worker.fetch(
+      new Request('https://worker.example/?url=https://example.com/page'),
+      env,
+      ctx,
+    );
+
+    expect(response.status).toBe(200);
   });
 });
 
