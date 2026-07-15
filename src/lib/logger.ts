@@ -15,13 +15,33 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 4,
 };
 
-const isVerbose =
+let isVerbose =
   typeof location !== 'undefined' && (location.search.includes('debug') || location.search.includes('trace'));
 
-const minLevel: LogLevel = isVerbose ? 'trace' : 'warn';
+export function setMinLevel(level: LogLevel): void {
+  const priority = LEVEL_PRIORITY[level];
+  if (priority == null) return;
+  minLevelRef.current = level;
+  isVerbose = true;
+}
+
+let minLevelRef = { current: ('warn' as unknown) as LogLevel };
+
+// Initialize after DOM is ready so location.search is populated.
+if (typeof document !== 'undefined') {
+  const parsed = new URLSearchParams(location.search);
+  if (parsed.has('debug') || parsed.has('trace')) {
+    minLevelRef.current = 'trace';
+    isVerbose = true;
+  }
+}
+
+function getMinLevel(): LogLevel {
+  return minLevelRef.current;
+}
 
 function shouldLog(level: LogLevel): boolean {
-  return LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[minLevel];
+  return LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[getMinLevel()];
 }
 
 function formatPrefix(module: string): string {
