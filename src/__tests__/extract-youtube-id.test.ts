@@ -75,6 +75,21 @@ describe('extractYoutubeVideoId', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?t=30&list=PLxyz')).toBeNull();
   });
 
+  it('rejects malformed embed paths where the ID contains non-allowed chars', () => {
+    // v= embedded in path instead of query string — regex rejects '=' character.
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/v=dQw4w9WgXcQ')).toBeNull();
+  });
+
+  it('extracts ID at index [2] even when extra segments follow', () => {
+    // The function takes pathname[2] and validates via regex; trailing junk is ignored.
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ/extra')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('returns null for bare path segments with no valid ID', () => {
+    // Trailing slash on /watch/ — pathname[2] is empty string, regex rejects.
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/')).toBeNull();
+  });
+
   it('extracts from /watch/ path with multiple query parameters', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120&feature=share')).toBe('dQw4w9WgXcQ');
   });
