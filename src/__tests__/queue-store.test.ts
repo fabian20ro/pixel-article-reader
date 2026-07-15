@@ -334,5 +334,58 @@ describe('queue-store', () => {
       expect(result[0].id).toBe('blank-1');
       expect(result[1].id).toBe('blank-2');
     });
+
+    it('deduplicates items with same non-empty URL even when other fields differ', () => {
+      const existing = makeItem({ id: 'existing', url: 'https://example.com/dup', title: 'Old' });
+      const duplicate = makeItem({ id: 'newer', url: 'https://example.com/dup', title: 'New' });
+      const result = addToQueue([existing], duplicate);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('newer');
+      expect(result[0].title).toBe('New');
+    });
+  });
+
+  describe('loadQueue invalid items', () => {
+    it('drops items with non-finite wordCount', () => {
+      const valid = makeItem();
+      const bad = { ...makeItem(), wordCount: NaN } as QueueItem;
+      localStorage.setItem('article-reader-queue', JSON.stringify([valid, bad]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe(valid.id);
+    });
+
+    it('drops items that are not objects (null, string, number)', () => {
+      localStorage.setItem('article-reader-queue', JSON.stringify([null, 'string-item', 42]));
+
+      const loaded = loadQueue();
+      expect(loaded).toEqual([]);
+    });
+
+    it('preserves valid items alongside non-object entries by dropping the bad ones only', () => {
+      const validWithEmptyTitle: QueueItem = makeItem({ id: 'empty-title', title: '' });
+      localStorage.setItem('article-reader-queue', JSON.stringify([validWithEmptyTitle, null]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+    });
+  });
+
+  describe('sanitizeSiteName edge cases', () => {
+    it('falls back to hostname when siteName is blank but url is valid', () => {
+      const article = makeArticle({ title: 'Test', siteName: '', resolvedUrl: 'https://example.com/article' });
+      const item = createQueueItem(article);
+
+      expect(item.siteName).toBe('example.com');
+    });
+
+    it('falls back to "Unknown source" when url is invalid and siteName is blank', () => {
+      const article = makeArticle({ title: 'Test', siteName: '', resolvedUrl: '' });
+      const item = createQueueItem(article);
+
+      expect(item.siteName).toBe('Unknown source');
+    });
   });
 });
