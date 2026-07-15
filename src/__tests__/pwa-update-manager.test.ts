@@ -210,4 +210,20 @@ describe('PwaUpdateManager', () => {
     expect(result).toBe('failed');
     expect(sw.update).toHaveBeenCalledTimes(2); // init + explicit check
   });
+
+  it('checkForUpdates non-silent shows status messages in order on success', async () => {
+    const sw = mockServiceWorkerEnvironment();
+    mockCacheStorage();
+    const onStatus = vi.fn();
+
+    const manager = new PwaUpdateManager({ onStatus });
+    await manager.init('sw.js');
+    onStatus.mockClear(); // clear init's silent checkForUpdates effects
+
+    const result = await manager.checkForUpdates({ silent: false });
+
+    expect(result).toBe('no-change');
+    expect(onStatus).toHaveBeenNthCalledWith(1, 'Checking...');
+    expect(onStatus).toHaveBeenNthCalledWith(2, 'Up to date.');
+  });
 });
