@@ -55,6 +55,12 @@ describe('createArticleFromText', () => {
     expect(article.paragraphs.length).toBeGreaterThan(0);
   });
 
+  it('rejects body with fewer than 3 words', () => {
+    // Body has exactly 2 words — below the 3-word minimum.
+    const text = 'Title Line\none two';
+    expect(() => createArticleFromText(text)).toThrow();
+  });
+
   it('produces paragraphs when long-title pasted text has single body line', () => {
     const title = 'x'.repeat(200);
     const body = 'This is a valid article with enough words to be processed correctly. It has multiple sentences.';
