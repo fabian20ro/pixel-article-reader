@@ -693,4 +693,52 @@ describe('ArticleController', () => {
     // Article section must remain hidden — no article was displayed.
     expect(refs.articleSection.classList.contains('hidden')).toBe(true);
   });
+
+  it('suppresses stale error when an older file upload fails after a newer one succeeds', async () => {
+    // First (older) upload resolves with delay. Second (newer) resolves immediately,
+    // so loadToken changes and the first's stale result is ignored.
+    let resolveFirst = null; // ((v: any) => void) | null;
+    vi.mocked(createArticleFromPdf).mockImplementationOnce(
+      () => new Promise((resolve) => { (resolveFirst as any) = resolve; }) as any,
+    );
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce({
+      title: 'Newer',
+      content: '<p>newer</p>',
+      textContent: 'newer',
+      markdown: 'newer',
+      paragraphs: ['newer paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/newer',
+    } as any);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file1 = new File(['old'], 'a.pdf', { type: 'application/pdf' });
+    const file2 = new File(['new'], 'b.pdf', { type: 'application/pdf' });
+
+    // Start first upload (won't resolve until we do).
+    const p1 = (controller as any).handleFileUpload(file1);
+    // Immediately start second — it resolves synchronously.
+    const p2 = (controller as any).handleFileUpload(file2);
+    await p2;
+    // Now let the stale result from file1 tick through; it must be ignored.
+    ((resolveFirst as unknown) as (() => void))();
+    await Promise.resolve();
+
+    expect(controller.getCurrentArticle()?.title).toBe('Newer');
+    // The stale error/result from file1 must NOT have been applied to the view.
+    expect(refs.errorMessage.textContent).not.toContain('Old');
+    expect(refs.articleTitle.textContent).toBe('Newer');
+  });
 });
