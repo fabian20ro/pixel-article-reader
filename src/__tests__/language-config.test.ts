@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import type { Language } from '../lib/language-config.js';
 import {
   SUPPORTED_LANGUAGES,
   LANG_TTS_CODES,
   langToCode,
   isLanguage,
+  DEFAULT_LANGUAGE,
   DEFAULT_TRANSLATION_TARGET,
 } from '../lib/language-config.js';
 
@@ -17,6 +19,18 @@ describe('SUPPORTED_LANGUAGES', () => {
 
   it('is a readonly tuple', () => {
     expect(SUPPORTED_LANGUAGES.length).toBe(2);
+  });
+});
+
+// ── DEFAULT_LANGUAGE ────────────────────────────────────────────────
+
+describe('DEFAULT_LANGUAGE', () => {
+  it('equals the first supported language', () => {
+    expect(DEFAULT_LANGUAGE).toBe(SUPPORTED_LANGUAGES[0]);
+  });
+
+  it('is a valid supported language', () => {
+    expect(isLanguage(DEFAULT_LANGUAGE)).toBe(true);
   });
 });
 
@@ -64,6 +78,13 @@ describe('langToCode', () => {
       expect(typeof code).toBe('string');
       expect(code.length).toBeGreaterThan(0);
     }
+  });
+
+  // Normalization: langToCode does not normalize BCP-47 subtags; it falls through
+  // to the en default for any input other than an explicit 'ro'.
+  it('falls back to "en" for region-tagged codes', () => {
+    expect(langToCode('en-US' as Language)).toBe('en');
+    expect(langToCode('ro-RO' as Language)).toBe('en');
   });
 });
 
