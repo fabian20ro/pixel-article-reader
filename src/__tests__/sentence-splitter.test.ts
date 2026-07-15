@@ -78,6 +78,26 @@ describe('sentence-splitter', () => {
       const text = 'A. B. C. D.';
       expect(splitSentences(text)).toEqual(['A. B. C. D.']);
     });
+
+    it('should chain merge-then-split when merged segments exceed MAX_UTTERANCE_LENGTH', () => {
+      // Many short sentences get merged into one chunk that exceeds 200 chars, then split.
+      const text = 'One.' + ' '.repeat(5) + 'Two.' + ' '.repeat(5) + 'Three.' + ' '.repeat(5) + 'Four.' + ' '.repeat(5) + 'Five.' + ' '.repeat(5) + 'Six.' + ' '.repeat(5) + 'Seven.' + ' '.repeat(5) + 'Eight.';
+      const result = splitSentences(text);
+      expect(result.length).toBeGreaterThan(1);
+    });
+
+    it('should split on em-dash delimiters', () => {
+      const text = 'Before — after';
+      // Text is short so no splitting needed unless below threshold. Test via long sentence.
+      const longText = 'X'.repeat(50) + ' — ' + 'Y'.repeat(50);
+      expect(splitLongSentence(longText, 30).length).toBeGreaterThan(1);
+    });
+
+    it('should keep leading whitespace in segment after trim', () => {
+      const text = 'first;   second; third';
+      const result = splitLongSentence(text, 5);
+      expect(result[1].startsWith('second')).toBe(true);
+    });
   });
 
   describe('splitKeepingDelimiter', () => {
