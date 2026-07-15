@@ -49,4 +49,38 @@ describe('extractYoutubeVideoId bug reproduction', () => {
   it('returns null for invalid characters in v query param', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=invalid!@#chars')).toBeNull();
   });
+
+  // --- error paths and fallback edge cases (recently added) ---
+
+  it('extracts ID from youtu.be URL with fragment hash', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/abc12345678#t=30s')).toBe('abc12345678');
+  });
+
+  it('extracts ID from watch URL with extra query params (ignores time & list)', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc12345678&t=30&list=PLx')).toBe('abc12345678');
+  });
+
+  it('extracts ID from watch URL where v param is present but pathname lacks trailing slash', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
+  });
+
+  it('returns null for empty string (catch path)', () => {
+    expect(extractYoutubeVideoId('')).toBeNull();
+  });
+
+  it('returns null for whitespace-only string (catch path)', () => {
+    expect(extractYoutubeVideoId('   ')).toBeNull();
+  });
+
+  it('returns null when embed/shorts/live/v path has fewer than 2 segments', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/')).toBeNull();
+  });
+
+  it('returns null for a valid-looking YouTube URL whose ID is too long (13 chars)', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abcdefghijklm')).toBeNull();
+  });
+
+  it('extracts ID from m.youtube.com watch URL', () => {
+    expect(extractYoutubeVideoId('https://m.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
+  });
 });
