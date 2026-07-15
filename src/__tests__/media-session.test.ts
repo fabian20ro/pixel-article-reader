@@ -187,4 +187,25 @@ describe('MediaSessionController', () => {
     expect(urlBefore).not.toBeNull();
     expect(controller['silentUrl']).toBeNull();
   });
+
+  it('should re-start silent audio on visibilitychange when returning from background', async () => {
+    // Simulate Android Chrome pausing audio while page is hidden.
+    controller.activate('Test Title');
+    await Promise.resolve();
+    playSpy.mockClear();
+    (document as any).visibilityState = 'hidden';
+    const event = new Event('visibilitychange');
+    document.dispatchEvent(event);
+
+    // While hidden: no replay should happen.
+    expect(playSpy).not.toHaveBeenCalled();
+
+    // Simulate returning to foreground — audio is paused, so it should restart.
+    (document as any).visibilityState = 'visible';
+    const resumeEvent = new Event('visibilitychange');
+    document.dispatchEvent(resumeEvent);
+
+    await Promise.resolve();
+    expect(playSpy).toHaveBeenCalled();
+  });
 });
