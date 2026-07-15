@@ -117,6 +117,9 @@ export class MediaSessionController {
    * so the browser allows audio.play().
    */
   activate(title?: string): void {
+    // Idempotent: skip if already active with audio in DOM.
+    if (this._active && this.audio) return;
+
     this.ensureAudio();
     if (!this.audio) return;
 

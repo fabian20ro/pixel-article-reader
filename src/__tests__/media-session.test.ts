@@ -63,6 +63,19 @@ describe('MediaSessionController', () => {
     expect(playSpy).toHaveBeenCalled();
   });
 
+  it('should be idempotent — double activate does not re-play audio or restart keep-alive timer', async () => {
+    controller.activate('Test Title');
+    await Promise.resolve(); // let play() promise settle
+    const firstCallCount = playSpy.mock.calls.length;
+    const firstKeepAlive = (controller as any)['keepAliveTimer'];
+
+    controller.activate(); // second activate — should be a no-op
+
+    expect(controller.active).toBe(true);
+    expect(playSpy.mock.calls.length).toBe(firstCallCount);
+    expect((controller as any)['keepAliveTimer']).toBe(firstKeepAlive);
+  });
+
   it('should deactivate and stop audio', () => {
     controller.activate();
     controller.deactivate();
