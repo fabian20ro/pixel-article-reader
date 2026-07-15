@@ -115,6 +115,22 @@ describe('session-store', () => {
       expect(loadLastArticle()).toBeNull();
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
+
+    it('returns null without crashing when localStorage throws on read', () => {
+      const throwingStorage = {
+        getItem: (_key: string) => { throw new DOMException('Quota exceeded', 'QuotaExceededError'); },
+        setItem: (_key: string, _value: string) => {},
+        removeItem: (_key: string) => {},
+        clear: () => {},
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: throwingStorage,
+        configurable: true,
+      });
+
+      expect(() => loadLastArticle()).not.toThrow();
+      expect(loadLastArticle()).toBeNull();
+    });
   });
 
   describe('saveLastArticle', () => {
