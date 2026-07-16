@@ -61,6 +61,37 @@ describe('createArticleFromText', () => {
     expect(() => createArticleFromText(text)).toThrow();
   });
 
+  it('accepts title at exact 150-char boundary', () => {
+    const title = 'x'.repeat(150);
+    const body = 'This is a valid article with enough words to be processed correctly.';
+    const text = `${title}\n${body}`;
+    const article = createArticleFromText(text);
+
+    expect(article.title).toBe(title);
+    expect(article.textContent).toContain(body);
+  });
+
+  it('strips markdown image references before processing', () => {
+    const body = 'This is a valid article with enough words to be processed correctly.';
+    const text = `My Title\n![alt](image.png)\n${body}`;
+    const article = createArticleFromText(text);
+
+    expect(article.title).toBe('My Title');
+    // Image reference should not appear in body content.
+    expect(article.textContent).not.toContain('![alt]');
+    expect(article.textContent).toContain(body);
+  });
+
+  it('handles tab-separated words in body correctly', () => {
+    const text = 'Title Line\nword one\tword two\tword three';
+    const article = createArticleFromText(text);
+
+    // Tabs are preserved as whitespace separators within a paragraph.
+    expect(article.paragraphs.length).toBeGreaterThan(0);
+    expect(article.wordCount).toBeGreaterThanOrEqual(3);
+    expect(article.textContent).toContain('word one');
+  });
+
   it('produces paragraphs when long-title pasted text has single body line', () => {
     const title = 'x'.repeat(200);
     const body = 'This is a valid article with enough words to be processed correctly. It has multiple sentences.';
