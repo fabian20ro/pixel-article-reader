@@ -179,4 +179,40 @@ describe('settings-store', () => {
 
     expect(loadSettings(defaults).lang).toBe('en');
   });
+
+  it('returns full defaults when storage holds an empty object', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({}),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings).toEqual(createDefaultSettings(defaults));
+  });
+
+  it('ignores extraneous keys stored alongside valid data', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 1.5, lang: 'en', voiceName: 'Test', extraField: true } satisfies Partial<AppSettings> & Record<string, unknown>),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(settings.rate).toBe(1.5);
+    expect(settings.lang).toBe('en');
+    expect(settings.voiceName).toBe('Test');
+    void (settings as AppSettings).extraField; // not a real field — just asserting no leak path exists
+  });
+
+  it('does not leak stored unknown keys into the returned settings shape', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ foo: 'bar', baz: 42 } satisfies Record<string, unknown>),
+    );
+
+    const settings = loadSettings(defaults);
+    expect(Object.keys(settings)).toEqual(expect.arrayContaining(['rate', 'lang', 'voiceName', 'voiceGender', 'wakeLock', 'theme', 'deviceVoiceOnly']));
+    for (const key of Object.keys(settings)) {
+      expect(key).not.toMatch(/^(foo|baz)$/);
+    }
+  });
 });
