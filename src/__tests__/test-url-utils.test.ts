@@ -47,6 +47,16 @@ describe('url_utils', () => {
       expect(extractUrl(`${prefix} https://example.com`)).toBeNull();
     });
 
+    it('extracts URL with exactly 500-char prefix (boundary)', () => {
+      const prefix = 'a'.repeat(499) + ' ';
+      expect(extractUrl(prefix + 'https://example.com')).toBe('https://example.com');
+    });
+
+    it('handles share-text URLs where trailing text is in brackets', () => {
+      // Trailing bracketed text after URL means URL isn't at end-of-string so returns null.
+      expect(extractUrl('[Read more] https://example.com [source]')).toBeNull();
+    });
+
     it('returns null when URL is embedded mid-text (not at end)', () => {
       expect(extractUrl('Some text https://example.com more text')).toBeNull();
     });
