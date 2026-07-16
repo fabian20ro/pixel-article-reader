@@ -83,6 +83,25 @@ describe('parseArticleFromHtml', () => {
       expect(article.textContent).not.toContain('![');
     });
 
+    it('caps excerpt at 200 characters', () => {
+      const text = 'word '.repeat(100) + '\n'; // ~100 words, > 200 chars
+      const article = createArticleFromText(text.trim());
+      expect(article.excerpt.length).toBeLessThanOrEqual(200);
+    });
+
+    it('returns non-empty trimmed paragraphs', () => {
+      const text = 'Title\n\n' + 'word '.repeat(60) + '\n\n' + 'more words'.padEnd(100, 'x');
+      const article = createArticleFromText(text);
+      expect(article.paragraphs.length).toBeGreaterThan(1);
+      expect(article.paragraphs.every((p: string) => p.trim().length > 0)).toBe(true);
+    });
+
+    it('preserves original text in markdown field', () => {
+      const text = 'Title\n\n![img](pic.png)\n\n' + 'word '.repeat(60);
+      const article = createArticleFromText(text);
+      expect(article.markdown).toBe(text.trim());
+    });
+
     it('preserves markdown image in raw text when no title detected', () => {
       // Long first line exceeds 150 chars → hasTitle=false → bodyText uses uncleaned original
       const longLine = 'A'.repeat(160) + '\n![alt](image.png)\n\nbody';
