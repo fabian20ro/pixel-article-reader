@@ -110,4 +110,20 @@ describe('fetchTtsAudio', () => {
 
     expect(clearTimeoutSpy).toHaveBeenCalled();
   });
+
+  it('returns null when both attempts fail transiently', async () => {
+    const start = Date.now();
+
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new Error('Network error')) // first: transient
+      .mockRejectedValueOnce(new Error('Network error')); // second: also transient
+
+    const result = await fetchTtsAudio('hello', 'en', config);
+
+    expect(result).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    // ~1s retry delay between attempts
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(900);
+  });
 });
