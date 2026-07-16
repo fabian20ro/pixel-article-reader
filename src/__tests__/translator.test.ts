@@ -66,6 +66,48 @@ describe('buildBatches', () => {
     expect(result.length).toBe(1);
     expect(result[0]).toBe(veryLong);
   });
+
+  it('groups two paragraphs that exactly hit the batch character limit', () => {
+    // MAX_BATCH_CHARS=3000; BATCH_SEPARATOR='\n\n' (2 chars)
+    // Each para: (3000 - 2) / 2 = 1499 → total with sep = 3000
+    const p = 'x'.repeat(1499);
+    const result = buildBatches([p, p]);
+    expect(result.length).toBe(1);
+    expect(result[0]).toBe(`${p}\n\n${p}`);
+  });
+
+  it('splits when two paragraphs exceed the batch limit by one character', () => {
+    // Each para: 1500 chars → combined with sep = 3002 > 3000
+    const p = 'x'.repeat(1500);
+    const result = buildBatches([p, p]);
+    expect(result.length).toBe(2);
+    expect(result[0]).toBe(p);
+    expect(result[1]).toBe(p);
+  });
+
+  it('packs long and short paragraphs together when they fit', () => {
+    // Long para: 2000 chars. Short: (3000 - 2 - 2000) = 998 fits; 999 does not.
+    const long = 'a'.repeat(2000);
+    const short = 'b'.repeat(998);
+    const result = buildBatches([long, short]);
+    expect(result.length).toBe(1);
+    expect(result[0]).toBe(`${long}\n\n${short}`);
+  });
+
+  it('splits when long+short exceed the batch limit', () => {
+    const long = 'a'.repeat(2000);
+    const short = 'b'.repeat(999); // just one char too many
+    const result = buildBatches([long, short]);
+    expect(result.length).toBe(2);
+    expect(result[0]).toBe(long);
+    expect(result[1]).toBe(short);
+  });
+
+  it('places each very-long paragraph in its own batch', () => {
+    const big = 'x'.repeat(2500); // too long to share with anything non-trivial
+    const result = buildBatches([big, big, big]);
+    expect(result.length).toBe(3);
+  });
 });
 
 // ── translateParagraphs ────────────────────────────────────────────

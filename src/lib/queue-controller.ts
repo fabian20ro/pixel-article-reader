@@ -203,6 +203,8 @@ export class QueueController {
       const msg = `Failed to load: ${item.title}`;
       this.cb.onError(msg);
       this.events.emit('error', { message: msg });
+      // Auto-skip on failure — preserve queue flow like a media player
+      if (this.hasNext()) void this.playNext();
     } finally {
       this._isLoadingItem = false;
     }
