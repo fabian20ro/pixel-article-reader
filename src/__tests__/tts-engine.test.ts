@@ -681,6 +681,47 @@ describe('TTSEngine', () => {
     expect(utter.voice?.name).toBe('Ioana');
   });
 
+  // ── Device voice only (audio backend swap) ──────────────────────
+
+  it('setDeviceVoiceOnly(true) disables the audio backend', () => {
+    const engine = createEngine();
+    const initialAudio = (engine as unknown as Record<string, unknown>).audioBackend;
+
+    engine.setDeviceVoiceOnly(true);
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+
+    // Restore for other tests
+    if (initialAudio !== null) {
+      engine.setDeviceVoiceOnly(false);
+    }
+  });
+
+  it('setDeviceVoiceOnly round-trips to original backend', () => {
+    const engine = createEngine();
+    const initialAudio = (engine as unknown as Record<string, unknown>).audioBackend;
+
+    // Disable
+    engine.setDeviceVoiceOnly(true);
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+
+    // Restore — if there was an original backend it comes back
+    engine.setDeviceVoiceOnly(false);
+    if (initialAudio !== null) {
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBe(initialAudio);
+    } else {
+      // When no audio backend existed initially, toggle off leaves null too
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    }
+  });
+
+  it('setDeviceVoiceOnly(false) is a no-op when already disabled', () => {
+    const engine = createEngine();
+    (engine as unknown as Record<string, unknown>).audioBackend = null; // force state off
+
+    engine.setDeviceVoiceOnly(false); // should be idempotent — stays off
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+  });
+
   // ── Voice sync bug fixes ─────────────────────────────────────────
 
   it('speakCurrent does not advance chain when paused', () => {
