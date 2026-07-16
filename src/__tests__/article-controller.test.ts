@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ArticleController } from '../lib/article-controller.js';
 import { extractArticle, createArticleFromMarkdownFile, createArticleFromPdf, createArticleFromTextFile, createArticleFromEpub } from '../lib/extractor.js';
 
@@ -102,6 +102,10 @@ describe('ArticleController', () => {
       removeItem: vi.fn(),
     };
     vi.stubGlobal('localStorage', localStorageMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('passes extractArticle an options object from the browser load path and handles errors', async () => {
@@ -212,6 +216,38 @@ describe('ArticleController', () => {
 
     expect(controller.getCurrentArticle()).toEqual(article);
     expect(refs.articleTitle.textContent).toBe('Stored Article');
+  });
+
+  it('shows error view when offline while loading from stored article', async () => {
+    const article = {
+      title: 'Offline Stored',
+      content: '<p>Content</p>',
+      textContent: 'Content',
+      markdown: 'Content',
+      paragraphs: ['Paragraph 1'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/offline',
+    } as any;
+
+    const refs = makeRefs();
+    vi.stubGlobal('navigator', { onLine: false });
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await controller.loadArticleFromStored(article);
+
+    expect(refs.errorMessage.textContent).toBe('You appear to be offline. Showing saved article.');
+    expect(refs.errorSection.classList.contains('hidden')).toBe(false);
+    expect(controller.getCurrentArticle()).not.toEqual(article);
   });
 
   it('triggers loadArticle when goBtn is clicked', async () => {

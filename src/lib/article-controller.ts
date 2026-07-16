@@ -127,6 +127,11 @@ export class ArticleController {
 
   /** Load and display an article from stored content (IndexedDB). Used by queue for local files. */
   async loadArticleFromStored(article: Article): Promise<void> {
+    if (navigator.onLine === false) {
+      this.options.refs.errorMessage.textContent = 'You appear to be offline. Showing saved article.';
+      this.showView('error');
+      return;
+    }
     this.options.tts.stop();
     this.currentArticle = article;
     this.currentArticleUrl = '';
