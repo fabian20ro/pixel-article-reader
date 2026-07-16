@@ -133,4 +133,42 @@ describe('isSpeakableText', () => {
     expect(isSpeakableText('   ')).toBe(false);
     expect(isSpeakableText('\t\t')).toBe(false);
   });
+
+  it('returns false for an empty string', () => {
+    // trimmed.length === 0 triggers the early < 2 check.
+    expect(isSpeakableText('')).toBe(false);
+  });
+
+  it('treats mixed ASCII digits and non-Latin text as speakable via char fallback', () => {
+    // wordCount=1 (digits only count as one token "123" ≥ 2 chars with alnum), < 3 → char fallback;
+    // stripped "123你好世界" length = 7 ≥ 4 → true.
+    expect(isSpeakableText('123 你好世界')).toBe(true);
+  });
+
+  it('returns false for mixed digit-non-Latin text below character threshold', () => {
+    // wordCount=1 ("5"), < 3 → char fallback; stripped "5你" length = 2 < 4 → false.
+    expect(isSpeakableText('5 你')).toBe(false);
+  });
+
+  it('returns true for non-Latin text with embedded ASCII digits via char fallback', () => {
+    // wordCount=1 ("9"), < 3 → char fallback; stripped "Привет9мир" length = 8 ≥ 4 → true.
+    expect(isSpeakableText('Привет 9 мир')).toBe(true);
+  });
+
+  it('returns false for text with only digits and non-Latin chars below both thresholds', () => {
+    // wordCount=1 ("12"), < 3 → char fallback; stripped "12世" length = 3 < 4 → false.
+    expect(isSpeakableText('12 世')).toBe(false);
+  });
+
+  it('returns true for text where punctuation removal reveals sufficient non-Latin chars', () => {
+    // wordCount=0, char fallback strips `.,!?;:()[]{}'"<>"` → stripped "Приветмир" length = 7 ≥ 4 → true.
+    expect(isSpeakableText('Привет!  мир.')).toBe(true);
+  });
+
+  it('returns false for a two-character trimmed string', () => {
+    // trimmed.length === 2, < 2 check fails (2 is not less than 2), but wordCount=0 (< 3) → char fallback;
+    // stripped length = 2 < 4 → false.
+    expect(isSpeakableText('ab')).toBe(false);
+  });
+
 });
