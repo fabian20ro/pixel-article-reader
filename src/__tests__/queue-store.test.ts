@@ -373,6 +373,38 @@ describe('queue-store', () => {
     });
   });
 
+  describe('loadQueue rejects items with empty required fields', () => {
+    it('drops items with an empty id', () => {
+      localStorage.setItem(
+        'article-reader-queue',
+        JSON.stringify([{ ...makeItem(), id: '', url: 'https://example.com' }]),
+      );
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(0);
+    });
+
+    it('drops items with an empty title and no valid URL fallback for siteName', () => {
+      localStorage.setItem(
+        'article-reader-queue',
+        JSON.stringify([{ ...makeItem(), title: '', url: '' }]),
+      );
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1); // still valid — empty title gets "Untitled" fallback, empty URL is allowed
+    });
+
+    it('drops items with a non-string lang field', () => {
+      localStorage.setItem(
+        'article-reader-queue',
+        JSON.stringify([{ ...makeItem(), lang: 42 as unknown as string }]),
+      );
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(0);
+    });
+  });
+
   describe('sanitizeSiteName edge cases', () => {
     it('falls back to hostname when siteName is blank but url is valid', () => {
       const article = makeArticle({ title: 'Test', siteName: '', resolvedUrl: 'https://example.com/article' });
