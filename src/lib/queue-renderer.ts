@@ -75,6 +75,7 @@ export class QueueRenderer {
     const li = document.createElement('li');
     li.className = 'queue-item' + (idx === currentIndex ? ' playing' : '');
     li.setAttribute('role', 'listitem');
+    li.tabIndex = 0;
     li.dataset.itemId = item.id;
 
     li.appendChild(this.buildDragHandle());
@@ -83,6 +84,12 @@ export class QueueRenderer {
     li.appendChild(this.buildActions(item));
 
     li.addEventListener('click', () => this.cb.onItemClick(item.id));
+    li.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === li) {
+        e.preventDefault();
+        this.cb.onItemClick(item.id);
+      }
+    });
     return li;
   }
 
