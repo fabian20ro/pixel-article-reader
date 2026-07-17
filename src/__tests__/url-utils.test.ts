@@ -193,6 +193,24 @@ describe('getUrlFromParams', () => {
     window.history.replaceState(null, '', `/?text=${shared}`);
     expect(getUrlFromParams()).toBe('https://share.google/o5SabsH2YlQYu8x7F');
   });
+
+  it('returns null when all candidate params are present but invalid', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?url=garbage&text=no+url+here&title=nope&link=&u=also-not-a-url',
+    );
+    expect(getUrlFromParams()).toBeNull();
+  });
+
+  it('returns null when ?url= is an empty string and fallbacks are invalid', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?url=&text=nope&title=nope&link=nope&u=nope',
+    );
+    expect(getUrlFromParams()).toBeNull();
+  });
 });
 
 // ── clearQueryParams ────────────────────────────────────────────────
