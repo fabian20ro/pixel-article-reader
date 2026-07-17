@@ -86,6 +86,15 @@ describe('langToCode', () => {
     expect(langToCode('en-US' as Language)).toBe('en');
     expect(langToCode('ro-RO' as Language)).toBe('en');
   });
+
+  // Regression: langToCode must never throw or return undefined when handed a
+  // Language-like string that is not explicitly 'ro'; it always returns 'en'.
+  // This protects callers who pass arbitrary language codes to TTS endpoints.
+  for (const fallback of ['ja', 'zh-CN', 'pt-BR', '', 'EN'] as const) {
+    it(`falls back to "en" when given ${JSON.stringify(fallback)}`, () => {
+      expect(langToCode(fallback as Language)).toBe('en');
+    });
+  }
 });
 
 // ── isLanguage ──────────────────────────────────────────────────────
