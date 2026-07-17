@@ -9,7 +9,8 @@ import {
   renderServiceWorker,
   renderStableManifest,
   rewriteIndexHtmlForStableAssets,
-} from './update-precache.mjs';
+  syncDistServiceWorker,
+} from '../scripts/update-precache.mjs';
 
 describe('update-precache', () => {
   it('collects emitted dist assets and renders them into PRECACHE', () => {
@@ -65,16 +66,16 @@ describe('update-precache', () => {
     const template = `const PRECACHE = [\n];\n`;
     const entries = [
       './assets/ok.js',
-      "./assets/bad\\back\\path.js",
+      "./assets/bad\\\\back\\\\path.js",
       "./assets/skip'quote.js",
     ];
 
     const rendered = renderServiceWorker(template, entries);
 
-    // Backslashes doubled so JS parses them as literal '\' chars.
+    // Backslashes doubled so JS parses them as literal '\\' chars.
     expect(rendered).toContain("./assets/bad\\\\back\\\\path.js',");
     // Single quotes escaped so they don't break out of the string literal.
-    expect(rendered).toContain('./assets/skip\\'quote.js\',');
+    expect(rendered).toContain('./assets/skip\\\'quote.js\\',');
     expect(rendered).not.toMatch(/bad\back/);
   });
 
@@ -143,6 +144,60 @@ describe('update-precache', () => {
 
       const remaining = readdirSync(assetsDir);
       expect(remaining).toEqual(['main-v1.js']);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('throws when dist/ does not exist', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-sync-no-dist-'));
+
+    try {
+      expect(() => syncDistServiceWorker()).toThrow(/dist\/ does not exist/);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('returns outputSwPath and sorted precache entries with "./" first', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-sync-dist-'));
+
+    try {
+      mkdirSync(join(tempRoot, 'icons'), { recursive: true });
+      mkdirSync(join(tempRoot, 'vendor', 'pdfjs'), { recursive: true });
+      writeFileSync(join(tempRoot, 'sw.js'), "const PRECACHE = [\n];\n");
+      writeFileSync(join(tempRoot, 'manifest.json'), '{"name":"App"}');
+      writeFileSync(join(tempRoot, 'icons', 'icon-192.png'), 'PNG_192');
+      writeFileSync(join(tempRoot, 'icons', 'icon-512.png'), 'PNG_512');
+      writeFileSync(join(tempRoot, 'vendor', 'pdfjs', 'pdf.worker.min.mjs'), '// pdf worker');
+
+      const distDir = join(tempRoot, 'dist');
+      mkdirSync(distDir, { recursive: true });
+      mkdirSync(join(distDir, 'assets'), { recursive: true });
+      writeFileSync(join(distDir, 'index.html'), '<!doctype html>');
+      writeFileSync(join(distDir, 'manifest.webmanifest'), '{"name":"App"}');
+      writeFileSync(join(distDir, 'sw.js'), '// placeholder');
+
+      const outputSwPath = join(distDir, 'sw.js');
+      mkdirSync(join(distDir, 'assets'), { recursive: true });
+      writeFileSync(join(distDir, 'assets', 'main.js'), 'code');
+      writeFileSync(join(distDir, 'assets', 'style.css'), '{}');
+
+      const result = syncDistServiceWorker();
+
+      expect(result.outputSwPath).toBe(outputSwPath);
+      expect(result.precacheEntries[0]).toBe('./');
+      // "./" first, then sorted dist files (excluding ./sw.js itself)
+      for (let i = 1; i < result.precacheEntries.length - 1; i++) {
+        const prev = result.precacheEntries[i];
+        const next = result.precacheEntries[i + 1];
+        expect(prev).toBeLessThanOrEqual(next);
+      }
+      // Check the rendered sw.js contains precached entries and is valid JS.
+      const written = readFileSync(outputSwPath, 'utf8');
+      expect(written).toContain('const PRECACHE = [');
+      // Entry for index.html should be present
+      expect(written).toContain("./index.html");
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
