@@ -129,5 +129,15 @@ describe('sentence-splitter', () => {
       const result = splitKeepingDelimiter('alpha; beta; gamma delta', /;\s*/);
       expect(result[result.length - 1]).toBe('gamma delta');
     });
+
+    it('should normalize output chunks by trimming and filtering empty segments', () => {
+      const text = 'Before — after — done.';
+      const result = splitSentences(text);
+      for (const seg of result) {
+        expect(seg).not.toMatch(/^\s/);
+        expect(seg).not.toMatch(/\s$/);
+        expect(seg.length).toBeGreaterThan(0);
+      }
+    });
   });
 });
