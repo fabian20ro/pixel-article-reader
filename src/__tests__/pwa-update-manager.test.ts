@@ -211,6 +211,18 @@ describe('PwaUpdateManager', () => {
     expect(sw.update).toHaveBeenCalledTimes(2); // init + explicit check
   });
 
+  it('checkForUpdates returns no-change silently when registration is missing', async () => {
+    mockCacheStorage();
+
+    const onStatus = vi.fn();
+    const manager = new PwaUpdateManager({ onStatus });
+
+    const result = await manager.checkForUpdates({ silent: false });
+
+    expect(result).toBe('no-change');
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
   it('checkForUpdates non-silent shows status messages in order on success', async () => {
     const sw = mockServiceWorkerEnvironment();
     mockCacheStorage();

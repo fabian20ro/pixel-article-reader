@@ -91,5 +91,5 @@ export function splitSentences(text: string): string[] {
   const merged = mergeShortSentences(pieces);
   return merged.flatMap((s) =>
     s.length > MAX_UTTERANCE_LENGTH ? splitLongSentence(s, MAX_UTTERANCE_LENGTH) : [s],
-  );
+  ).map((chunk) => chunk.trim()).filter((chunk) => chunk.length > 0);
 }

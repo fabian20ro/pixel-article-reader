@@ -96,6 +96,26 @@ describe('session-store', () => {
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
 
+    it('removes +Infinity timestamps before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: makeArticle(), savedAt: Number.POSITIVE_INFINITY }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
+    it('removes -Infinity timestamps before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: makeArticle(), savedAt: Number.NEGATIVE_INFINITY }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
     it('removes articles with invalid field types before returning null', () => {
       localStorage.setItem(
         'article-reader-last-article',
