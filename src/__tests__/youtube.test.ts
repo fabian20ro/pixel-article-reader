@@ -44,6 +44,26 @@ describe('extractYoutubeVideoId', () => {
   it('returns null for invalid URLs', () => {
     expect(extractYoutubeVideoId('https://example.com')).toBeNull();
   });
+
+  it('extracts ID from watch URL with timestamp param', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from watch URL with playlist param', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLxyz')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from short URL with extra params', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/dQw4w9WgXcQ?si=abc123')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from embed URL with query params', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts ID from shorts URL with timestamp fragment', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ#t=10')).toBe('dQw4w9WgXcQ');
+  });
 });
 
 describe('extractArticleFromYoutube', () => {
