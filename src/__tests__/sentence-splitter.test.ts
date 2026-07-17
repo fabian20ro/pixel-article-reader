@@ -3,7 +3,8 @@ import {
   mergeShortSentences, 
   splitKeepingDelimiter,
   splitLongSentence, 
-  splitSentences 
+  splitSentences,
+  MAX_UTTERANCE_LENGTH
 } from '../lib/sentence-splitter';
 
 describe('sentence-splitter', () => {
@@ -80,10 +81,17 @@ describe('sentence-splitter', () => {
     });
 
     it('should chain merge-then-split when merged segments exceed MAX_UTTERANCE_LENGTH', () => {
-      // Many short sentences get merged into one chunk that exceeds 200 chars, then split.
-      const text = 'One.' + ' '.repeat(5) + 'Two.' + ' '.repeat(5) + 'Three.' + ' '.repeat(5) + 'Four.' + ' '.repeat(5) + 'Five.' + ' '.repeat(5) + 'Six.' + ' '.repeat(5) + 'Seven.' + ' '.repeat(5) + 'Eight.';
+      // Build many short sentences (~20 chars each) so the merged chunk exceeds 200,
+      // forcing splitLongSentence to fire. With MIN_SENTENCE_LENGTH=40 and 8 segments of ~21 chars,
+      // mergeShortSentences concatenates them all into one chunk well over MAX_UTTERANCE_LENGTH (200).
+      const short = 'A shorter sentence.';
+      const text = [...Array(13)].map(() => short).join(' ');
+      expect(text.length).toBeGreaterThan(MAX_UTTERANCE_LENGTH);
       const result = splitSentences(text);
-      expect(result.length).toBeGreaterThan(1);
+      expect(result.length).toBeGreaterThanOrEqual(2);
+      for (const seg of result) {
+        expect(seg.length).toBeLessThanOrEqual(MAX_UTTERANCE_LENGTH);
+      }
     });
 
     it('should split on em-dash delimiters', () => {
