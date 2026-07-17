@@ -8,6 +8,25 @@ describe('extractYoutubeVideoId', () => {
   it('extracts from /watch/ URL format', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch/abc12345678')).toBe('abc12345678');
   });
+
+  it('rejects non-11-char path ID on /watch/', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/shortID')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/not-a-video-id-123')).toBeNull();
+  });
+
+  it('rejects invalid IDs on /embed/, /shorts/, and /live/', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/short')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/shorts/not-valid-id!@#')).toBeNull();
+    expect(extractYoutubeVideoId('https://www.youtube.com/live/xYz')).toBeNull();
+  });
+
+  it('extracts from /watch/ pathname with extra query parameters', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch/abc12345678?t=30&list=PLxyz')).toBe('abc12345678');
+  });
+
+  it('extracts from /embed/ with trailing slash and query parameters', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0&fs=1')).toBe('dQw4w9WgXcQ');
+  });
   it('extracts from standard URL', () => {
     expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
