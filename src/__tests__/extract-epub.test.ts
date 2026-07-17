@@ -226,4 +226,155 @@ describe('parseEpubFromArrayBuffer', () => {
     // cover.png is skipped — only the chapter paragraph should appear
     expect(article.textContent).toContain('survives');
   });
+
+  it('handles case-different container.xml path (readZipFile fallback)', async () => {
+    const zip = new JSZip();
+
+    // Use uppercase Container.xml — extractOpfPath regex still finds full-path,
+    // but readZipFile must fall back to case-insensitive match in zip.files.
+    zip.file(
+      'META-INF/Container.xml',
+      `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf"/>
+  </rootfiles>
+</container>`
+    );
+
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf">
+  <metadata><dc:title>Case Book</dc:title></metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>A paragraph that is long enough to pass the extraction filter in this test.</p></body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    const article = await parseEpubFromArrayBuffer(buf, 'https://example.com/case-book.epub', domParserCtor);
+
+    expect(article.title).toBe('Case Book');
+    expect(article.textContent).toContain('long enough');
+  });
+
+  it('throws when decompressed content exceeds the zip-bomb guard', async () => {
+    const zip = new JSZip();
+
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf"/>
+  </rootfiles>
+</container>`
+    );
+
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf">
+  <metadata><dc:title>Big Book</dc:title></metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    // Generate a chapter whose string length exceeds MAX_EXTRACTED_BYTES (50 MB).
+    const giantText = 'x'.repeat(51_000_000);
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>${giantText}</p></body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    await expect(
+      parseEpubFromArrayBuffer(buf, 'https://example.com/big.epub', domParserCtor),
+    ).rejects.toThrow(/too large after decompression/);
+  });
+
+  it('preserves heading markdown formatting in extracted text', async () => {
+    const zip = new JSZip();
+
+    zip.file(
+      'META-INF/container.xml',
+      `<?xml version="1.0"?>
+<container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="content.opf"/>
+  </rootfiles>
+</container>`
+    );
+
+    zip.file(
+      'content.opf',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="http://www.idpf.org/2007/opf">
+  <metadata><dc:title>Heading Book</dc:title></metadata>
+  <manifest>
+    <item id="ch1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>`
+    );
+
+    zip.file(
+      'chapter.xhtml',
+      `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body>
+    <h2>Chapter Title</h2>
+    <p>A paragraph long enough to pass the extraction filter and survive the speakable-text check.</p>
+    <h3>Subsection Header</h3>
+    <p>Another paragraph that is sufficiently long and speakable for test validation purposes here.</p>
+  </body>
+</html>`
+    );
+
+    const buf = await zip.generateAsync({ type: 'arraybuffer' });
+
+    const domParserCtor = class {
+      parseFromString(html: string, _type: string) { return new DOMParser().parseFromString(html, 'application/xml'); }
+    };
+
+    const article = await parseEpubFromArrayBuffer(buf, 'https://example.com/heading-book.epub', domParserCtor);
+
+    // Headings are formatted with ## or ### prefix per extractTextFromXhtml.
+    expect(article.textContent).toContain('## Chapter Title');
+    expect(article.textContent).toContain('### Subsection Header');
+    expect(article.textContent).toContain('long enough to pass');
+  });
 });
