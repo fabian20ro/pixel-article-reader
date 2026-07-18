@@ -136,6 +136,26 @@ describe('session-store', () => {
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
 
+    it('removes articles where the article field is a non-object primitive before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: 'a string', savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
+    it('removes articles where the article field is null before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: null, savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
     it('removes articles missing required fields before returning null', () => {
       localStorage.setItem(
         'article-reader-last-article',
