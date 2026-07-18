@@ -54,3 +54,11 @@ export function loadLastArticle(): LastSessionData | null {
     return null;
   }
 }
+
+export function clearLastArticle(): void {
+  try {
+    localStorage.removeItem(LAST_ARTICLE_KEY);
+  } catch {
+    // Storage unavailable — nothing to remove.
+  }
+}
