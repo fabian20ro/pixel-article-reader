@@ -722,6 +722,22 @@ describe('TTSEngine', () => {
     expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
   });
 
+  it('setDeviceVoiceOnly(true) is a no-op when already enabled', () => {
+    const engine = createEngine();
+
+    engine.setDeviceVoiceOnly(true);
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+
+    // Saving state before second call so we can verify it is preserved
+    const savedAudioBefore = (engine as unknown as Record<string, unknown>)._savedAudioBackend;
+
+    engine.setDeviceVoiceOnly(true);
+
+    // Should be no-op: backend stays null, saved backend unchanged
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBe(savedAudioBefore);
+  });
+
   // ── Voice sync bug fixes ─────────────────────────────────────────
 
   it('speakCurrent does not advance chain when paused', () => {
