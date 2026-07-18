@@ -211,6 +211,24 @@ describe('getUrlFromParams', () => {
     );
     expect(getUrlFromParams()).toBeNull();
   });
+
+  it('falls back to ?text= when ?url= contains an invalid URL', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?url=garbage&text=https%3A%2F%2Fexample.com%2Fpost',
+    );
+    expect(getUrlFromParams()).toBe('https://example.com/post');
+  });
+
+  it('falls back to ?title= when both ?url= and ?text= are invalid', () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?url=bogus&text=nope&title=Article Title%20https%3A%2F%2Fexample.com%2Fpost',
+    );
+    expect(getUrlFromParams()).toBe('https://example.com/post');
+  });
 });
 
 // ── clearQueryParams ────────────────────────────────────────────────
