@@ -71,7 +71,19 @@ export function loadSettings(defaults: SettingsDefaults): AppSettings {
       deviceVoiceOnly: typeof parsed.deviceVoiceOnly === 'boolean' ? parsed.deviceVoiceOnly : false,
     };
 
-    if (JSON.stringify(cleaned) !== raw) {
+    const defaultsMatch = (a: unknown, b: unknown): boolean => a === b;
+
+    let needsWriteback = false;
+    const parsedAny: Record<string, unknown> = { ...parsed };
+    const cleanedAny: Record<string, unknown> = { ...cleaned };
+    for (const key of Object.keys(parsed)) {
+      if (parsedAny[key] !== cleanedAny[key]) {
+        needsWriteback = true;
+        break;
+      }
+    }
+
+    if (needsWriteback) {
       saveSettings(cleaned);
     }
 

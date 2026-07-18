@@ -215,4 +215,51 @@ describe('settings-store', () => {
       expect(key).not.toMatch(/^(foo|baz)$/);
     }
   });
+
+  it('does not trigger a spurious save when defaults fill missing keys', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 1, lang: 'auto' }),
+    );
+
+    const saved = loadSettings(defaults);
+    expect(saved.rate).toBe(1);
+    expect(saved.lang).toBe('auto');
+    expect(localStorage.getItem('articlevoice-settings')).toBe(JSON.stringify({ rate: 1, lang: 'auto' }));
+  });
+
+  it('only triggers a save when at least one field actually changed', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 2, lang: 'en' }),
+    );
+
+    const saved = loadSettings(defaults);
+    expect(saved.rate).toBe(2);
+    expect(saved.lang).toBe('en');
+    expect(localStorage.getItem('articlevoice-settings')).toBe(JSON.stringify({ rate: 2, lang: 'en' }));
+  });
+
+  it('does not trigger a save when valid settings already match defaults', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 1, lang: 'auto', voiceName: '', voiceGender: 'auto', wakeLock: true, theme: 'dark', deviceVoiceOnly: false }),
+    );
+
+    const saved = loadSettings(defaults);
+    expect(saved).toEqual(createDefaultSettings(defaults));
+    expect(localStorage.getItem('articlevoice-settings')).toBe(JSON.stringify({ rate: 1, lang: 'auto', voiceName: '', voiceGender: 'auto', wakeLock: true, theme: 'dark', deviceVoiceOnly: false }));
+  });
+
+  it('triggers a save when invalid values are sanitized', () => {
+    localStorage.setItem(
+      'articlevoice-settings',
+      JSON.stringify({ rate: 99, lang: 'xx' }),
+    );
+
+    const saved = loadSettings(defaults);
+    expect(saved.rate).toBe(3);
+    expect(saved.lang).toBe('auto');
+    expect(localStorage.getItem('articlevoice-settings')).toBe(JSON.stringify({ rate: 3, lang: 'auto', voiceName: '', voiceGender: 'auto', wakeLock: true, theme: 'dark', deviceVoiceOnly: false }));
+  });
 });
