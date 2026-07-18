@@ -1,3 +1,7 @@
+import { createLogger } from './logger.js';
+
+const log = createLogger('Translator');
+
 /**
  * Text translation via the CORS proxy's translate endpoint.
  * Batches paragraphs to minimize API calls while staying under per-request limits.
@@ -134,6 +138,7 @@ async function translateSingle(
       throw new Error(`Translation rate limited${batchInfo}.${waitMsg}${detail ? ' ' + detail : ''}`);
     }
     if (resp.status === 405) {
+      log.warn('POST translate rejected with 405, falling back to GET', detail || resp.statusText);
       try {
         return await translateSingleGet(text, sourceLang, targetLang, proxyBase);
       } catch (fallbackErr: unknown) {

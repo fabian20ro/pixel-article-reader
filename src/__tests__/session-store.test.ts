@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadLastArticle, saveLastArticle, type LastSessionData } from '../lib/session-store.js';
+import { clearLastArticle, loadLastArticle, saveLastArticle, type LastSessionData } from '../lib/session-store.js';
 import type { Article } from '../lib/extractor.js';
 
 function createStorageMock() {
@@ -203,6 +203,22 @@ describe('session-store', () => {
       const savedAt = loaded!.savedAt;
       expect(typeof savedAt).toBe('number');
       expect(savedAt === savedAt && savedAt !== Infinity && savedAt !== -Infinity).toBe(true);
+    });
+  });
+
+  describe('clearLastArticle', () => {
+    it('removes the stored article from localStorage', () => {
+      const article = makeArticle({ title: 'Clear Me' });
+      saveLastArticle(article);
+      clearLastArticle();
+
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+      expect(loadLastArticle()).toBeNull();
+    });
+
+    it('does nothing when no article was saved', () => {
+      clearLastArticle();
+      expect(loadLastArticle()).toBeNull();
     });
   });
 });

@@ -214,6 +214,60 @@ describe('translateParagraphs', () => {
     expect(fetchSpy.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'GET' }));
   });
 
+  it('uses GET translation when POST returns 405 and GET fallback succeeds', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(mockErrorResponse(405, 'Method not allowed'))
+      .mockResolvedValueOnce(mockTranslateResponse('Hello from GET fallback'));
+
+    const result = await translateParagraphs(['Salut'], 'ro', 'en', PROXY);
+
+    expect(result).toEqual(['Hello from GET fallback']);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    // First call: POST to action=translate
+    expect(fetchSpy.mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST' }));
+    // Second call (from translateSingleGet): GET with query params
+    const secondUrl = String(fetchSpy.mock.calls[1][0]);
+    expect(secondUrl).toContain('action=translate');
+    expect(secondUrl).toContain('from=ro');
+    expect(secondUrl).toContain('to=en');
+    expect(fetchSpy.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('throws combined error when POST returns 405 and GET fallback also fails', async () => {
+    const getFallbackResp = {
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve({ error: 'downstream unavailable' }),
+      headers: { get: (name: string) => name === 'Retry-After' ? null : null },
+    } as unknown as Response;
+
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(mockErrorResponse(405, 'Method not allowed'))
+      .mockResolvedValueOnce(getFallbackResp);
+
+    await expect(
+      translateParagraphs(['Test'], 'de', 'en', PROXY),
+    ).rejects.toThrow(/status 405.*GET fallback failed:.*status 503/);
+  });
+
+  it('does not crash when error response body is non-JSON', async () => {
+    const rawResp = {
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      json: () => Promise.reject(new Error('invalid')),
+      headers: { get: () => null },
+    } as unknown as Response;
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(rawResp);
+
+    await expect(
+      translateParagraphs(['Test'], 'de', 'en', PROXY),
+    ).rejects.toThrow(/500/);
+  });
+
   it('handles rate limit error with retry info', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockErrorResponse(429, 'Rate limit exceeded'),
