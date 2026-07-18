@@ -108,6 +108,51 @@ describe('ArticleController', () => {
     vi.unstubAllGlobals();
   });
 
+  it('loads a shared-url article via handleInitialSharedUrl', async () => {
+    const sharedArticle = {
+      title: 'Shared Article',
+      content: '<p>shared</p>',
+      textContent: 'shared',
+      markdown: 'shared',
+      paragraphs: ['shared paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 10,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/shared',
+    } as any;
+
+    vi.mocked(extractArticle).mockResolvedValueOnce(sharedArticle);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    // Simulate a shared URL in the query string.
+    const historyReplace = vi.fn();
+    vi.stubGlobal('window', {
+      location: { search: '?url=https://example.com/shared' },
+      history: { replaceState: historyReplace },
+    });
+
+    await controller.handleInitialSharedUrl();
+
+    expect(historyReplace).toHaveBeenCalled();
+
+    expect(extractArticle).toHaveBeenCalledWith(
+      'https://example.com/shared',
+      'https://proxy.example.workers.dev',
+      expect.anything(),
+    );
+    expect(controller.getCurrentArticle()).toEqual(sharedArticle);
+  });
+
   it('passes extractArticle an options object from the browser load path and handles errors', async () => {
     const errorMsg = 'boom';
     vi.mocked(extractArticle).mockRejectedValueOnce(new Error(errorMsg));

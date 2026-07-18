@@ -112,7 +112,10 @@ describe('fetchTtsAudio', () => {
   });
 
   it('returns null when both attempts fail transiently', async () => {
-    const start = Date.now();
+    // Stub setTimeout to fire the callback synchronously so await delays resolve immediately — avoids wall-clock flakiness.
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+      (cb: any) => { cb(); return 0; },
+    );
 
     vi.mocked(fetch)
       .mockRejectedValueOnce(new Error('Network error')) // first: transient
@@ -122,8 +125,7 @@ describe('fetchTtsAudio', () => {
 
     expect(result).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(2);
-    // ~1s retry delay between attempts
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeGreaterThanOrEqual(900);
+    // Verify the retry delay constant is used (stubbed to fire synchronously)
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), 1000);
   });
 });
