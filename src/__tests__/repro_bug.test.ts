@@ -83,4 +83,19 @@ describe('extractYoutubeVideoId bug reproduction', () => {
   it('extracts ID from m.youtube.com watch URL', () => {
     expect(extractYoutubeVideoId('https://m.youtube.com/watch?v=abc12345678')).toBe('abc12345678');
   });
+
+  // --- character-class edge cases for the [\w-]{11} regex ---
+
+  it('extracts ID containing hyphens (valid YouTube format)', () => {
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=abc-1234567')).toBe('abc-1234567');
+  });
+
+  it('extracts uppercase-alphanumeric ID (case-insensitive match)', () => {
+    expect(extractYoutubeVideoId('https://youtu.be/ABCDEFghijk')).toBe('ABCDEFghijk');
+  });
+
+  it('returns null when hyphen is at a non-allowed position in the ID', () => {
+    // Hyphens are valid inside [\w-], but an all-hyphen string fails length+pattern check
+    expect(extractYoutubeVideoId('https://www.youtube.com/watch?v=---------')).toBeNull();
+  });
 });
