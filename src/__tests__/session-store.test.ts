@@ -73,6 +73,16 @@ describe('session-store', () => {
       expect(localStorage.getItem('article-reader-last-article')).toBeNull();
     });
 
+    it('removes entries missing savedAt before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: makeArticle() }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
     it('removes articles with non-string paragraphs before returning null', () => {
       localStorage.setItem(
         'article-reader-last-article',
@@ -120,6 +130,26 @@ describe('session-store', () => {
       localStorage.setItem(
         'article-reader-last-article',
         JSON.stringify({ article: { ...makeArticle(), title: 42 }, savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
+    it('removes articles where the article field is a non-object primitive before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: 'a string', savedAt: 123456789 }),
+      );
+
+      expect(loadLastArticle()).toBeNull();
+      expect(localStorage.getItem('article-reader-last-article')).toBeNull();
+    });
+
+    it('removes articles where the article field is null before returning null', () => {
+      localStorage.setItem(
+        'article-reader-last-article',
+        JSON.stringify({ article: null, savedAt: 123456789 }),
       );
 
       expect(loadLastArticle()).toBeNull();
