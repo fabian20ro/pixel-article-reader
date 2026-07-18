@@ -111,6 +111,29 @@ describe('fetchTtsAudio', () => {
     expect(clearTimeoutSpy).toHaveBeenCalled();
   });
 
+  it('retries once when resp.blob() throws on a successful response and returns null', async () => {
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+      (cb: any) => { cb(); return 0; },
+    );
+
+    let blobCallCount = 0;
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      blob: async () => {
+        blobCallCount++;
+        throw new Error('corrupt stream');
+      },
+    } as any);
+
+    const result = await fetchTtsAudio('hello', 'en', config);
+
+    expect(result).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(blobCallCount).toBe(2);
+    // Verify the retry delay constant is used (stubbed to fire synchronously)
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), 1000);
+  });
+
   it('returns null when both attempts fail transiently', async () => {
     // Stub setTimeout to fire the callback synchronously so await delays resolve immediately — avoids wall-clock flakiness.
     const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
