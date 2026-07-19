@@ -82,19 +82,26 @@ describe('fetchTtsAudio', () => {
   });
 
   it('treats fetch abort (timeout) as transient and retries', async () => {
+    // Stub setTimeout to fire synchronously so the timeout fires immediately,
+    // triggering AbortController.abort() without real wall-clock delays.
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+      (cb: any) => { cb(); return 0; },
+    );
+
     const abortError = new Error('The user aborted a request.');
     abortError.name = 'AbortError';
 
-    vi.mocked(fetch)
-      .mockRejectedValueOnce(abortError); // first attempt: timeout → transient path
-
-    vi.mocked(fetch).mockResolvedValueOnce({
+    // First attempt: setTimeout fires immediately → AbortController.abort() → fetch rejects
+    vi.mocked(fetch).mockRejectedValueOnce(abortError);
+    // Second attempt: succeeds after retry delay stubbed synchronously
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['audio']),
-    } as any); // second attempt succeeds
+    } as any);
 
     const result = await fetchTtsAudio('hello', 'en', config);
     expect(result).toBe('blob:url');
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), 10_000);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
