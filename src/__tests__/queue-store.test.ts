@@ -460,6 +460,16 @@ describe('queue-store', () => {
       const loaded = loadQueue();
       expect(loaded).toHaveLength(1);
     });
+
+    it('drops items with a malformed (non-empty) URL that fails isValidArticleUrl', () => {
+      const valid = makeItem();
+      const bad = makeItem({ url: 'not-a-url' } as QueueItem);
+      localStorage.setItem('article-reader-queue', JSON.stringify([valid, bad]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe(valid.id);
+    });
   });
 
   describe('loadQueue rejects items with empty required fields', () => {
