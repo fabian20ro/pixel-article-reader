@@ -738,6 +738,35 @@ describe('TTSEngine', () => {
     expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBe(savedAudioBefore);
   });
 
+  it('setDeviceVoiceOnly toggles correctly during active playback', () => {
+    const engine = createEngine();
+    const initialAudio = (engine as unknown as Record<string, unknown>).audioBackend;
+
+    // Start playback to simulate mid-stream toggle
+    engine.loadArticle(['Hello.'], 'en');
+    engine.play();
+    expect(engine.state.isPlaying).toBe(true);
+
+    // Disable audio backend while playing — speech synthesis should still work
+    engine.setDeviceVoiceOnly(true);
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBe(initialAudio);
+
+    // Toggle back on — audio backend should be restored
+    engine.setDeviceVoiceOnly(false);
+    if (initialAudio !== null) {
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBe(initialAudio);
+      expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBeNull();
+    } else {
+      // No initial backend: restoring from null keeps it off
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    }
+
+    // Engine should still be in a clean state after the toggle cycle
+    expect(engine.state.isPlaying).toBe(true);
+    expect(mockSynth.speak).toHaveBeenCalled();
+  });
+
   // ── Voice sync bug fixes ─────────────────────────────────────────
 
   it('speakCurrent does not advance chain when paused', () => {
@@ -830,6 +859,80 @@ describe('TTSEngine', () => {
 
     // Sentence index should not have advanced
     expect(engine.state.currentSentence).toBe(0);
+  });
+
+  // ── speakCurrent: end-of-article termination chain ────────────────
+
+  it('speakCurrent terminates article when all sentences complete naturally', async () => {
+    vi.useRealTimers();
+    const onEnd = vi.fn();
+    const engine = createEngine({ onEnd });
+    // 2 paragraphs, each with 1 sentence — exhaust both via speak→onend chain
+    engine.loadArticle(
+      [
+        'First paragraph has one sentence that ends here.',
+        'Second paragraph also completes its single sentence.',
+      ],
+      'en',
+    );
+    engine.play();
+
+    // Wait for the mock's setTimeout(0) onend to fire and chain through speakCurrent
+    await new Promise((r) => setTimeout(r, 50));
+
+    // handleEnd should have fired: onEnd callback called, engine stopped.
+    // Engine keeps its current paragraph position after stop (not reset).
+    expect(onEnd).toHaveBeenCalled();
+    expect(engine.state.isPlaying).toBe(false);
+    expect(engine.state.currentParagraph).toBe(2);
+  });
+
+  it('speakCurrent advances across paragraphs when sentence-end completes', async () => {
+    vi.useRealTimers();
+    const onParagraphChange = vi.fn();
+    const engine = createEngine({ onParagraphChange });
+    // Multi-sentence, multi-paragraph: sentences complete individually via mock onend.
+    // The sentence splitter merges short adjacent fragments, so two consecutive
+    // short sentences may become a single utterance — verify observed behavior.
+    engine.loadArticle(
+      [
+        'First paragraph sentence one. First paragraph sentence two.',
+        'Second paragraph only has this one sentence here.',
+      ],
+      'en',
+    );
+    engine.play();
+
+    // Wait for all speak→onend chains to resolve (sentences × setTimeout 0)
+    await new Promise((r) => setTimeout(r, 100));
+
+    // After exhaustion: article ended, no more speaking expected.
+    expect(engine.state.isPlaying).toBe(false);
+    // Sentence splitter merges the two first-para sentences into one utterance,
+    // so only 2 speak() calls total (one per paragraph's merged utterance).
+    expect(mockSynth.speak).toHaveBeenCalledTimes(2);
+    expect(onParagraphChange).toHaveBeenCalledWith(0, 'First paragraph sentence one. First paragraph sentence two.');
+    expect(onParagraphChange).toHaveBeenCalledWith(1, 'Second paragraph only has this one sentence here.');
+  });
+
+  it('_speakGen increments and cancelAllBackends runs on skipForward', () => {
+    const engine = createEngine();
+    engine.loadArticle(
+      [
+        'First paragraph first sentence that ends with a period.',
+        'Second paragraph first sentence also ends here.',
+      ],
+      'en',
+    );
+    engine.play();
+
+    // skipForward must call cancelAllBackends (which cancels speech backend)
+    // and increment the speak generation counter to invalidate stale onEnd callbacks.
+    const cancelBefore = mockSynth.cancel.mock.calls.length;
+    engine.skipForward();
+
+    expect(mockSynth.cancel).toHaveBeenCalledTimes(cancelBefore + 1);
+    expect(engine.state.currentParagraph).toBe(1);
   });
 
   it('seekToTime jumps to the correct paragraph/sentence', () => {

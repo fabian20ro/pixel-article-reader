@@ -776,9 +776,9 @@ describe('ArticleController', () => {
   });
 
   it('suppresses stale error when an older file upload fails after a newer one succeeds', async () => {
-    // First (older) upload resolves with delay. Second (newer) resolves immediately,
+    // First (older) upload rejects with delay. Second (newer) resolves immediately,
     // so loadToken changes and the first's stale result is ignored.
-    let resolveFirst = null; // ((v: any) => void) | null;
+    let resolveFirst: ((v: any) => void) | null = null;
     vi.mocked(createArticleFromPdf).mockImplementationOnce(
       () => new Promise((resolve) => { (resolveFirst as any) = resolve; }) as any,
     );
@@ -821,5 +821,111 @@ describe('ArticleController', () => {
     // The stale error/result from file1 must NOT have been applied to the view.
     expect(refs.errorMessage.textContent).not.toContain('Old');
     expect(refs.articleTitle.textContent).toBe('Newer');
+  });
+
+  it('skips extractArticle when offline despite a shared URL in the query string', async () => {
+    const refs = makeRefs();
+
+    // Simulate a shared URL in the query string.
+    vi.stubGlobal('window', {
+      location: { search: '?url=https://example.com/shared' },
+      history: { replaceState: vi.fn() },
+    });
+
+    // Force offline mode — controller checks navigator.onLine.
+    vi.stubGlobal('navigator', { onLine: false });
+
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await controller.handleInitialSharedUrl();
+
+    expect(extractArticle).not.toHaveBeenCalled();
+  });
+
+  it('suppresses stale error when an older file upload fails after a newer one succeeds on the failure path', async () => {
+    // First (older) upload rejects with delay. Second (newer) resolves immediately,
+    // so loadToken changes and the first's stale error is suppressed.
+    let rejectFirst: ((err: Error) => void) | null = null;
+    vi.mocked(createArticleFromPdf).mockImplementationOnce(
+      () => new Promise((_, reject) => { (rejectFirst as any) = reject; }) as any,
+    );
+    vi.mocked(createArticleFromPdf).mockResolvedValueOnce({
+      title: 'Newer',
+      content: '<p>newer</p>',
+      textContent: 'newer',
+      markdown: 'newer',
+      paragraphs: ['newer paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/newer',
+    } as any);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    const file1 = new File(['old'], 'a.pdf', { type: 'application/pdf' });
+    const file2 = new File(['new'], 'b.pdf', { type: 'application/pdf' });
+
+    // Start first upload (won't reject until we do).
+    void (controller as any).handleFileUpload(file1);
+    // Immediately start second — it resolves synchronously.
+    await (controller as any).handleFileUpload(file2);
+    // Now trigger the stale rejection from file1; it must be ignored.
+    ((rejectFirst as unknown) as (() => void))(new Error('stale failure'));
+    await Promise.resolve();
+
+    expect(controller.getCurrentArticle()?.title).toBe('Newer');
+    // The stale error must NOT have been displayed on the error message element.
+    expect(refs.errorMessage.textContent).not.toContain('stale failure');
+  });
+
+  it('exposes loadArticleFromUrl as a public queue entry point', async () => {
+    const article = {
+      title: 'Queue Article',
+      content: '<p>queued</p>',
+      textContent: 'queued',
+      markdown: 'queued',
+      paragraphs: ['queued paragraph'],
+      lang: 'en',
+      htmlLang: 'en',
+      siteName: 'Site',
+      excerpt: '',
+      wordCount: 1,
+      estimatedMinutes: 1,
+      resolvedUrl: 'https://example.com/queue',
+    } as any;
+
+    vi.mocked(extractArticle).mockResolvedValueOnce(article);
+
+    const refs = makeRefs();
+    const controller = new ArticleController({
+      refs,
+      tts: { stop: vi.fn(), loadArticle: vi.fn(), setLang: vi.fn() } as any,
+      proxyBase: 'https://proxy.example.workers.dev',
+      initialLangOverride: 'auto',
+    });
+
+    await controller.loadArticleFromUrl('https://example.com/queue');
+
+    expect(extractArticle).toHaveBeenCalledWith(
+      'https://example.com/queue',
+      'https://proxy.example.workers.dev',
+      expect.anything(),
+    );
+    expect(controller.getCurrentArticle()).toEqual(article);
   });
 });

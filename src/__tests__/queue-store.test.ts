@@ -160,6 +160,22 @@ describe('queue-store', () => {
       expect(loaded).toEqual([middle, newer]);
       expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([middle, newer]);
     });
+
+    it('does not write back to localStorage when the queue is already clean', () => {
+      const item = makeItem();
+      localStorage.setItem(
+        'article-reader-queue',
+        JSON.stringify([item]),
+      );
+
+      // Capture current stored value before loadQueue call
+      const storedBefore = localStorage.getItem('article-reader-queue');
+
+      const loaded = loadQueue();
+
+      expect(loaded).toHaveLength(1);
+      expect(localStorage.getItem('article-reader-queue')).toBe(storedBefore);
+    });
   });
 
   describe('addToQueue', () => {
@@ -330,6 +346,55 @@ describe('queue-store', () => {
       // so callers can rely on the returned array for UI rendering.
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('fail-safe');
+
+      Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
+    });
+  });
+
+  describe('removeFromQueue failure resilience', () => {
+    it('preserves in-memory queue state when localStorage.setItem throws on save', () => {
+      const mock = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!;
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: createStorageMock(),
+        configurable: true,
+      });
+
+      (globalThis.localStorage as any).setItem = () => {
+        throw new DOMException('QuotaExceededError', 'Failed to save');
+      };
+
+      const a = makeItem({ id: 'keep-me' });
+      const result = removeFromQueue([a], 'remove-me');
+
+      // In-memory state must remain consistent even when persistence fails,
+      // so callers can rely on the returned array for UI rendering.
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('keep-me');
+
+      Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
+    });
+  });
+
+  describe('reorderQueue failure resilience', () => {
+    it('preserves in-memory queue state when localStorage.setItem throws on save', () => {
+      const mock = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!;
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: createStorageMock(),
+        configurable: true,
+      });
+
+      (globalThis.localStorage as any).setItem = () => {
+        throw new DOMException('QuotaExceededError', 'Failed to save');
+      };
+
+      const a = makeItem({ id: 'a' });
+      const b = makeItem({ id: 'b' });
+      const result = reorderQueue([b, a]);
+
+      // In-memory state must remain consistent even when persistence fails,
+      // so callers can rely on the returned array for UI rendering.
+      expect(result[0].id).toBe('b');
+      expect(result[1].id).toBe('a');
 
       Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
     });
