@@ -21,9 +21,13 @@ export async function fetchTtsAudio(
   text: string,
   lang: string,
   config: TtsAudioFetcherConfig,
+  signal?: AbortSignal,
 ): Promise<string | null> {
+  // Caller-supplied already-aborted signal: short-circuit.
+  if (signal?.aborted) return null;
+
   try {
-    return await attemptFetch(text, lang, config);
+    return await attemptFetch(text, lang, config, signal);
   } catch (err) {
     // If it's a permanent error, don't retry.
     if (err instanceof Error && err.message.startsWith('Permanent error')) {
@@ -32,7 +36,7 @@ export async function fetchTtsAudio(
     // Transient error (network error, timeout, or non-retryable HTTP status)
     await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
     try {
-      return await attemptFetch(text, lang, config);
+      return await attemptFetch(text, lang, config, signal);
     } catch {
       return null;
     }
@@ -43,6 +47,7 @@ async function attemptFetch(
   text: string,
   lang: string,
   config: TtsAudioFetcherConfig,
+  callerSignal?: AbortSignal,
 ): Promise<string | null> {
   const url =
     `${config.proxyBase}/?action=tts` +
@@ -50,6 +55,16 @@ async function attemptFetch(
     `&lang=${encodeURIComponent(lang)}`;
 
   const controller = new AbortController();
+  // Merge caller-supplied signal so abort propagates to the fetch.
+  let onCallerAbort: (() => void) | null = null;
+  if (callerSignal) {
+    onCallerAbort = () => controller.abort(callerSignal.reason);
+    if (callerSignal.aborted) {
+      onCallerAbort();
+    } else {
+      callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+    }
+  }
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
@@ -70,5 +85,6 @@ async function attemptFetch(
     throw err;
   } finally {
     clearTimeout(timeout);
+    if (onCallerAbort) callerSignal?.removeEventListener('abort', onCallerAbort as EventListener);
   }
 }
