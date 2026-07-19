@@ -108,13 +108,14 @@ export function loadQueue(): QueueItem[] {
   }
 }
 
-/** Persist queue to localStorage. Returns false on QuotaExceededError. */
-export function saveQueue(items: QueueItem[]): boolean {
+/** Persist queue to localStorage. Calls onFail synchronously if storage throws. Returns false on failure. */
+export function saveQueue(items: QueueItem[], onFail?: (err: unknown) => void): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     return true;
   } catch (err) {
     log.warn('Failed to save queue (quota exceeded?)', err);
+    onFail?.(err);
     return false;
   }
 }
@@ -134,24 +135,24 @@ export function createQueueItem(article: Article): QueueItem {
 }
 
 /** Add an item to the queue. Enforces max size. Returns the new queue. */
-export function addToQueue(items: QueueItem[], item: QueueItem): QueueItem[] {
+export function addToQueue(items: QueueItem[], item: QueueItem, onFail?: (err: unknown) => void): QueueItem[] {
   // Prevent duplicates by URL
   const filtered = items.filter((i) => !item.url || i.url !== item.url);
   const updated = [...filtered, item].slice(-MAX_QUEUE_SIZE);
-  saveQueue(updated);
+  saveQueue(updated, onFail);
   return updated;
 }
 
 /** Remove an item by id. Returns the new queue. */
-export function removeFromQueue(items: QueueItem[], id: string): QueueItem[] {
+export function removeFromQueue(items: QueueItem[], id: string, onFail?: (err: unknown) => void): QueueItem[] {
   const updated = items.filter((i) => i.id !== id);
-  saveQueue(updated);
+  saveQueue(updated, onFail);
   return updated;
 }
 
 /** Replace the entire queue (for reordering). Returns the saved queue. */
-export function reorderQueue(items: QueueItem[]): QueueItem[] {
-  saveQueue(items);
+export function reorderQueue(items: QueueItem[], onFail?: (err: unknown) => void): QueueItem[] {
+  saveQueue(items, onFail);
   return items;
 }
 
