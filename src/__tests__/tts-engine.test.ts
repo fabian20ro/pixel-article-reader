@@ -738,6 +738,35 @@ describe('TTSEngine', () => {
     expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBe(savedAudioBefore);
   });
 
+  it('setDeviceVoiceOnly toggles correctly during active playback', () => {
+    const engine = createEngine();
+    const initialAudio = (engine as unknown as Record<string, unknown>).audioBackend;
+
+    // Start playback to simulate mid-stream toggle
+    engine.loadArticle(['Hello.'], 'en');
+    engine.play();
+    expect(engine.state.isPlaying).toBe(true);
+
+    // Disable audio backend while playing — speech synthesis should still work
+    engine.setDeviceVoiceOnly(true);
+    expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBe(initialAudio);
+
+    // Toggle back on — audio backend should be restored
+    engine.setDeviceVoiceOnly(false);
+    if (initialAudio !== null) {
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBe(initialAudio);
+      expect((engine as unknown as Record<string, unknown>)._savedAudioBackend).toBeNull();
+    } else {
+      // No initial backend: restoring from null keeps it off
+      expect((engine as unknown as Record<string, unknown>).audioBackend).toBeNull();
+    }
+
+    // Engine should still be in a clean state after the toggle cycle
+    expect(engine.state.isPlaying).toBe(true);
+    expect(mockSynth.speak).toHaveBeenCalled();
+  });
+
   // ── Voice sync bug fixes ─────────────────────────────────────────
 
   it('speakCurrent does not advance chain when paused', () => {
