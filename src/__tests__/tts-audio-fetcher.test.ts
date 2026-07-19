@@ -82,19 +82,26 @@ describe('fetchTtsAudio', () => {
   });
 
   it('treats fetch abort (timeout) as transient and retries', async () => {
+    // Stub setTimeout to fire synchronously so the timeout fires immediately,
+    // triggering AbortController.abort() without real wall-clock delays.
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+      (cb: any) => { cb(); return 0; },
+    );
+
     const abortError = new Error('The user aborted a request.');
     abortError.name = 'AbortError';
 
-    vi.mocked(fetch)
-      .mockRejectedValueOnce(abortError); // first attempt: timeout → transient path
-
-    vi.mocked(fetch).mockResolvedValueOnce({
+    // First attempt: setTimeout fires immediately → AbortController.abort() → fetch rejects
+    vi.mocked(fetch).mockRejectedValueOnce(abortError);
+    // Second attempt: succeeds after retry delay stubbed synchronously
+    vi.mocked(fetch).mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['audio']),
-    } as any); // second attempt succeeds
+    } as any);
 
     const result = await fetchTtsAudio('hello', 'en', config);
     expect(result).toBe('blob:url');
+    expect(spy).toHaveBeenCalledWith(expect.any(Function), 10_000);
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
@@ -150,5 +157,50 @@ describe('fetchTtsAudio', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     // Verify the retry delay constant is used (stubbed to fire synchronously)
     expect(spy).toHaveBeenCalledWith(expect.any(Function), 1000);
+  });
+
+  it('returns null when caller passes already-aborted AbortSignal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await fetchTtsAudio('hello', 'en', config, controller.signal);
+    expect(result).toBeNull();
+    // No fetch should have been attempted.
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('cancels in-flight fetch when caller aborts signal mid-call', async () => {
+    const controller = new AbortController();
+
+    // Stub setTimeout so the retry delay fires synchronously (avoids wall-clock timing).
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(
+      (cb: any) => { cb(); return 0; },
+    );
+
+    let resolveFetch!: () => void;
+    const fetchPromise = new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    // Make mock actually check the signal and reject with AbortError if aborted.
+    vi.mocked(fetch).mockImplementation((_url, init?: any) => {
+      if (init?.signal?.aborted) {
+        const err = new Error('The user aborted a request.');
+        (err as any).name = 'AbortError';
+        return Promise.reject(err);
+      }
+      // Resolve the pending promise so we don't hang on await below.
+      resolveFetch();
+      return Promise.resolve({ ok: true, blob: async () => new Blob(['audio']) });
+    });
+
+    // Kick off the fetch.
+    const promise = fetchTtsAudio('hello', 'en', config, controller.signal);
+
+    // Let it start — abort before it resolves.
+    controller.abort();
+
+    const result = await promise;
+    expect(result).toBeNull();
   });
 });
