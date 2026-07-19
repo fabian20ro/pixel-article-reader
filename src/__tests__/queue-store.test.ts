@@ -160,6 +160,22 @@ describe('queue-store', () => {
       expect(loaded).toEqual([middle, newer]);
       expect(JSON.parse(localStorage.getItem('article-reader-queue') ?? '[]')).toEqual([middle, newer]);
     });
+
+    it('does not write back to localStorage when the queue is already clean', () => {
+      const item = makeItem();
+      localStorage.setItem(
+        'article-reader-queue',
+        JSON.stringify([item]),
+      );
+
+      // Capture current stored value before loadQueue call
+      const storedBefore = localStorage.getItem('article-reader-queue');
+
+      const loaded = loadQueue();
+
+      expect(loaded).toHaveLength(1);
+      expect(localStorage.getItem('article-reader-queue')).toBe(storedBefore);
+    });
   });
 
   describe('addToQueue', () => {
