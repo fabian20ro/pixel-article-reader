@@ -335,6 +335,55 @@ describe('queue-store', () => {
     });
   });
 
+  describe('removeFromQueue failure resilience', () => {
+    it('preserves in-memory queue state when localStorage.setItem throws on save', () => {
+      const mock = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!;
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: createStorageMock(),
+        configurable: true,
+      });
+
+      (globalThis.localStorage as any).setItem = () => {
+        throw new DOMException('QuotaExceededError', 'Failed to save');
+      };
+
+      const a = makeItem({ id: 'keep-me' });
+      const result = removeFromQueue([a], 'remove-me');
+
+      // In-memory state must remain consistent even when persistence fails,
+      // so callers can rely on the returned array for UI rendering.
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('keep-me');
+
+      Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
+    });
+  });
+
+  describe('reorderQueue failure resilience', () => {
+    it('preserves in-memory queue state when localStorage.setItem throws on save', () => {
+      const mock = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!;
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: createStorageMock(),
+        configurable: true,
+      });
+
+      (globalThis.localStorage as any).setItem = () => {
+        throw new DOMException('QuotaExceededError', 'Failed to save');
+      };
+
+      const a = makeItem({ id: 'a' });
+      const b = makeItem({ id: 'b' });
+      const result = reorderQueue([b, a]);
+
+      // In-memory state must remain consistent even when persistence fails,
+      // so callers can rely on the returned array for UI rendering.
+      expect(result[0].id).toBe('b');
+      expect(result[1].id).toBe('a');
+
+      Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
+    });
+  });
+
   describe('addToQueue ordering', () => {
     it('preserves newest-last (FIFO) order through multiple adds', () => {
       const a = makeItem({ id: 'first', url: 'https://example.com/1' });
