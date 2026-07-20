@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parsePdfFromArrayBuffer, createArticleFromPdf, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
 import { MAX_PDF_SIZE } from '../lib/extractors/types.js';
 
@@ -313,5 +313,75 @@ describe('createArticleFromPdf - input guards', () => {
       arrayBuffer(): Promise<ArrayBuffer> { throw new Error('unreachable'); },
     };
     await expect(createArticleFromPdf(negInfSizeFile as any)).rejects.toThrow(/Invalid file object/);
+  });
+});
+
+describe('parsePdfFromArrayBuffer - happy path integration', () => {
+  const mock = vi.hoisted(() => ({
+    getDocument: vi.fn(),
+    GlobalWorkerOptions: {},
+  }));
+
+  beforeEach(() => {
+    vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => mock);
+  });
+
+  function setupMockPdf(numPages: number, info: any, itemsPerPage: (pageNum: number) => Array<{ str: string; transform: number[]; height?: number }>) {
+    const getPage = vi.fn((pageNum: number) => Promise.resolve({
+      getTextContent: () => Promise.resolve({
+        items: itemsPerPage(pageNum),
+      }),
+    }));
+
+    mock.getDocument.mockReturnValue({ promise: Promise.resolve({
+      numPages,
+      info,
+      getPage,
+    })});
+  }
+
+  it('should produce a correct Article from valid PDF text items with metadata', async () => {
+    setupMockPdf(1, { Title: 'Test Article', Author: 'Test Author' }, () => [
+      { str: 'This is the first paragraph of the article.', transform: [1, 0, 0, 1, 0, 700], height: 12 },
+      { str: '', transform: [1, 0, 0, 1, 0, 650], height: 12 }, // empty -> skipped
+      { str: 'This is the second paragraph with more content.', transform: [1, 0, 0, 1, 0, 640], height: 12 }
+    ]);
+
+    const buffer = new ArrayBuffer(1024); // non-empty valid buffer
+    const result = await parsePdfFromArrayBuffer(buffer, 'test-article.pdf');
+
+    expect(result).toBeDefined();
+    expect(result.title).toBe('Test Article');
+    expect(result.siteName).toBe('Test Author');
+    expect(result.paragraphs).toHaveLength(2);
+    expect(result.paragraphs[0]).toContain('This is the first paragraph');
+    expect(result.paragraphs[1]).toContain('This is the second paragraph');
+    expect(result.textContent).toContain('first paragraph');
+    expect(result.textContent).toContain('second paragraph');
+    expect(result.wordCount).toBeGreaterThan(0);
+  });
+
+  it('should handle multiple pages correctly', async () => {
+    setupMockPdf(2, {}, (pageNum: number) => [
+      { str: `Page ${pageNum} content here.`, transform: [1, 0, 0, 1, 0, 700], height: 12 }
+    ]);
+
+    const buffer = new ArrayBuffer(1024);
+    const result = await parsePdfFromArrayBuffer(buffer, 'multi-page.pdf');
+
+    expect(result.paragraphs).toHaveLength(2);
+    expect(result.paragraphs[0]).toContain('Page 1 content');
+    expect(result.paragraphs[1]).toContain('Page 2 content');
+  });
+
+  it('should use filename as title when no metadata present', async () => {
+    setupMockPdf(1, {}, () => [
+      { str: 'Some content here for the article.', transform: [1, 0, 0, 1, 0, 700], height: 12 }
+    ]);
+
+    const buffer = new ArrayBuffer(1024);
+    const result = await parsePdfFromArrayBuffer(buffer, 'document-name.pdf');
+
+    expect(result.title).toBe('document-name'); // filename without extension used as title
   });
 });
