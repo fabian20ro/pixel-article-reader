@@ -34,7 +34,9 @@ export class AudioTTSBackend implements TTSBackend {
     this.ensureAudio();
 
     this.fetchAudio(text).then((audioUrl) => {
-      if (isValid && !isValid()) return; // stale fetch — abort
+      const valid = isValid ? isValid() : true;
+      if (!valid) return; // stale fetch — abort
+
       if (!audioUrl) {
         callbacks.onError(true); // fallback to speech
         return;
