@@ -7,6 +7,7 @@ import type { TTSBackend, TTSBackendCallbacks } from './tts-backend.js';
 
 export class SpeechTTSBackend implements TTSBackend {
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  private defaultRate = 1.0;
 
   speak(
     text: string,
@@ -16,7 +17,8 @@ export class SpeechTTSBackend implements TTSBackend {
     callbacks: TTSBackendCallbacks,
   ): void {
     const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = rate;
+    // Use provided rate; if zero or invalid, fall back to the last setRate() default.
+    utter.rate = rate > 0 ? rate : this.defaultRate;
     utter.lang = lang;
     if (voice) utter.voice = voice;
 
@@ -51,8 +53,8 @@ export class SpeechTTSBackend implements TTSBackend {
     speechSynthesis.cancel();
   }
 
-  setRate(_rate: number): void {
-    // Rate is set per-utterance in speak(), nothing to do here
+  setRate(rate: number): void {
+    if (rate > 0) this.defaultRate = rate;
   }
 
   dispose(): void {
