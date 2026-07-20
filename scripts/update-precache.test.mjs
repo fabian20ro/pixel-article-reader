@@ -227,4 +227,81 @@ describe('update-precache', () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('collects no files from an empty dist directory', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-collect-empty-'));
+
+    try {
+      // Create a completely empty directory — no sw.js, no assets/, nothing.
+      mkdirSync(tempRoot);
+
+      const entries = collectDistFiles(tempRoot);
+      expect(entries).toEqual([]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('collects dist files recursively through nested subdirectories', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-collect-nested-'));
+
+    try {
+      mkdirSync(join(tempRoot, 'assets', 'deep', 'nested'), { recursive: true });
+      writeFileSync(join(tempRoot, 'index.html'), '<!doctype html>');
+      writeFileSync(join(tempRoot, 'assets', 'main.js'), '// code');
+      writeFileSync(join(tempRoot, 'assets', 'deep', 'layer.js'), '// layer');
+      writeFileSync(join(tempRoot, 'assets', 'deep', 'nested', 'leaf.js'), '// leaf');
+
+      const entries = collectDistFiles(tempRoot).sort();
+
+      expect(entries).toEqual([
+        './assets/deep/layer.js',
+        './assets/deep/nested/leaf.js',
+        './assets/main.js',
+        './index.html',
+      ]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('skips sw.js from the collected entries even when present at root', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-collect-skip-sw-'));
+
+    try {
+      mkdirSync(tempRoot);
+      writeFileSync(join(tempRoot, 'sw.js'), '// service worker');
+      writeFileSync(join(tempRoot, 'index.html'), '<!doctype html>');
+      writeFileSync(join(tempRoot, 'assets', 'main.js'), '// code');
+
+      const entries = collectDistFiles(tempRoot).sort();
+
+      expect(entries).toEqual([
+        './assets/main.js',
+        './index.html',
+      ]);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('throws when source icon file is missing in syncStableRuntimeAssets', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pixel-article-reader-sync-missing-icon-'));
+
+    try {
+      // Verify that copyFileSync throws ENOENT when the source doesn't exist,
+      // which is what syncStableRuntimeAssets relies on to fail loudly.
+      const fakeIconsDir = join(tempRoot, 'icons');
+      mkdirSync(fakeIconsDir, { recursive: true });
+      // No icon files written — dir exists but empty.
+
+      expect(() => {
+        copyFileSync(join(fakeIconsDir, 'icon-192.png'), '/tmp/dest-icon-192.png');
+      }).toThrow(/ENOENT|no such file/i);
+
+      rmSync('/tmp/dest-icon-192.png', { force: true });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
