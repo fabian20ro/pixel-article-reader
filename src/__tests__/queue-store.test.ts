@@ -340,12 +340,16 @@ describe('queue-store', () => {
       };
 
       const item = makeItem({ id: 'fail-safe' });
-      const result = addToQueue([], item);
+      let failCalled = false;
+      let failError: unknown;
+      const result = addToQueue([], item, (err) => { failCalled = true; failError = err; });
 
       // In-memory state must remain consistent even when persistence fails,
       // so callers can rely on the returned array for UI rendering.
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('fail-safe');
+      expect(failCalled).toBe(true);
+      expect(failError).toBeInstanceOf(DOMException);
 
       Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
     });
@@ -364,12 +368,14 @@ describe('queue-store', () => {
       };
 
       const a = makeItem({ id: 'keep-me' });
-      const result = removeFromQueue([a], 'remove-me');
+      let failCalled = false;
+      const result = removeFromQueue([a], 'remove-me', (err) => { failCalled = true; });
 
       // In-memory state must remain consistent even when persistence fails,
       // so callers can rely on the returned array for UI rendering.
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('keep-me');
+      expect(failCalled).toBe(true);
 
       Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
     });
@@ -389,12 +395,14 @@ describe('queue-store', () => {
 
       const a = makeItem({ id: 'a' });
       const b = makeItem({ id: 'b' });
-      const result = reorderQueue([b, a]);
+      let failCalled = false;
+      const result = reorderQueue([b, a], (err) => { failCalled = true; });
 
       // In-memory state must remain consistent even when persistence fails,
       // so callers can rely on the returned array for UI rendering.
       expect(result[0].id).toBe('b');
       expect(result[1].id).toBe('a');
+      expect(failCalled).toBe(true);
 
       Object.defineProperty(globalThis, 'localStorage', { value: mock.value, configurable: true });
     });
@@ -459,6 +467,16 @@ describe('queue-store', () => {
 
       const loaded = loadQueue();
       expect(loaded).toHaveLength(1);
+    });
+
+    it('drops items with a malformed (non-empty) URL that fails isValidArticleUrl', () => {
+      const valid = makeItem();
+      const bad = makeItem({ url: 'not-a-url' } as QueueItem);
+      localStorage.setItem('article-reader-queue', JSON.stringify([valid, bad]));
+
+      const loaded = loadQueue();
+      expect(loaded).toHaveLength(1);
+      expect(loaded[0].id).toBe(valid.id);
     });
   });
 
