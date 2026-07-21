@@ -307,6 +307,89 @@ describe('selectVoice', () => {
   });
 });
 
+// ── computeTimeline ─────────────────────────────────────────────────
+
+describe('computeTimeline', () => {
+  it('returns duration and position for a single-sentence article at rate 1', () => {
+    const paragraphs = [['Hello world.']];
+    const result = computeTimeline(paragraphs, 0, 0, 1);
+    expect(result.duration).toBeCloseTo(12 / 14);
+    expect(result.position).toBeCloseTo(0);
+  });
+
+  it('position equals duration at the last sentence of a single-paragraph article', () => {
+    const paragraphs = [['Hello world. This is longer text.']];
+    const result = computeTimeline(paragraphs, 0, 1, 1);
+    expect(result.position).toBeCloseTo(result.duration);
+  });
+
+  it('position advances through sentences within a paragraph', () => {
+    const paragraphs = [['Short. A longer sentence here with more words.']];
+    const first = computeTimeline(paragraphs, 0, 0, 1);
+    const second = computeTimeline(paragraphs, 0, 1, 1);
+    expect(second.position).toBeGreaterThan(first.position);
+    expect(second.duration).toBeCloseTo(first.duration);
+  });
+
+  it('position advances across paragraphs with different lengths', () => {
+    // Short first para (6 chars), longer second para (25 chars)
+    const paragraphs = [['Short.'], ['A longer sentence that has many more characters here.']];
+    const p0end = computeTimeline(paragraphs, 0, 1, 1); // end of short para: 6 chars accumulated
+    const p1mid = computeTimeline(paragraphs, 1, 2, 1); // mid second para: well past start
+    expect(p1mid.position).toBeGreaterThan(p0end.position);
+  });
+
+  it('position is zero at start regardless of total length', () => {
+    const paragraphs = [['Hello.'], ['World.']];
+    expect(computeTimeline(paragraphs, 0, 0, 1).position).toBeCloseTo(0);
+  });
+
+  it('rate scales duration inversely — double rate halves duration and position', () => {
+    const paragraphs = [['One two three four five six seven eight.'], ['Nine ten eleven twelve thirteen fourteen fifteen sixteen.']];
+    const slow = computeTimeline(paragraphs, 1, 2, 0.5);
+    const fast = computeTimeline(paragraphs, 1, 2, 2);
+    expect(fast.duration).toBeCloseTo(slow.duration / 4);
+    expect(fast.position).toBeCloseTo(slow.position / 4);
+  });
+
+  it('returns Infinity duration when rate is zero', () => {
+    const paragraphs = [['Hello world.']];
+    const result = computeTimeline(paragraphs, 0, 0, 0);
+    expect(result.duration).toBe(Infinity);
+    expect(result.position).toBe(0);
+  });
+
+  it('handles empty paragraph array', () => {
+    const paragraphs: string[][] = [];
+    const result = computeTimeline(paragraphs, 0, 0, 1);
+    // totalChars=0 → duration/position = 0 at rate>0; handled via charsPerSec check
+    expect(result.position).toBe(0);
+  });
+
+  it('handles empty first paragraph correctly', () => {
+    // Empty para[0] contributes zero chars to position regardless of sentence count in later paras.
+    const paragraphs: string[][] = [[''], ['text here.']];
+    const result = computeTimeline(paragraphs, 1, 0, 1);
+    expect(result.position).toBeCloseTo(0);
+    // total duration reflects all text in the article
+    expect(result.duration).toBeCloseTo(10 / 14);
+  });
+
+  it('position skips empty sentences at current location', () => {
+    const paragraphs: string[][] = [['Hello.'], [''], ['text here.']];
+    // At para[2], sentIdx=0 — accumulated chars from para[0] only (empty para[1])
+    const result = computeTimeline(paragraphs, 2, 0, 1);
+    expect(result.position).toBeCloseTo(6 / 14);
+    expect(result.duration).toBeCloseTo(16 / 14);
+  });
+
+  it('duration is unaffected by position index — same total', () => {
+    const paragraphs = [['A. B. C.']];
+    expect(computeTimeline(paragraphs, 0, 0, 1).duration)
+      .toBeCloseTo(computeTimeline(paragraphs, 0, 2, 1).duration);
+  });
+});
+
 // ── TTSEngine ───────────────────────────────────────────────────────
 
 describe('TTSEngine', () => {
