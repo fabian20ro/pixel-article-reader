@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parsePdfFromArrayBuffer, createArticleFromPdf, extractParagraphsFromTextItems } from '../lib/extractors/extract-pdf';
-import { MAX_PDF_SIZE } from '../lib/extractors/types.js';
+import { MAX_PDF_SIZE, MIN_PARAGRAPH_LENGTH } from '../lib/extractors/types.js';
 
 describe('extractParagraphsFromTextItems', () => {
   it('should handle empty or whitespace-only strings', () => {
@@ -411,5 +411,24 @@ describe('parsePdfFromArrayBuffer - happy path integration', () => {
     expect(result.title).toBe('Encoded Article');
     expect(result.siteName).toBe('Encoded Author');
     expect(result.paragraphs[0]).toContain('Content paragraph here.');
+  });
+
+  it('should split a single long block into sentence-level paragraphs (regression: no fallback test)', async () => {
+    // Single paragraph that passes MIN_PARAGRAPH_LENGTH on its own but is short enough
+    // to trigger the sentence-splitting fallback when only one clean paragraph exists.
+    const bigText = 'First sentence here with enough words to qualify today. Second sentence too has many good words in it now.';
+    setupMockPdf(1, {}, () => [
+      { str: bigText, transform: [1, 0, 0, 1, 0, 700], height: 12 },
+    ]);
+
+    const buffer = new ArrayBuffer(1024);
+    const result = await parsePdfFromArrayBuffer(buffer, 'single-block.pdf');
+
+    expect(result.paragraphs.length).toBeGreaterThan(1);
+    for (const p of result.paragraphs) {
+      expect(p.trim().length).toBeGreaterThanOrEqual(MIN_PARAGRAPH_LENGTH);
+    }
+    expect(result.paragraphs.join(' ')).toContain('First sentence');
+    expect(result.paragraphs.join(' ')).toContain('Second sentence');
   });
 });
