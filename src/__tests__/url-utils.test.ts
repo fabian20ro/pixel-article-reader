@@ -241,6 +241,13 @@ describe('clearQueryParams', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('preserves pathname when clearing a non-root URL', () => {
+    window.history.replaceState(null, '', '/article/123?url=https%3A%2F%2Fexample.com');
+    clearQueryParams();
+    expect(window.location.search).toBe('');
+    expect(window.location.pathname).toBe('/article/123');
+  });
+
   it('does nothing when there are no query params', () => {
     window.history.replaceState(null, '', '/');
     clearQueryParams(); // should not throw
