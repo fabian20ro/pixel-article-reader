@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TTSEngine, selectVoice, splitSentences, computeTimeline, type TTSCallbacks } from '../lib/tts-engine.js';
+import type { Language } from '../lib/language-config.js';
 
 // ── SpeechSynthesis mock ────────────────────────────────────────────
 
@@ -942,6 +943,46 @@ describe('TTSEngine', () => {
 
     // Sentence index should not have advanced
     expect(engine.state.currentSentence).toBe(0);
+  });
+
+  // ── Degraded voice selection (no voices installed) ────────────────
+
+  it('speakCurrent proceeds with null voice when no system voices are available', () => {
+    mockSynth.getVoices.mockReturnValue([]);
+    const engine = createEngine();
+    // Force empty voice list — simulates a device with no TTS engines installed.
+    (engine as unknown as Record<string, unknown>).allVoices = [];
+
+    engine.loadArticle(['Hello world.'], 'en');
+    expect((engine as unknown as Record<string, null | SpeechSynthesisVoice>).voice).toBeNull();
+
+    // Engine should still attempt to speak — speech backend uses whatever the browser provides.
+    engine.play();
+    expect(mockSynth.speak).toHaveBeenCalled();
+
+    const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
+    expect(utter.voice).toBeNull();
+    // No crash: engine is still playing despite null voice selection.
+    expect(engine.state.isPlaying).toBe(true);
+  });
+
+  it('setLang to an unsupported language selects no voice and degrades gracefully', () => {
+    mockSynth.getVoices.mockReturnValue([]);
+    const engine = createEngine();
+    // Force empty voice list so selectVoice has nothing to match.
+    (engine as unknown as Record<string, unknown>).allVoices = [];
+
+    engine.loadArticle(['Hello.'], 'en');
+    expect(engine.state.isPlaying).toBe(false);
+
+    // Switch to a language with no matching voices installed on this device.
+    engine.setLang('xx-XX' as Language);
+    expect((engine as unknown as Record<string, null | SpeechSynthesisVoice>).voice).toBeNull();
+
+    // Engine should still be able to play — speech backend falls through to default system voice.
+    engine.play();
+    expect(mockSynth.speak).toHaveBeenCalled();
+    expect(engine.state.isPlaying).toBe(true);
   });
 
   // ── speakCurrent: end-of-article termination chain ────────────────
