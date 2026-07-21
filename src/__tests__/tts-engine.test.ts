@@ -935,6 +935,36 @@ describe('TTSEngine', () => {
     expect(engine.state.currentParagraph).toBe(1);
   });
 
+  it('stale utterance completion does not advance sentence after stop()', () => {
+    vi.useFakeTimers();
+    const onProgress = vi.fn();
+    const engine = createEngine({ onProgress });
+    engine.loadArticle([
+      'First paragraph first sentence that ends with a period.',
+      'Second paragraph first sentence also ends here.',
+    ], 'en');
+    engine.play();
+
+    // Verify speaking started (sentence 0)
+    expect(engine.state.currentSentence).toBe(0);
+    const speakCallsBefore = mockSynth.speak.mock.calls.length;
+
+    // Stop — this should cancel the in-flight utterance and increment _speakGen.
+    engine.stop();
+    expect(engine.state.isPlaying).toBe(false);
+
+    // Simulate the cancelled utterance's onend firing after stop().
+    // The stale onEnd must NOT advance sentence position or start a new chain.
+    vi.runAllTimers();
+
+    // Position should remain at paragraph 0, sentence 0 (reset by stop).
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(0);
+    // No new speak call from the stale completion.
+    expect(mockSynth.speak.mock.calls.length).toBe(speakCallsBefore);
+    vi.useRealTimers();
+  });
+
   it('seekToTime jumps to the correct paragraph/sentence', () => {
     const onParagraphChange = vi.fn();
     const engine = createEngine({ onParagraphChange });
