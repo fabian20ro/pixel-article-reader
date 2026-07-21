@@ -384,4 +384,32 @@ describe('parsePdfFromArrayBuffer - happy path integration', () => {
 
     expect(result.title).toBe('document-name'); // filename without extension used as title
   });
+
+  it('should decode UTF-16 BE Uint8Array-encoded metadata in pdf.info (regression: encoded title/author silently lost)', async () => {
+    function encodeUtf16Be(s: string): Uint8Array {
+      const bytes = new Uint8Array(2 + s.length * 2); // BOM + chars
+      bytes[0] = 0xFE;
+      bytes[1] = 0xFF;
+      for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        bytes[2 + i * 2] = (code >> 8) & 0xff;
+        bytes[2 + i * 2 + 1] = code & 0xff;
+      }
+      return bytes;
+    }
+
+    setupMockPdf(1, {
+      Title: encodeUtf16Be('Encoded Article'),
+      Author: encodeUtf16Be('Encoded Author'),
+    }, () => [
+      { str: 'Content paragraph here.', transform: [1, 0, 0, 1, 0, 700], height: 12 }
+    ]);
+
+    const buffer = new ArrayBuffer(1024);
+    const result = await parsePdfFromArrayBuffer(buffer, 'encoded.pdf');
+
+    expect(result.title).toBe('Encoded Article');
+    expect(result.siteName).toBe('Encoded Author');
+    expect(result.paragraphs[0]).toContain('Content paragraph here.');
+  });
 });
