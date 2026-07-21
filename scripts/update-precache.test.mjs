@@ -304,4 +304,34 @@ describe('update-precache', () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('overwrites icons in renderStableManifest and rewrites apple-touch-icon href', () => {
+    const source = JSON.stringify({
+      name: 'Pixel Reader',
+      icons: [{ src: './icons/old.png' }, { src: './icons/legacy.svg' }],
+    });
+
+    const manifest = renderStableManifest(source);
+    const parsed = JSON.parse(manifest);
+
+    expect(parsed.icons).toHaveLength(2);
+    expect(parsed.icons[0].src).toBe('./icons/icon-192.png');
+    expect(parsed.icons[0].sizes).toBe('192x192');
+    expect(parsed.icons[1].src).toBe('./icons/icon-512.png');
+    expect(parsed.icons[1].type).toBe('image/png');
+
+    const html = `
+      <link rel="manifest" href="./assets/manifest-abc.json">
+      <link rel="apple-touch-icon" href="./assets/old-icon.png">
+      <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-xyz.png">
+    `;
+
+    const rewritten = rewriteIndexHtmlForStableAssets(html);
+
+    expect(rewritten).toContain(`href="${STABLE_MANIFEST_PATH}"`);
+    expect(rewritten).not.toContain('./assets/manifest-abc.json');
+    // apple-touch-icon points at the stable icon path, not old path
+    expect(rewritten).toContain(STABLE_ICON_PATH);
+    expect(rewritten).not.toContain('./assets/old-icon.png');
+  });
 });

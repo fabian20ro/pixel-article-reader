@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TTSEngine, selectVoice, splitSentences, computeTimeline, type TTSCallbacks } from '../lib/tts-engine.js';
+import type { Language } from '../lib/language-config.js';
 
 // ── SpeechSynthesis mock ────────────────────────────────────────────
 
@@ -304,6 +305,89 @@ describe('selectVoice', () => {
     const v = selectVoice(multiRegion, 'en');
     expect(v).not.toBeNull();
     expect(v!.lang.startsWith('en')).toBe(true);
+  });
+});
+
+// ── computeTimeline ─────────────────────────────────────────────────
+
+describe('computeTimeline', () => {
+  it('returns duration and position for a single-sentence article at rate 1', () => {
+    const paragraphs = [['Hello world.']];
+    const result = computeTimeline(paragraphs, 0, 0, 1);
+    expect(result.duration).toBeCloseTo(12 / 14);
+    expect(result.position).toBeCloseTo(0);
+  });
+
+  it('position equals duration at the last sentence of a single-paragraph article', () => {
+    const paragraphs = [['Hello world. This is longer text.']];
+    const result = computeTimeline(paragraphs, 0, 1, 1);
+    expect(result.position).toBeCloseTo(result.duration);
+  });
+
+  it('position advances through sentences within a paragraph', () => {
+    const paragraphs = [['Short. A longer sentence here with more words.']];
+    const first = computeTimeline(paragraphs, 0, 0, 1);
+    const second = computeTimeline(paragraphs, 0, 1, 1);
+    expect(second.position).toBeGreaterThan(first.position);
+    expect(second.duration).toBeCloseTo(first.duration);
+  });
+
+  it('position advances across paragraphs with different lengths', () => {
+    // Short first para (6 chars), longer second para (25 chars)
+    const paragraphs = [['Short.'], ['A longer sentence that has many more characters here.']];
+    const p0end = computeTimeline(paragraphs, 0, 1, 1); // end of short para: 6 chars accumulated
+    const p1mid = computeTimeline(paragraphs, 1, 2, 1); // mid second para: well past start
+    expect(p1mid.position).toBeGreaterThan(p0end.position);
+  });
+
+  it('position is zero at start regardless of total length', () => {
+    const paragraphs = [['Hello.'], ['World.']];
+    expect(computeTimeline(paragraphs, 0, 0, 1).position).toBeCloseTo(0);
+  });
+
+  it('rate scales duration inversely — double rate halves duration and position', () => {
+    const paragraphs = [['One two three four five six seven eight.'], ['Nine ten eleven twelve thirteen fourteen fifteen sixteen.']];
+    const slow = computeTimeline(paragraphs, 1, 2, 0.5);
+    const fast = computeTimeline(paragraphs, 1, 2, 2);
+    expect(fast.duration).toBeCloseTo(slow.duration / 4);
+    expect(fast.position).toBeCloseTo(slow.position / 4);
+  });
+
+  it('returns Infinity duration when rate is zero', () => {
+    const paragraphs = [['Hello world.']];
+    const result = computeTimeline(paragraphs, 0, 0, 0);
+    expect(result.duration).toBe(Infinity);
+    expect(result.position).toBe(0);
+  });
+
+  it('handles empty paragraph array', () => {
+    const paragraphs: string[][] = [];
+    const result = computeTimeline(paragraphs, 0, 0, 1);
+    // totalChars=0 → duration/position = 0 at rate>0; handled via charsPerSec check
+    expect(result.position).toBe(0);
+  });
+
+  it('handles empty first paragraph correctly', () => {
+    // Empty para[0] contributes zero chars to position regardless of sentence count in later paras.
+    const paragraphs: string[][] = [[''], ['text here.']];
+    const result = computeTimeline(paragraphs, 1, 0, 1);
+    expect(result.position).toBeCloseTo(0);
+    // total duration reflects all text in the article
+    expect(result.duration).toBeCloseTo(10 / 14);
+  });
+
+  it('position skips empty sentences at current location', () => {
+    const paragraphs: string[][] = [['Hello.'], [''], ['text here.']];
+    // At para[2], sentIdx=0 — accumulated chars from para[0] only (empty para[1])
+    const result = computeTimeline(paragraphs, 2, 0, 1);
+    expect(result.position).toBeCloseTo(6 / 14);
+    expect(result.duration).toBeCloseTo(16 / 14);
+  });
+
+  it('duration is unaffected by position index — same total', () => {
+    const paragraphs = [['A. B. C.']];
+    expect(computeTimeline(paragraphs, 0, 0, 1).duration)
+      .toBeCloseTo(computeTimeline(paragraphs, 0, 2, 1).duration);
   });
 });
 
@@ -861,6 +945,46 @@ describe('TTSEngine', () => {
     expect(engine.state.currentSentence).toBe(0);
   });
 
+  // ── Degraded voice selection (no voices installed) ────────────────
+
+  it('speakCurrent proceeds with null voice when no system voices are available', () => {
+    mockSynth.getVoices.mockReturnValue([]);
+    const engine = createEngine();
+    // Force empty voice list — simulates a device with no TTS engines installed.
+    (engine as unknown as Record<string, unknown>).allVoices = [];
+
+    engine.loadArticle(['Hello world.'], 'en');
+    expect((engine as unknown as Record<string, null | SpeechSynthesisVoice>).voice).toBeNull();
+
+    // Engine should still attempt to speak — speech backend uses whatever the browser provides.
+    engine.play();
+    expect(mockSynth.speak).toHaveBeenCalled();
+
+    const utter = mockSynth.speak.mock.calls[0][0] as MockUtterance;
+    expect(utter.voice).toBeNull();
+    // No crash: engine is still playing despite null voice selection.
+    expect(engine.state.isPlaying).toBe(true);
+  });
+
+  it('setLang to an unsupported language selects no voice and degrades gracefully', () => {
+    mockSynth.getVoices.mockReturnValue([]);
+    const engine = createEngine();
+    // Force empty voice list so selectVoice has nothing to match.
+    (engine as unknown as Record<string, unknown>).allVoices = [];
+
+    engine.loadArticle(['Hello.'], 'en');
+    expect(engine.state.isPlaying).toBe(false);
+
+    // Switch to a language with no matching voices installed on this device.
+    engine.setLang('xx-XX' as Language);
+    expect((engine as unknown as Record<string, null | SpeechSynthesisVoice>).voice).toBeNull();
+
+    // Engine should still be able to play — speech backend falls through to default system voice.
+    engine.play();
+    expect(mockSynth.speak).toHaveBeenCalled();
+    expect(engine.state.isPlaying).toBe(true);
+  });
+
   // ── speakCurrent: end-of-article termination chain ────────────────
 
   it('speakCurrent terminates article when all sentences complete naturally', async () => {
@@ -933,6 +1057,36 @@ describe('TTSEngine', () => {
 
     expect(mockSynth.cancel).toHaveBeenCalledTimes(cancelBefore + 1);
     expect(engine.state.currentParagraph).toBe(1);
+  });
+
+  it('stale utterance completion does not advance sentence after stop()', () => {
+    vi.useFakeTimers();
+    const onProgress = vi.fn();
+    const engine = createEngine({ onProgress });
+    engine.loadArticle([
+      'First paragraph first sentence that ends with a period.',
+      'Second paragraph first sentence also ends here.',
+    ], 'en');
+    engine.play();
+
+    // Verify speaking started (sentence 0)
+    expect(engine.state.currentSentence).toBe(0);
+    const speakCallsBefore = mockSynth.speak.mock.calls.length;
+
+    // Stop — this should cancel the in-flight utterance and increment _speakGen.
+    engine.stop();
+    expect(engine.state.isPlaying).toBe(false);
+
+    // Simulate the cancelled utterance's onend firing after stop().
+    // The stale onEnd must NOT advance sentence position or start a new chain.
+    vi.runAllTimers();
+
+    // Position should remain at paragraph 0, sentence 0 (reset by stop).
+    expect(engine.state.currentParagraph).toBe(0);
+    expect(engine.state.currentSentence).toBe(0);
+    // No new speak call from the stale completion.
+    expect(mockSynth.speak.mock.calls.length).toBe(speakCallsBefore);
+    vi.useRealTimers();
   });
 
   it('seekToTime jumps to the correct paragraph/sentence', () => {
