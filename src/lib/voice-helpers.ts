@@ -28,11 +28,17 @@ export function detectVoiceGender(name: string): 'male' | 'female' | null {
   const lower = name.toLowerCase();
   if (/\bfemale\b/.test(lower) || /\bwoman\b/.test(lower)) return 'female';
   if (/\bmale\b/.test(lower)) return 'male';
+  const sep = /[-_]/;
   for (const n of KNOWN_FEMALE) {
-    if (lower === n || lower.startsWith(n + ' ')) return 'female';
+    if (lower === n || lower.startsWith(n + ' ') || lower.startsWith(n + '-')) return 'female';
+    // Handle suffix-style voice names: e.g. "samantha-us" or "daniel_en"
+    const sIdx = lower.indexOf(n);
+    if (sIdx >= 0 && sep.test(lower.charAt(sIdx + n.length))) return 'female';
   }
   for (const n of KNOWN_MALE) {
-    if (lower === n || lower.startsWith(n + ' ')) return 'male';
+    if (lower === n || lower.startsWith(n + ' ') || lower.startsWith(n + '-')) return 'male';
+    const sIdx = lower.indexOf(n);
+    if (sIdx >= 0 && sep.test(lower.charAt(sIdx + n.length))) return 'male';
   }
   return null;
 }
