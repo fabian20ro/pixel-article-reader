@@ -29,6 +29,13 @@ export class WakeLockManager {
         sentinel.release().catch(() => {});
       } else {
         this.wakeLock = sentinel;
+        // Browser may release the lock externally (e.g. system sleep).
+        // Detect it so we don't hold a stale reference.
+        sentinel.addEventListener('release', () => {
+          if (this.wakeLock === sentinel) {
+            this.wakeLock = null;
+          }
+        });
       }
     } catch {
       // Wake Lock request can fail (e.g., low battery mode)
