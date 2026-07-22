@@ -33,6 +33,20 @@ export function toStorable(article: Article, id: string): StoredArticleContent {
   };
 }
 
+/** Validate that a stored record has the required identity and shape. */
+export function validateStoredArticle(stored: StoredArticleContent): boolean {
+  if (!stored || typeof stored !== 'object') return false;
+  if (typeof stored.id !== 'string' || stored.id.length === 0) return false;
+  // Required storable fields — partial writes produce garbage we must reject.
+  const requiredFields: Array<keyof StoredArticleContent> = [
+    'title', 'markdown', 'textContent', 'lang', 'htmlLang', 'siteName', 'excerpt', 'wordCount', 'estimatedMinutes',
+  ];
+  for (const field of requiredFields) {
+    if (!(field in stored)) return false;
+  }
+  return true;
+}
+
 /** Reconstruct an Article from StoredArticleContent. */
 export function fromStorable(stored: StoredArticleContent): Article {
   return {
@@ -101,7 +115,15 @@ export async function loadArticleContent(id: string): Promise<StoredArticleConte
     const tx = db.transaction(STORE_NAME, 'readonly');
     const request = tx.objectStore(STORE_NAME).get(id);
     return await new Promise<StoredArticleContent | null>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result ?? null);
+      request.onsuccess = () => {
+        const result = request.result ?? null;
+        if (result && validateStoredArticle(result)) {
+          resolve(result);
+        } else {
+          log.warn('Loaded article content has invalid shape, discarding', request.result);
+          resolve(null);
+        }
+      };
       request.onerror = () => reject(request.error);
     });
   } catch (err) {
