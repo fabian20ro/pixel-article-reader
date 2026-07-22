@@ -97,11 +97,12 @@ function extractDocumentMetadata(pdf: any): { title?: string; author?: string } 
 
     function decode(value: unknown): string {
       if (typeof value === 'string') return value.trim();
-      if (value instanceof Uint8Array && value.length >= 2) {
+      if (value instanceof Uint8Array && value.length >= 4) {
         // PDF strings are UTF-16 BE, sometimes prefixed with BOM.
-        const bytes = new Uint8Array(value.buffer, value.byteOffset + 2, value.length - 2);
+        const bytes = new Uint8Array(value.buffer, value.byteOffset + 2, Math.max(0, value.length - 2));
         let s = '';
         for (let i = 0; i < bytes.length; i += 2) {
+          if (i + 1 >= bytes.length) break; // skip partial trailing byte to avoid garbage chars
           s += String.fromCharCode((bytes[i] << 8) | bytes[i + 1]);
         }
         return s.replace(/\u0000/g, '').trim();
