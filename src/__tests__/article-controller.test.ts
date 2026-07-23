@@ -660,6 +660,8 @@ describe('ArticleController', () => {
     Object.defineProperty(largeFile, 'size', { value: 60 * 1024 * 1024 });
     await (controller as any).handleFileUpload(largeFile);
     expect(refs.errorMessage.textContent).toContain('File too large');
+    expect(refs.errorMessage.textContent).toContain('MiB');
+    expect(refs.errorMessage.textContent).toContain('50 MB');
 
     const badFile = new File(['content'], 'test.exe', { type: 'application/x-msdownload' });
     await (controller as any).handleFileUpload(badFile);
