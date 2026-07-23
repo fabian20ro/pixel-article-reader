@@ -21,8 +21,14 @@ export interface ChapterRendererOptions {
 export function buildChaptersList(options: ChapterRendererOptions): void {
   const { articleText, chaptersList, chaptersBtn, chaptersFilter, tts, onChapterClick } = options;
 
-  if (!articleText || !chaptersList) {
-    throw new TypeError('ChapterRenderer: articleText and chaptersList are required');
+  const missing = [];
+  if (!articleText) missing.push('articleText');
+  if (!chaptersList) missing.push('chaptersList');
+  if (!chaptersBtn) missing.push('chaptersBtn');
+  if (!chaptersFilter || typeof chaptersFilter.clear !== 'function') missing.push('chaptersFilter');
+  if (!tts || typeof tts.jumpToParagraph !== 'function') missing.push('tts');
+  if (missing.length > 0) {
+    throw new TypeError(`ChapterRenderer: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required`);
   }
 
   chaptersFilter.clear();
