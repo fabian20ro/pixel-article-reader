@@ -461,6 +461,34 @@ describe('extractArticle', () => {
     expect(capturedDoc!.querySelectorAll('img').length).toBe(0);
     expect(capturedDoc!.querySelectorAll('figcaption').length).toBe(1);
   });
+
+  it('fetches directly (no proxy) when proxyBase is empty string', async () => {
+    const DIRECT_URL = 'https://example.com/article';
+    mockFetch(SAMPLE_HTML, 200, { 'X-Final-URL': DIRECT_URL });
+    mockParse.mockReturnValue({
+      title: 'Direct Title',
+      content: '<p>Content with enough words to pass the filter.</p>',
+      textContent: 'Content with enough words to pass the filter.',
+      siteName: 'Example',
+      excerpt: '',
+    });
+
+    const article = await extractArticle(DIRECT_URL, '');
+
+    expect(article.title).toBe('Direct Title');
+    // Direct path should use the URL itself (no proxy URL wrapping)
+    const lastCall = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(lastCall[0]).toBe(DIRECT_URL);
+  });
+
+  it('passes TypeError through unchanged when direct fetch fails', async () => {
+    mockFetch(''); // keep the default Response shape but...
+    (globalThis.fetch as any).mockImplementationOnce(async () => {
+      throw new TypeError('NetworkError');
+    });
+
+    await expect(extractArticle(ARTICLE_URL, '')).rejects.toThrow(TypeError);
+  });
 });
 
 describe('extractYoutubeVideoId', () => {
