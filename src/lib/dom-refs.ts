@@ -78,6 +78,14 @@ function requireElement<T extends HTMLElement>(id: string, root: Document): T {
   return element as T;
 }
 
+function requireElements<T extends HTMLElement>(selector: string, root: Document): NodeListOf<T> {
+  const elements = root.querySelectorAll<T>(selector);
+  if (elements.length === 0) {
+    throw new Error(`Missing required elements matching: ${selector}`);
+  }
+  return elements;
+}
+
 export function getAppDomRefs(root: Document = document): AppDomRefs {
   return {
     urlInput: requireElement<HTMLTextAreaElement>('url-input', root),
@@ -117,15 +125,15 @@ export function getAppDomRefs(root: Document = document): AppDomRefs {
     checkUpdateBtn: requireElement('check-update-btn', root),
     updateStatus: requireElement('update-status', root),
     voiceGenderGroup: requireElement('voice-gender-group', root),
-    voiceGenderBtns: root.querySelectorAll<HTMLButtonElement>('#voice-gender-selector .segment-btn'),
+    voiceGenderBtns: requireElements<HTMLButtonElement>('#voice-gender-selector .segment-btn', root),
     fileInput: requireElement<HTMLInputElement>('file-input', root),
     fileBtn: requireElement('file-btn', root),
     installBanner: requireElement('install-banner', root),
     installBtn: requireElement('install-btn', root),
     installDismiss: requireElement('install-dismiss', root),
-    speedBtns: root.querySelectorAll<HTMLButtonElement>('#speed-selector .segment-btn'),
-    themeBtns: root.querySelectorAll<HTMLButtonElement>('#theme-selector .segment-btn'),
-    settingsLangBtns: root.querySelectorAll<HTMLButtonElement>('#settings-lang-selector .segment-btn'),
+    speedBtns: requireElements<HTMLButtonElement>('#speed-selector .segment-btn', root),
+    themeBtns: requireElements<HTMLButtonElement>('#theme-selector .segment-btn', root),
+    settingsLangBtns: requireElements<HTMLButtonElement>('#settings-lang-selector .segment-btn', root),
     // Queue drawer (left)
     menuToggle: requireElement('menu-toggle', root),
     queueDrawer: requireElement('queue-drawer', root),
