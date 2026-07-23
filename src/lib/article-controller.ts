@@ -168,7 +168,8 @@ export class ArticleController {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
 
     if (file.size > ArticleController.MAX_FILE_SIZE) {
-      this.showError(`File too large (${(file.size / 1_000_000).toFixed(1)} MB). Maximum is 50 MB.`);
+      const sizeMB = Math.round((file.size / 1_048_576) * 10) / 10;
+      this.showError(`File too large (${sizeMB} MiB). Maximum is 47.7 MiB (50 MB).`);
       return;
     }
 

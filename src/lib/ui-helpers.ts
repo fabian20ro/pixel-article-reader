@@ -46,3 +46,32 @@ export function updateSegmentButtons(btns: NodeListOf<HTMLButtonElement>, active
     btn.classList.toggle('active', btn.dataset.value === activeValue);
   });
 }
+
+/** Close a drawer when the user presses Escape. Returns cleanup function. */
+export function closeDrawerWithEsc(panel: HTMLElement, overlay: HTMLElement): () => void {
+  const handler = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && panel.classList.contains('open')) {
+      closeDrawer(panel, overlay);
+    }
+  };
+  document.addEventListener('keydown', handler);
+  return () => document.removeEventListener('keydown', handler);
+}
+
+/** Show a snackbar and auto-dismiss after durationMs. Returns cleanup function. */
+export function showSnackbarTimeout(el: HTMLElement, durationMs = 4000): () => void {
+  showSnackbar(el);
+  const handleEnd = () => {
+    clearTimeout(timer);
+    hideSnackbar(el);
+  };
+  el.addEventListener('transitionend', handleEnd, { once: true });
+  const timer = setTimeout(() => {
+    el.removeEventListener('transitionend', handleEnd);
+    hideSnackbar(el);
+  }, durationMs);
+  return () => {
+    clearTimeout(timer);
+    el.removeEventListener('transitionend', handleEnd);
+  };
+}
